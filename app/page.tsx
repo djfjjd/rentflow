@@ -12,11 +12,11 @@ export default function Home() {
           하나의 Next.js 프로젝트 안에서 모바일 PWA 앱과 관리자 웹사이트가 라우팅으로 분리되고,
           하나의 Supabase 데이터베이스/스토리지를 공유하도록 설계한 MVP입니다.
         </p>
+        <UniversalAiIntake />
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
           <GatewayCard href="/admin/dashboard" icon={MonitorCog} title="관리자 웹사이트" body="차량, 배차, 회차, 예약, 정비, 서류 관리" />
           <GatewayCard href="/admin/settings" icon={Database} title="Supabase 구조" body="권한, 테이블, 스토리지 연결 준비" />
         </div>
-        <UniversalAiIntake />
       </section>
     </main>
   );
