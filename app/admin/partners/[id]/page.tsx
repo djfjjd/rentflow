@@ -3,6 +3,10 @@ import { PartnerHistory } from "@/components/erp/PartnerManager";
 import { AdminShell } from "@/components/erp/Shell";
 import { adminNavItems, partners } from "@/lib/erp-data";
 
+export function generateStaticParams() {
+  return partners.map((partner) => ({ id: partner.id }));
+}
+
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const partner = partners.find((item) => item.id === id) ?? partners[0];

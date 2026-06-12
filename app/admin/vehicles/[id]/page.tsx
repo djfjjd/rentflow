@@ -7,6 +7,10 @@ import { AdminShell } from "@/components/erp/Shell";
 import { receivables } from "@/lib/finance-ops-data";
 import { adminNavItems, vehicleHistory, vehicles } from "@/lib/erp-data";
 
+export function generateStaticParams() {
+  return vehicles.map((vehicle) => ({ id: vehicle.id }));
+}
+
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const vehicle = vehicles.find((item) => item.id === id) ?? vehicles[0];
