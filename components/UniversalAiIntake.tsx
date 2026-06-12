@@ -165,12 +165,12 @@ export function UniversalAiIntake() {
             {isUploading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                생성형 AI 분석 및 저장 중...
+                업로드 중...
               </>
             ) : (
               <>
-                <Sparkles className="h-5 w-5" aria-hidden="true" />
-                AI 분석 및 자동 저장
+                <ImagePlus className="h-5 w-5" aria-hidden="true" />
+                업로드
               </>
             )}
           </button>
