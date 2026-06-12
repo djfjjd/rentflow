@@ -5,13 +5,8 @@ import { UniversalAiIntake } from "@/components/UniversalAiIntake";
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8">
-      <section className="mx-auto max-w-4xl">
-        <p className="text-sm font-bold text-primary">Next.js App Router · Supabase ready</p>
-        <h1 className="mt-2 text-3xl font-black text-ink sm:text-5xl">렌터카 사고대차 ERP</h1>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-          하나의 Next.js 프로젝트 안에서 모바일 PWA 앱과 관리자 웹사이트가 라우팅으로 분리되고,
-          하나의 Supabase 데이터베이스/스토리지를 공유하도록 설계한 MVP입니다.
-        </p>
+      <section className="mx-auto max-w-4xl text-center">
+        <h1 className="mt-2 text-3xl font-black text-ink sm:text-5xl">렌터카 사고대차 관리 플랫폼 RentFlow</h1>
         <UniversalAiIntake />
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
           <GatewayCard href="/admin/dashboard" icon={MonitorCog} title="관리자 웹사이트" body="차량, 배차, 회차, 예약, 정비, 서류 관리" />
