@@ -53,6 +53,13 @@ export async function onRequestPost({ request, env }: UploadContext) {
       businessFolder: metadata.businessFolder,
       fileKind: metadata.fileKind,
       folderPath: metadata.folderPath,
+      orderer: metadata.orderer,
+      repairShop: metadata.repairShop,
+      customerCar: metadata.customerCar,
+      customerPhone: metadata.customerPhone,
+      driverLicenseInfo: metadata.driverLicenseInfo,
+      ocrTargets: metadata.ocrTargets,
+      memo: metadata.memo,
     },
   };
   const driveResult = await callAppsScript(env, payload);

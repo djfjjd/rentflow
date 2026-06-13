@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertTriangle, Car, FileImage, ImagePlus, Loader2, Sparkles, UserRound, Wrench, CheckCircle2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, FileImage, ImagePlus, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
 
@@ -82,27 +82,21 @@ export function UniversalAiIntake() {
       for (const file of files) {
         const fileAnalysis = analyzeIntake(text, file.name, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
         
-        // Map situation to Drive folders
-        const folderMap: Record<IntakeAnalysis["situation"], DriveBusinessFolder> = {
-          "사고": "사고사진",
-          "정비": "정비",
-          "배차": "배차",
-          "회차": "회차",
-          "예약": "배차", // 예약은 배차 폴더로 임시 분류
-          "일반": "배차"
-        };
+        const fileCategory = classifyUploadedFile(file.name, fileAnalysis.situation);
 
         const metadata: UploadFileMetadata = {
           vehicleNumber: fileAnalysis.fields.find(f => f.label === "차량번호")?.value || "unknown",
           claimNumber: fileAnalysis.fields.find(f => f.label === "보험접수번호")?.value,
-          businessFolder: folderMap[fileAnalysis.situation],
-          fileKind: fileAnalysis.situation === "사고" ? "사진" : "정비",
+          businessFolder: fileCategory.businessFolder,
+          fileKind: fileCategory.fileKind,
           intakeType,
           orderer,
           repairShop,
           customerCar,
           customerName,
           customerPhone,
+          driverLicenseInfo: fileAnalysis.fields.find(f => f.label === "면허정보")?.value,
+          ocrTargets: ["차량번호", "보험접수번호", "면허정보", "고객명"],
           memo: text,
         };
 
@@ -120,9 +114,8 @@ export function UniversalAiIntake() {
   };
 
   return (
-    <section className="mt-6 rounded-lg border border-line bg-white p-5 shadow-sm">
-      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <div>
+    <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
+      <div>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -145,7 +138,7 @@ export function UniversalAiIntake() {
                   <ImagePlus className="h-8 w-8" aria-hidden="true" />
                 </span>
                 <span className="mt-4 text-lg font-black text-ink">사진 업로드 (다중 선택 가능)</span>
-                <span className="mt-2 text-sm leading-6 text-gray-500">사고부위, 계기판, 견적서, 카톡 캡처</span>
+                <span className="mt-2 text-sm leading-6 text-gray-500">사고부위, 면허증, 보험접수번호, 차량번호 촬영자료</span>
               </>
             )}
           </button>
@@ -189,7 +182,7 @@ export function UniversalAiIntake() {
                 </label>
               ))}
             </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
               {(intakeType === "insurance" || intakeType === "selfPay") && (
                 <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
               )}
@@ -202,6 +195,14 @@ export function UniversalAiIntake() {
               {intakeType === "selfService" && (
                 <LabeledInput label="고객명" value={customerName} onChange={setCustomerName} onDirty={() => setAnalyzed(false)} placeholder="고객명 입력" />
               )}
+              <LabeledInput
+                label="고객 휴대폰번호"
+                value={customerPhone}
+                onChange={setCustomerPhone}
+                onDirty={() => setAnalyzed(false)}
+                placeholder="010-0000-0000"
+                inputMode="tel"
+              />
             </div>
           </div>
           <textarea
@@ -212,18 +213,7 @@ export function UniversalAiIntake() {
             }}
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="차량번호, 오더자, 수리처, 고객 차종, 정비내역, 사고부위, 접수번호"
-          />
-          <input
-            type="tel"
-            value={customerPhone}
-            onChange={(event) => {
-              setCustomerPhone(event.target.value);
-              setAnalyzed(false);
-            }}
-            className="mt-3 min-h-12 w-full rounded-lg border border-line bg-white px-4 text-base font-semibold text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="고객 휴대폰번호"
-            inputMode="tel"
+            placeholder="사고부위, 기타 특이사항"
           />
           <button
             type="button"
@@ -243,59 +233,12 @@ export function UniversalAiIntake() {
               </>
             )}
           </button>
-        </div>
-
-        <div className="rounded-lg border border-line bg-slate-50 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold text-primary">만능 접수 분석</p>
-              <h2 className="mt-1 text-2xl font-black text-ink">
-                {uploadComplete ? "저장 완료" : analyzed ? mainAnalysis.title : "대기중"}
-              </h2>
-            </div>
-            <SituationBadge situation={analyzed ? mainAnalysis.situation : "일반"} />
-          </div>
-
-          {analyzed ? (
-            <>
-              {uploadComplete && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-600 border border-emerald-100">
-                  <CheckCircle2 className="h-5 w-5" />
-                  모든 사진이 분석되어 Google Drive에 자동 저장되었습니다.
-                </div>
-              )}
-              <p className="mt-4 rounded-lg bg-white p-3 text-sm font-semibold leading-6 text-gray-700">{mainAnalysis.summary}</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {mainAnalysis.fields.map((field) => (
-                  <div key={field.label} className="rounded-lg bg-white px-3 py-2">
-                    <p className="text-xs font-bold text-gray-500">{field.label}</p>
-                    <p className="mt-1 truncate text-sm font-black text-ink">{field.value}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <p className="text-xs font-bold text-gray-500">추천 처리</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {mainAnalysis.actions.map((action) => (
-                    <span key={action} className="rounded-md bg-white px-3 py-2 text-xs font-black text-primary">
-                      {action}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${mainAnalysis.confidence}%` }} />
-              </div>
-              <p className="mt-2 text-right text-xs font-bold text-gray-500">신뢰도 {mainAnalysis.confidence}%</p>
-            </>
-          ) : (
-            <div className="mt-5 grid gap-3">
-              <Placeholder icon={Car} text="차량번호와 접수번호를 자동 분류" />
-              <Placeholder icon={UserRound} text="오더자, 고객 차종, 수리처 후보 추출" />
-              <Placeholder icon={Wrench} text="정비, 사고, 배차, 회차 상황 추천" />
+          {uploadComplete && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-600">
+              <CheckCircle2 className="h-5 w-5" />
+              사진과 입력 내용이 분석되어 Google Drive에 자동 저장되었습니다.
             </div>
           )}
-        </div>
       </div>
     </section>
   );
@@ -329,8 +272,9 @@ function analyzeIntake(
   const repairShop = form.repairShop || readField(source, ["수리처", "공업사", "정비소", "수리공장"]);
   const customerCar = form.customerCar || readField(source, ["고객차종", "고객 차종", "상대차종", "차종"]);
   const customerName = form.customerName || readField(source, ["고객명", "고객"]);
+  const driverLicenseInfo = readField(source, ["면허번호", "운전면허", "면허정보", "면허"]);
   const maintenance = readField(source, ["정비내역", "수리내역", "작업내용", "메모"]);
-  const hasAccident = ["사고", "범퍼", "파손", "기스", "추돌", "보험", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
+  const hasAccident = ["사고", "범퍼", "파손", "기스", "추돌", "보험", "접수", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
   const hasMaintenance = ["정비", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
   const hasReturn = ["회차", "반납", "입고"].some((keyword) => lower.includes(keyword));
   const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword));
@@ -357,7 +301,7 @@ function analyzeIntake(
   return {
     title: titleMap[situation],
     situation,
-    confidence: Math.min(96, 62 + [plateNumber, claimNumber, orderer, repairShop, customerCar, maintenance, fileName].filter(Boolean).filter((value) => value !== "-").length * 5),
+    confidence: Math.min(96, 62 + [plateNumber, claimNumber, orderer, repairShop, customerCar, driverLicenseInfo, maintenance, fileName].filter(Boolean).filter((value) => value !== "-").length * 5),
     summary: `${plateNumber !== "-" ? plateNumber : "차량 미확인"} 기준으로 ${titleMap[situation]}로 분류했습니다.`,
     fields: [
       { label: "차량번호", value: plateNumber },
@@ -367,10 +311,37 @@ function analyzeIntake(
       { label: "고객 차종", value: customerCar || "-" },
       { label: "고객명", value: customerName || "-" },
       { label: "고객 휴대폰", value: form.customerPhone || "-" },
+      { label: "면허정보", value: driverLicenseInfo || "-" },
       { label: "정비/작업", value: maintenance || detectWork(source) },
     ],
     actions: actionsMap[situation],
   };
+}
+
+function classifyUploadedFile(fileName: string, situation: IntakeAnalysis["situation"]): { businessFolder: DriveBusinessFolder; fileKind: DriveFileKind } {
+  const normalized = fileName.toLowerCase();
+
+  if (["license", "driver", "면허"].some((keyword) => normalized.includes(keyword))) {
+    return { businessFolder: "면허증", fileKind: "면허증" };
+  }
+
+  if (["보험", "접수", "claim", "insurance"].some((keyword) => normalized.includes(keyword))) {
+    return { businessFolder: "보험접수자료", fileKind: "보험접수자료" };
+  }
+
+  if (["정비", "수리", "견적", "maintenance", "repair"].some((keyword) => normalized.includes(keyword)) || situation === "정비") {
+    return { businessFolder: "정비사진", fileKind: "정비사진" };
+  }
+
+  if (["외관", "전면", "후면", "측면", "계기판", "exterior"].some((keyword) => normalized.includes(keyword))) {
+    return { businessFolder: "차량외관사진", fileKind: "차량외관사진" };
+  }
+
+  if (situation === "사고") {
+    return { businessFolder: "사고사진", fileKind: "사고사진" };
+  }
+
+  return { businessFolder: "사고사진", fileKind: "사고사진" };
 }
 
 function LabeledInput({
@@ -379,12 +350,14 @@ function LabeledInput({
   onChange,
   onDirty,
   placeholder,
+  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   onDirty: () => void;
   placeholder: string;
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <label className="block">
@@ -397,6 +370,7 @@ function LabeledInput({
         }}
         className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
         placeholder={placeholder}
+        inputMode={inputMode}
       />
     </label>
   );
@@ -415,25 +389,4 @@ function detectWork(source: string) {
     if (source.includes(keyword)) return keyword;
   }
   return "-";
-}
-
-function SituationBadge({ situation }: { situation: IntakeAnalysis["situation"] }) {
-  const danger = situation === "사고" || situation === "정비";
-  return (
-    <span className={danger ? "inline-flex items-center gap-1 rounded-md bg-amber/10 px-3 py-1 text-sm font-black text-amber" : "inline-flex items-center gap-1 rounded-md bg-primary/10 px-3 py-1 text-sm font-black text-primary"}>
-      {danger ? <AlertTriangle className="h-4 w-4" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
-      {situation}
-    </span>
-  );
-}
-
-function Placeholder({ icon: Icon, text }: { icon: typeof Car; text: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg bg-white p-3 text-sm font-bold text-gray-600">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <span>{text}</span>
-    </div>
-  );
 }
