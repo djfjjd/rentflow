@@ -1,3 +1,4 @@
+import { AutoReturnProcessBoard } from "@/components/erp/HistoryBoards";
 import { AdminShell, StatCard } from "@/components/erp/Shell";
 import { adminNavItems, dispatches, vehicles } from "@/lib/erp-data";
 
@@ -62,6 +63,9 @@ export default function AdminDashboardPage() {
           </table>
         </div>
       </section>
+      <div className="mt-5">
+        <AutoReturnProcessBoard />
+      </div>
     </AdminShell>
   );
 }

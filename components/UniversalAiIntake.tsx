@@ -4,7 +4,7 @@ import { CheckCircle2, FileImage, ImagePlus, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
-import { vehicles } from "@/lib/erp-data";
+import { dispatches, vehicles } from "@/lib/erp-data";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
 
@@ -17,11 +17,25 @@ type IntakeAnalysis = {
   actions: string[];
 };
 
+type AiCategory = "사고" | "정비" | "계약" | "청구" | "입금" | "예약" | "일반메모";
+
+type AutoReturnPreview = {
+  plateNumber: string;
+  mileage: number;
+  fuelLevel: number;
+  capturedAt: string;
+  dispatchInfo: string;
+  confidenceScore: number;
+  report: string;
+};
+
 const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
   { value: "insurance", label: "보험건" },
   { value: "selfPay", label: "자차건" },
   { value: "selfService", label: "셀프건" },
 ];
+
+const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입금", "예약", "일반메모"];
 
 export function UniversalAiIntake() {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -39,6 +53,8 @@ export function UniversalAiIntake() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [selectedVehicleNumber, setSelectedVehicleNumber] = useState("");
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
+  const [aiCategory, setAiCategory] = useState<AiCategory>("일반메모");
+  const [autoReturnPreview, setAutoReturnPreview] = useState<AutoReturnPreview | null>(null);
 
   const mainAnalysis = useMemo(() => {
     const firstFileName = files[0]?.name || "";
@@ -61,6 +77,7 @@ export function UniversalAiIntake() {
     setAnalyzed(false);
     setUploadComplete(false);
     setUploadStatus("idle");
+    setAutoReturnPreview(null);
     
     previews.forEach((url) => URL.revokeObjectURL(url));
     const newPreviews = newFiles.map(file => 
@@ -89,6 +106,11 @@ export function UniversalAiIntake() {
         const fileAnalysis = analyzeIntake(text, file.name, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
         
         const fileCategory = classifyUploadedFile(file.name, fileAnalysis.situation);
+        const mockReturn = buildMockReturnPreview(file.name, selectedVehicleNumber);
+
+        if (mockReturn) {
+          setAutoReturnPreview(mockReturn);
+        }
 
         const metadata: UploadFileMetadata = {
           vehicleNumber: selectedVehicleNumber || fileAnalysis.fields.find(f => f.label === "차량번호")?.value || "unknown",
@@ -133,6 +155,7 @@ export function UniversalAiIntake() {
     setCustomerName("");
     setCustomerPhone("");
     setSelectedVehicleNumber("");
+    setAiCategory("일반메모");
     setAnalyzed(false);
   };
 
@@ -246,16 +269,32 @@ export function UniversalAiIntake() {
               />
             </div>
           </div>
-          <textarea
+            <textarea
             value={text}
             onChange={(event) => {
-              setText(event.target.value);
+              const nextText = event.target.value;
+              setText(nextText);
+              setAiCategory(classifyAiInbox(nextText));
               setAnalyzed(false);
             }}
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="사고부위, 기타 특이사항"
+            placeholder="AI 접수함: 정비요망, 사고접수, 계약서등록, 면허증등록, 청구서발행, 입금확인, 차량이상, 예약변경"
           />
+          <div className="mt-3 rounded-lg border border-line bg-field p-3">
+            <label className="block">
+              <span className="text-xs font-bold text-gray-500">AI 분류 결과</span>
+              <select
+                value={aiCategory}
+                onChange={(event) => setAiCategory(event.target.value as AiCategory)}
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              >
+                {aiCategories.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <button
             type="button"
             disabled={!canAnalyze || isUploading}
@@ -285,6 +324,25 @@ export function UniversalAiIntake() {
               <CheckCircle2 className="h-5 w-5" />
               업로드 완료. 입력 내용이 초기화되었습니다.
             </div>
+          )}
+          {autoReturnPreview && (
+            <section className="mt-4 rounded-lg border border-primary/20 bg-white p-4">
+              <p className="text-sm font-black text-primary">최근 배차건을 찾았습니다.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <InfoPill label="차량번호" value={autoReturnPreview.plateNumber} />
+                <InfoPill label="최근 배차" value={autoReturnPreview.dispatchInfo} />
+                <InfoPill label="추출 주행거리" value={`${autoReturnPreview.mileage.toLocaleString()}km`} />
+                <InfoPill label="추출 유량" value={`${autoReturnPreview.fuelLevel}%`} />
+              </div>
+              <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-field p-3 text-xs font-semibold leading-5 text-gray-700">{autoReturnPreview.report}</pre>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {["자동 회차 처리", "직접 수정 후 회차 처리", "다른 배차건 선택", "보류"].map((label) => (
+                  <button key={label} type="button" className="min-h-10 rounded-lg border border-line px-3 text-sm font-bold text-ink">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
       </div>
     </section>
@@ -368,6 +426,10 @@ function analyzeIntake(
 function classifyUploadedFile(fileName: string, situation: IntakeAnalysis["situation"]): { businessFolder: DriveBusinessFolder; fileKind: DriveFileKind } {
   const normalized = fileName.toLowerCase();
 
+  if (["회차계기판", "return-dashboard", "return_dash"].some((keyword) => normalized.includes(keyword))) {
+    return { businessFolder: "회차", fileKind: "사진" };
+  }
+
   if (["license", "driver", "면허"].some((keyword) => normalized.includes(keyword))) {
     return { businessFolder: "면허증", fileKind: "면허증" };
   }
@@ -389,6 +451,60 @@ function classifyUploadedFile(fileName: string, situation: IntakeAnalysis["situa
   }
 
   return { businessFolder: "사고사진", fileKind: "사고사진" };
+}
+
+function classifyAiInbox(value: string): AiCategory {
+  const source = value.toLowerCase();
+
+  if (["정비요망", "엔진오일", "브레이크", "타이어", "배터리", "점검", "차량이상"].some((keyword) => source.includes(keyword.toLowerCase()))) return "정비";
+  if (["사고", "파손", "접촉", "보험접수", "범퍼", "휀다"].some((keyword) => source.includes(keyword.toLowerCase()))) return "사고";
+  if (["계약", "계약서"].some((keyword) => source.includes(keyword))) return "계약";
+  if (["청구", "청구서"].some((keyword) => source.includes(keyword))) return "청구";
+  if (["입금", "입금확인"].some((keyword) => source.includes(keyword))) return "입금";
+  if (["예약", "예약변경"].some((keyword) => source.includes(keyword))) return "예약";
+
+  return "일반메모";
+}
+
+function buildMockReturnPreview(fileName: string, selectedVehicleNumber: string): AutoReturnPreview | null {
+  if (!["회차계기판", "return-dashboard", "return_dash"].some((keyword) => fileName.toLowerCase().includes(keyword))) {
+    return null;
+  }
+
+  const plateNumber = fileName.match(/\d{2,3}[가-힣]\d{4}/)?.[0] || selectedVehicleNumber || "차량번호 확인필요";
+  const mileage = Number(fileName.match(/(\d{4,7})\s*km/i)?.[1] || fileName.match(/_(\d{4,7})_/i)?.[1] || 0);
+  const vehicle = vehicles.find((item) => item.plateNumber === plateNumber);
+  const fuelLevel = Number(fileName.match(/유량\s*(\d{1,3})/)?.[1] || vehicle?.fuelLevel || 0);
+  const dispatch = dispatches.find((item) => item.rentalCarNumber === plateNumber) ?? dispatches[0];
+  const dispatchInfo = dispatch ? `${dispatch.id} · ${dispatch.customerName} · ${dispatch.status}` : "매칭 배차건 확인필요";
+  const finalMileage = mileage || vehicle?.mileage || 0;
+  const report = [
+    "[회차보고]",
+    `${plateNumber} 회차 완료`,
+    `주행거리: ${finalMileage.toLocaleString()}km`,
+    `유량: ${fuelLevel}%`,
+    "처리방식: 계기판 사진 자동인식",
+    "특이사항: 회차계기판 사진 업로드로 자동 회차 처리",
+  ].join("\n");
+
+  return {
+    plateNumber,
+    mileage: finalMileage,
+    fuelLevel,
+    capturedAt: new Date().toISOString(),
+    dispatchInfo,
+    confidenceScore: plateNumber === "차량번호 확인필요" ? 48 : 88,
+    report,
+  };
+}
+
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-field p-3">
+      <p className="text-xs font-bold text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-black text-ink">{value}</p>
+    </div>
+  );
 }
 
 function LabeledInput({

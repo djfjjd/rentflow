@@ -25,8 +25,7 @@ export function AdminShell({
         <aside className="hidden border-r border-line bg-white lg:block">
           <div className="sticky top-0 p-5">
             <Link href="/" className="block">
-              <p className="text-sm font-bold text-primary">Rent ERP</p>
-              <h1 className="mt-1 text-xl font-black text-ink">관리자 웹사이트</h1>
+              <h1 className="text-2xl font-black text-primary">렌트플로우</h1>
             </Link>
             <nav className="mt-6 space-y-1">
               {navItems.map((item) => {

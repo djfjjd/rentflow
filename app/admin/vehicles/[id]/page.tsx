@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DriveFileList } from "@/components/DriveFileList";
 import { DriverAssignmentManager } from "@/components/erp/DriverAssignmentManager";
-import { AccidentHistoryBoard, MaintenanceHistoryBoard, RevenueBoard } from "@/components/erp/HistoryBoards";
+import { AccidentHistoryBoard, AutoReturnProcessBoard, MaintenanceHistoryBoard, RevenueBoard } from "@/components/erp/HistoryBoards";
 import { ReceivableManager } from "@/components/erp/ReceivableManager";
 import { AdminShell } from "@/components/erp/Shell";
 import { receivables } from "@/lib/finance-ops-data";
@@ -53,6 +53,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       </div>
       <div className="mt-5">
         <AccidentHistoryBoard plateNumber={vehicle.plateNumber} />
+      </div>
+      <div className="mt-5">
+        <AutoReturnProcessBoard plateNumber={vehicle.plateNumber} />
       </div>
       <div className="mt-5">
         <RevenueBoard plateNumber={vehicle.plateNumber} />

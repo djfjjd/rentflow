@@ -10,6 +10,7 @@ import {
   type AccidentHistory,
   type MaintenanceHistory,
 } from "@/lib/erp-data";
+import { buildReturnReport, returnAutoProcesses } from "@/lib/auto-return-data";
 
 export function MaintenanceHistoryBoard({ plateNumber }: { plateNumber?: string }) {
   const items = plateNumber ? maintenanceHistories.filter((item) => item.plateNumber === plateNumber) : maintenanceHistories;
@@ -43,6 +44,43 @@ export function AccidentHistoryBoard({ plateNumber }: { plateNumber?: string }) 
       </div>
       <div className="grid gap-3">
         {items.map((item) => <AccidentCard key={item.id} item={item} />)}
+      </div>
+    </section>
+  );
+}
+
+export function AutoReturnProcessBoard({ plateNumber }: { plateNumber?: string }) {
+  const items = plateNumber ? returnAutoProcesses.filter((item) => item.plateNumber === plateNumber) : returnAutoProcesses;
+
+  return (
+    <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-black text-ink">자동 회차 처리 이력</h2>
+          <p className="mt-1 text-sm text-gray-500">회차계기판 사진 OCR/mock OCR 기반 자동 회차 결과입니다.</p>
+        </div>
+        <span className="rounded-md bg-primary/10 px-3 py-1 text-xs font-black text-primary">{items.length}건</span>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {items.map((item) => (
+          <article key={item.id} className="rounded-lg bg-field p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-black text-primary">{item.plateNumber} · {item.status}</p>
+                <p className="mt-2 text-sm font-semibold text-gray-700">
+                  주행거리 {item.extractedMileage.toLocaleString()}km · 유량 {item.extractedFuelLevel}% · 신뢰도 {item.confidenceScore}%
+                </p>
+                <p className="mt-1 text-xs font-semibold text-gray-500">
+                  배차 {item.matchedDispatchId ?? "확인필요"} · 회차 {item.createdReturnId ?? "미생성"} · {formatDate(item.createdAt)}
+                </p>
+              </div>
+              <pre className="whitespace-pre-wrap rounded-lg bg-white p-3 text-xs font-semibold leading-5 text-gray-700">{buildReturnReport(item)}</pre>
+            </div>
+          </article>
+        ))}
+        {items.length === 0 && (
+          <div className="rounded-lg bg-field p-4 text-center text-sm font-bold text-gray-500">자동 회차 처리 이력이 없습니다.</div>
+        )}
       </div>
     </section>
   );
@@ -196,4 +234,9 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-xl font-black text-ink">{value}</p>
     </article>
   );
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
 }
