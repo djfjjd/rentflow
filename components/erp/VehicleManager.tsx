@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { vehicleStatuses, type Vehicle, type VehicleStatus } from "@/lib/erp-data";
+import { type Vehicle } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
 
 const emptyVehicle: Vehicle = {
@@ -50,21 +50,7 @@ export function VehicleManager() {
           <TextField label="차량번호" value={editing.plateNumber} onChange={(value) => setEditing({ ...editing, plateNumber: value })} />
           <TextField label="차종" value={editing.model} onChange={(value) => setEditing({ ...editing, model: value })} />
           <TextField label="유종" value={editing.fuelType} onChange={(value) => setEditing({ ...editing, fuelType: value })} />
-          <NumberField label="유량" value={editing.fuelLevel} onChange={(value) => setEditing({ ...editing, fuelLevel: value })} suffix="%" />
           <NumberField label="주행거리" value={editing.mileage} onChange={(value) => setEditing({ ...editing, mileage: value })} suffix="km" />
-          <TextField label="현재위치" value={editing.location} onChange={(value) => setEditing({ ...editing, location: value })} />
-          <label className="grid gap-1 text-sm font-bold text-gray-600">
-            상태
-            <select
-              value={editing.status}
-              onChange={(event) => setEditing({ ...editing, status: event.target.value as VehicleStatus })}
-              className="min-h-11 rounded-lg border border-line bg-white px-3 text-ink"
-            >
-              {vehicleStatuses.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
-            </select>
-          </label>
           <label className="grid gap-1 text-sm font-bold text-gray-600">
             메모
             <textarea

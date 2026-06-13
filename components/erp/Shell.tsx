@@ -56,7 +56,7 @@ export function AdminShell({
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-black text-ink">
               <span className="inline-flex items-center gap-2">
                 <Menu className="h-4 w-4 text-primary" aria-hidden="true" />
-                관리자 메뉴
+                {title}
               </span>
               <span className="text-xs font-bold text-primary">더보기</span>
             </summary>
@@ -76,20 +76,6 @@ export function AdminShell({
               })}
             </nav>
           </details>
-          <header className="mb-5 rounded-lg border border-line bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-ink">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-500">{description}</p>
-              </div>
-              <Link
-                href="/app/inbox"
-                className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 text-sm font-bold text-ink"
-              >
-                모바일 앱으로
-              </Link>
-            </div>
-          </header>
           {children}
         </section>
       </div>

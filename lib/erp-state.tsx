@@ -53,6 +53,7 @@ const UPLOADED_FILES_KEY = "rentflow_uploaded_files";
 const MAINTENANCE_HISTORIES_KEY = "rentflow_maintenance_histories";
 const ACCIDENT_HISTORIES_KEY = "rentflow_accident_histories";
 const RESTORED_1146_KEY = "rentflow_restored_vehicle_1146";
+const RESTORED_1146_POSITION_KEY = "rentflow_restored_vehicle_1146_position";
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -77,13 +78,17 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
 
     if (savedVehicles) {
       const parsedVehicles = JSON.parse(savedVehicles);
-      const next = localStorage.getItem(RESTORED_1146_KEY) ? parsedVehicles : restoreVehicle1146(parsedVehicles);
+      const restoredVehicles = localStorage.getItem(RESTORED_1146_POSITION_KEY)
+        ? parsedVehicles
+        : restoreVehicle1146(parsedVehicles);
+      const next = orderVehicle1146(restoredVehicles);
       setVehicles(next);
       localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
       localStorage.setItem(RESTORED_1146_KEY, "true");
+      localStorage.setItem(RESTORED_1146_POSITION_KEY, "true");
     }
     if (savedDispatches) {
-      const next = filterSeedDispatches(JSON.parse(savedDispatches));
+      const next = cleanDispatches(filterSeedDispatches(JSON.parse(savedDispatches)));
       setDispatches(next);
       localStorage.setItem(DISPATCHES_KEY, JSON.stringify(next));
     }
@@ -278,10 +283,35 @@ function filterSeedAccidentHistories(items: AccidentHistory[]) {
   return items.filter((item) => item.id !== "ah-1");
 }
 
+function cleanDispatches(items: Dispatch[]) {
+  return items.map((item) => {
+    if (item.rentalCarNumber !== "142호1146") return item;
+    if (!item.repairShop.includes("성수")) return item;
+
+    return { ...item, repairShop: "확인필요" };
+  });
+}
+
 function restoreVehicle1146(items: Vehicle[]) {
   if (items.some((item) => item.plateNumber === "142호1146")) return items;
 
   const restored = initialVehicles.find((item) => item.plateNumber === "142호1146");
 
   return restored ? [...items, restored] : items;
+}
+
+function orderVehicle1146(items: Vehicle[]) {
+  const vehicle1146 = items.find((item) => item.plateNumber === "142호1146");
+  if (!vehicle1146) return items;
+
+  const without1146 = items.filter((item) => item.plateNumber !== "142호1146");
+  const insertIndex = without1146.findIndex((item) => item.plateNumber === "125하4304");
+
+  if (insertIndex === -1) return [vehicle1146, ...without1146];
+
+  return [
+    ...without1146.slice(0, insertIndex + 1),
+    vehicle1146,
+    ...without1146.slice(insertIndex + 1),
+  ];
 }

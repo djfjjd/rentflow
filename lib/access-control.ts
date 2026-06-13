@@ -2,7 +2,7 @@ import type { Role } from "@/lib/erp-data";
 
 const roleAccess: Record<Role, string[]> = {
   admin: ["/app", "/admin"],
-  staff: ["/app", "/admin/vehicles", "/admin/dispatches", "/admin/lost-items", "/admin/reservations", "/admin/documents"],
+  staff: ["/app", "/admin/vehicles", "/admin/dispatches", "/admin/lost-items", "/admin/reservations", "/admin/maintenance-history"],
   driver: ["/app"],
 };
 
