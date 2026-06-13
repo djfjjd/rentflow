@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { vehicleStatuses, vehicles as seedVehicles, type Vehicle, type VehicleStatus } from "@/lib/erp-data";
+import { vehicleStatuses, type Vehicle, type VehicleStatus } from "@/lib/erp-data";
+import { useERPState } from "@/lib/erp-state";
 
 const emptyVehicle: Vehicle = {
   id: "",
@@ -18,7 +19,7 @@ const emptyVehicle: Vehicle = {
 };
 
 export function VehicleManager() {
-  const [items, setItems] = useState<Vehicle[]>(seedVehicles);
+  const { vehicles: items, addVehicle, removeVehicle, isLoaded } = useERPState();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Vehicle>({ ...emptyVehicle, id: crypto.randomUUID() });
 
@@ -35,19 +36,11 @@ export function VehicleManager() {
       return;
     }
 
-    setItems((current) => {
-      const exists = current.some((item) => item.id === editing.id);
-      if (exists) {
-        return current.map((item) => (item.id === editing.id ? editing : item));
-      }
-      return [editing, ...current];
-    });
+    addVehicle(editing);
     setEditing({ ...emptyVehicle, id: crypto.randomUUID() });
   };
 
-  const remove = (id: string) => {
-    setItems((current) => current.filter((item) => item.id !== id));
-  };
+  if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">차량 데이터를 불러오는 중입니다...</div>;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[360px_1fr]">

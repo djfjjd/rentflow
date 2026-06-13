@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { PwaRegister } from "./pwa-register";
+import { ERPProvider } from "@/lib/erp-state";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,8 +39,10 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <PwaRegister />
-        {children}
+        <ERPProvider>
+          <PwaRegister />
+          {children}
+        </ERPProvider>
       </body>
     </html>
   );

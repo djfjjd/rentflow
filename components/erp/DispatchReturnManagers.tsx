@@ -5,11 +5,10 @@ import { useState } from "react";
 import { PartnerAutocomplete } from "@/components/erp/PartnerManager";
 import { ReportTools } from "@/components/erp/ReportTools";
 import {
-  dispatches as seedDispatches,
-  returns as seedReturns,
   type Dispatch,
   type ReturnRecord,
 } from "@/lib/erp-data";
+import { useERPState } from "@/lib/erp-state";
 
 const emptyDispatch: Dispatch = {
   id: "",
@@ -43,14 +42,18 @@ const emptyReturn: ReturnRecord = {
 };
 
 export function DispatchManager() {
-  const [items, setItems] = useState<Dispatch[]>(seedDispatches);
+  const { dispatches: items, addDispatch, isLoaded } = useERPState();
   const [form, setForm] = useState<Dispatch>({ ...emptyDispatch, id: crypto.randomUUID() });
 
   const save = () => {
     if (!form.claimNumber || !form.rentalCarNumber) return;
-    setItems((current) => [form, ...current]);
+
+    addDispatch(form);
     setForm({ ...emptyDispatch, id: crypto.randomUUID() });
   };
+
+  if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">배차 데이터를 불러오는 중입니다...</div>;
+
 
   return (
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
@@ -113,14 +116,16 @@ export function DispatchManager() {
 }
 
 export function ReturnManager() {
-  const [items, setItems] = useState<ReturnRecord[]>(seedReturns);
+  const { returns: items, addReturn, isLoaded } = useERPState();
   const [form, setForm] = useState<ReturnRecord>({ ...emptyReturn, id: crypto.randomUUID() });
 
   const save = () => {
     if (!form.rentalCarNumber || !form.returnAddress) return;
-    setItems((current) => [form, ...current]);
+    addReturn(form);
     setForm({ ...emptyReturn, id: crypto.randomUUID() });
   };
+
+  if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">회차 데이터를 불러오는 중입니다...</div>;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">

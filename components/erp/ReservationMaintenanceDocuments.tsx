@@ -5,19 +5,20 @@ import { useMemo, useState } from "react";
 import {
   documentTypes,
   documents as seedDocuments,
-  maintenanceItems,
   partners,
-  reservations,
-  vehicles,
   type Partner,
   type DocumentRecord,
   type DocumentType,
 } from "@/lib/erp-data";
+import { useERPState } from "@/lib/erp-state";
 
 export function ReservationBoard() {
+  const { reservations, isLoaded } = useERPState();
   const days = Array.from({ length: 30 }, (_, i) => `2026-06-${String(i + 1).padStart(2, "0")}`);
   
   const upcomingReservations = [...reservations].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">예약 데이터를 불러오는 중입니다...</div>;
 
   return (
     <div className="space-y-5">
@@ -68,7 +69,10 @@ export function ReservationBoard() {
 }
 
 export function MaintenanceBoard() {
+  const { maintenance: maintenanceItems, vehicles, isLoaded } = useERPState();
   const notices = maintenanceItems.filter((item) => item.status === "정비대기");
+
+  if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">정비 데이터를 불러오는 중입니다...</div>;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_360px]">

@@ -4,7 +4,7 @@ import { CheckCircle2, FileImage, ImagePlus, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
-import { dispatches, vehicles } from "@/lib/erp-data";
+import { useERPState } from "@/lib/erp-state";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
 
@@ -45,6 +45,7 @@ const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입
 const parkingZones = ["독도", "울릉도", "아파트", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
 
 export function UniversalAiIntake() {
+  const { vehicles, updateVehicle, addDispatch } = useERPState();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -152,6 +153,50 @@ export function UniversalAiIntake() {
 
         // 2. Upload to Drive (Mock)
         await uploadFilesToDrive([file], metadata);
+        
+        // 3. PERSIST ERP DATA
+        const plateNumber = metadata.vehicleNumber;
+        if (plateNumber && plateNumber !== "unknown") {
+          if (fileAnalysis.situation === "회차") {
+            updateVehicle(plateNumber, {
+              status: "대기중",
+              location: "본사 주차장",
+              fuelLevel: mockReturn?.fuelLevel ?? 85,
+              mileage: mockReturn?.mileage,
+            });
+          } else if (fileAnalysis.situation === "배차") {
+            updateVehicle(plateNumber, {
+              status: "배차중",
+              location: repairShop || "성수 제일공업사",
+            });
+            addDispatch({
+              id: `d-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+              claimNumber: metadata.claimNumber || "미접수",
+              customerName: customerName || "미확인",
+              customerPhone: customerPhone || "-",
+              customerCarNumber: "-",
+              customerCarModel: customerCar || "-",
+              rentalCarNumber: plateNumber,
+              orderedBy: orderer || "AI 접수",
+              repairShop: repairShop || "성수 제일공업사",
+              pickupAddress: "-",
+              deliveryAddress: "-",
+              fuelLevel: 85,
+              notes: text,
+              status: "출발보고",
+              uploadedAt: new Date().toISOString(),
+            });
+          } else if (fileAnalysis.situation === "정비" || fileAnalysis.situation === "사고") {
+            updateVehicle(plateNumber, {
+              status: fileAnalysis.situation === "사고" ? "사고" : "정비중",
+            });
+          } else if (parkingUpdate) {
+             updateVehicle(plateNumber, {
+               location: `본사주차장 ${parkingUpdate.parkingZone}구역`,
+             });
+          }
+        }
+        
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
 
