@@ -184,7 +184,25 @@ export function UniversalAiIntake() {
             </div>
           )}
           <div className="mt-4 rounded-lg border border-line bg-white p-4">
-            <div className="grid grid-cols-3 gap-2">
+            <label className="block">
+              <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
+              <select
+                value={selectedVehicleNumber}
+                onChange={(event) => {
+                  setSelectedVehicleNumber(event.target.value);
+                  setAnalyzed(false);
+                }}
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              >
+                <option value="">차량번호 선택</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.plateNumber}>
+                    {vehicle.plateNumber} · {vehicle.model}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {intakeTypeOptions.map((option) => (
                 <label
                   key={option.value}
@@ -206,24 +224,6 @@ export function UniversalAiIntake() {
               ))}
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <label className="block">
-                <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
-                <select
-                  value={selectedVehicleNumber}
-                  onChange={(event) => {
-                    setSelectedVehicleNumber(event.target.value);
-                    setAnalyzed(false);
-                  }}
-                  className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-                >
-                  <option value="">차량번호 선택</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.plateNumber}>
-                      {vehicle.plateNumber} · {vehicle.model}
-                    </option>
-                  ))}
-                </select>
-              </label>
               {(intakeType === "insurance" || intakeType === "selfPay") && (
                 <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
               )}
