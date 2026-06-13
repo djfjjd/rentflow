@@ -37,6 +37,7 @@ export type StoredFileMetadata = {
   vehicleNumber: string;
   insuranceNumber?: string;
   customerName?: string;
+  intakeType?: "insurance" | "selfPay" | "selfService";
   vehicleFolderUrl?: string;
   insuranceFolderUrl?: string;
   customerFolderUrl?: string;
@@ -98,6 +99,7 @@ function toStoredFileMetadata(result: DriveUploadResponse): StoredFileMetadata {
     vehicleNumber: result.vehicleNumber,
     insuranceNumber: result.insuranceNumber,
     customerName: result.customerName,
+    intakeType: result.intakeType,
     vehicleFolderUrl: result.vehicleFolderUrl,
     insuranceFolderUrl: result.insuranceFolderUrl,
     customerFolderUrl: result.customerFolderUrl,

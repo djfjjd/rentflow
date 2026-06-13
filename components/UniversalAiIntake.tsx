@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react
 import { uploadFilesToDrive, type StoredFileMetadata, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
 import { useERPState } from "@/lib/erp-state";
+import { resolveVehiclePlateNumber } from "@/lib/vehicle-utils";
 import type { AccidentHistory, Dispatch, MaintenanceHistory, ReturnRecord, Vehicle } from "@/lib/erp-data";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
@@ -119,10 +120,13 @@ export function UniversalAiIntake() {
     setUploadError("");
 
     try {
-      const parkingUpdate = parseParkingUpdate(text, selectedVehicleNumber);
+      const fileNames = files.map((file) => file.name).join(" ");
+      const resolveSource = [text, fileNames, orderer, repairShop, customerCar, customerName, customerPhone].join(" ");
+      const resolvedVehicleNumber = resolveVehiclePlateNumber(resolveSource, selectedVehicleNumber, vehicles);
+      const parkingUpdate = parseParkingUpdate(text, resolvedVehicleNumber, vehicles);
       const fallbackFileName = files[0]?.name || "";
       const analysis = analyzeIntake(text, fallbackFileName, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
-      const inferredVehicleNumber = selectedVehicleNumber || getAnalysisField(analysis, "차량번호") || parkingUpdate?.plateNumber || "unknown";
+      const inferredVehicleNumber = resolvedVehicleNumber || getAnalysisField(analysis, "차량번호") || parkingUpdate?.plateNumber || "unknown";
       const plateNumber = inferredVehicleNumber === "-" ? "unknown" : inferredVehicleNumber;
       const uploadedFiles: StoredFileMetadata[] = [];
 
@@ -140,8 +144,9 @@ export function UniversalAiIntake() {
           setAutoReturnPreview(mockReturn);
         }
 
+        const fileVehicleNumber = resolveVehiclePlateNumber([text, file.name, orderer, repairShop, customerCar, customerName, customerPhone].join(" "), selectedVehicleNumber, vehicles) || plateNumber;
         const metadata: UploadFileMetadata = {
-          vehicleNumber: selectedVehicleNumber || getAnalysisField(fileAnalysis, "차량번호") || plateNumber,
+          vehicleNumber: fileVehicleNumber,
           claimNumber: getAnalysisField(fileAnalysis, "보험접수번호"),
           businessFolder: fileCategory.businessFolder,
           fileKind: fileCategory.fileKind,
@@ -157,7 +162,7 @@ export function UniversalAiIntake() {
           memo: text,
         };
 
-        const uploaded = await uploadFilesToDrive([file], metadata);
+        const uploaded = (await uploadFilesToDrive([file], metadata)).map((storedFile) => ({ ...storedFile, intakeType }));
         uploadedFiles.push(...uploaded);
         
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
@@ -176,7 +181,7 @@ export function UniversalAiIntake() {
         addReturn,
         addMaintenanceHistory,
         addAccidentHistory,
-        form: { orderer, repairShop, customerCar, customerName, customerPhone, text },
+        form: { intakeType, orderer, repairShop, customerCar, customerName, customerPhone, text },
       });
 
       setAnalyzed(true);
@@ -431,10 +436,10 @@ function analyzeIntake(
   const hasAccident = ["사고", "파손", "범퍼", "휀다", "접촉", "보험접수", "기스", "추돌", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
   const hasMaintenance = ["정비", "정비요망", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
   const hasReturn = ["회차", "반납", "입고", "회차계기판"].some((keyword) => lower.includes(keyword));
-  const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword));
+  const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword)) || Boolean(form.orderer && form.repairShop);
   const hasReservation = ["예약", "예정", "스케줄"].some((keyword) => lower.includes(keyword));
 
-  const situation = hasAccident ? "사고" : hasMaintenance ? "정비" : hasReturn ? "회차" : hasDispatch ? "배차" : hasReservation ? "예약" : "일반";
+  const situation = hasReturn ? "회차" : hasDispatch ? "배차" : hasReservation ? "예약" : hasAccident ? "사고" : hasMaintenance ? "정비" : "일반";
   const titleMap = {
     사고: "사고/보험 접수 후보",
     정비: "정비이력 등록 후보",
@@ -552,14 +557,14 @@ function buildMockReturnPreview(
   };
 }
 
-function parseParkingUpdate(text: string, selectedVehicleNumber: string): ParkingUpdatePreview | null {
+function parseParkingUpdate(text: string, selectedVehicleNumber: string, vehicles: Vehicle[]): ParkingUpdatePreview | null {
   const source = text.trim();
   if (!source) return null;
 
   const parkingZone = parkingZones.find((zone) => source.includes(zone));
   if (!parkingZone) return null;
 
-  const plateNumber = source.match(/\d{2,3}[가-힣]\d{4}/)?.[0] || selectedVehicleNumber;
+  const plateNumber = resolveVehiclePlateNumber(source, selectedVehicleNumber, vehicles);
   if (!plateNumber) return null;
 
   return {
@@ -595,6 +600,7 @@ function persistAnalyzedIntake({
   addMaintenanceHistory: (record: MaintenanceHistory) => void;
   addAccidentHistory: (record: AccidentHistory) => void;
   form: {
+    intakeType: IntakeType;
     orderer: string;
     repairShop: string;
     customerCar: string;
@@ -631,6 +637,7 @@ function persistAnalyzedIntake({
       fuelLevel: vehicle?.fuelLevel ?? 85,
       notes: buildRecordMemo(form.text, uploadedFiles),
       status: "출발보고",
+      intakeType: form.intakeType,
       uploadedAt: now,
     });
     return;

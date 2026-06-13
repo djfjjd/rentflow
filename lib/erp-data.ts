@@ -88,6 +88,7 @@ export type Dispatch = {
   fuelLevel: number;
   notes: string;
   status: "배차등록" | "출발보고" | "도착보고" | "완료";
+  intakeType?: "insurance" | "selfPay" | "selfService";
   uploadedAt?: string;
 };
 

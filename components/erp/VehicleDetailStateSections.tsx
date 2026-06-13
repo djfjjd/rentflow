@@ -2,6 +2,7 @@
 
 import { AccidentHistoryBoard, MaintenanceHistoryBoard } from "@/components/erp/HistoryBoards";
 import { useERPState } from "@/lib/erp-state";
+import { isVehicleNumberMatch } from "@/lib/vehicle-utils";
 
 export function VehicleDetailStateSections({ plateNumber }: { plateNumber: string }) {
   const { uploadedFiles, dispatches, returns, maintenanceHistories, accidentHistories, isLoaded } = useERPState();
@@ -10,9 +11,11 @@ export function VehicleDetailStateSections({ plateNumber }: { plateNumber: strin
     return <div className="rounded-lg bg-white p-5 text-sm font-bold text-gray-500">차량 기록을 불러오는 중입니다...</div>;
   }
 
-  const vehicleUploads = uploadedFiles.filter((item) => item.vehicleNumber === plateNumber);
-  const vehicleDispatches = dispatches.filter((item) => item.rentalCarNumber === plateNumber);
-  const vehicleReturns = returns.filter((item) => item.rentalCarNumber === plateNumber);
+  const vehicleUploads = uploadedFiles.filter((item) =>
+    [item.vehicleNumber, item.fileName, item.r2Key, item.driveFileId].some((value) => isVehicleNumberMatch(value, plateNumber)),
+  );
+  const vehicleDispatches = dispatches.filter((item) => isVehicleNumberMatch(item.rentalCarNumber, plateNumber));
+  const vehicleReturns = returns.filter((item) => isVehicleNumberMatch(item.rentalCarNumber, plateNumber));
   const vehicleMaintenanceCount = maintenanceHistories.filter((item) => item.plateNumber === plateNumber).length;
   const vehicleAccidentCount = accidentHistories.filter((item) => item.plateNumber === plateNumber).length;
 

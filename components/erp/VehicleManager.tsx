@@ -5,6 +5,7 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { vehicleStatuses, type Vehicle, type VehicleStatus } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
+import { formatParkingLocation } from "@/lib/vehicle-utils";
 
 const emptyVehicle: Vehicle = {
   id: "",
@@ -117,7 +118,7 @@ export function VehicleManager() {
                   <td>{item.fuelType}</td>
                   <td>{item.fuelLevel}%</td>
                   <td>{item.mileage.toLocaleString()}km</td>
-                  <td>{item.location}</td>
+                  <td>{formatParkingLocation(item.location) || item.location}</td>
                   <td>
                     <StatusPill status={item.status} />
                   </td>

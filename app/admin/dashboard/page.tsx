@@ -4,24 +4,29 @@ import { AutoReturnProcessBoard } from "@/components/erp/HistoryBoards";
 import { AdminShell, StatCard } from "@/components/erp/Shell";
 import { adminNavItems } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
+import { formatParkingLocation, isVehicleNumberMatch } from "@/lib/vehicle-utils";
 
 export default function AdminDashboardPage() {
-  const { vehicles, dispatches, returns, isLoaded } = useERPState();
+  const { vehicles, dispatches, returns, uploadedFiles, isLoaded } = useERPState();
 
   const boardRows = vehicles.map((vehicle) => {
-    const vehicleDispatches = dispatches.filter((item) => item.rentalCarNumber === vehicle.plateNumber);
+    const vehicleDispatches = dispatches.filter((item) => isVehicleNumberMatch(item.rentalCarNumber, vehicle.plateNumber));
     const latestDispatch = vehicleDispatches[0];
+    const latestUpload = uploadedFiles.find((item) =>
+      [item.vehicleNumber, item.fileName, item.r2Key, item.driveFileId].some((value) => isVehicleNumberMatch(value, vehicle.plateNumber)),
+    );
+    const latestUploadedAt = latestDispatch?.uploadedAt || latestUpload?.uploadedAt || "";
+    const repairShopOrParking = formatParkingLocation(latestDispatch?.repairShop || vehicle.location) || latestDispatch?.repairShop || vehicle.location;
 
     return {
       id: vehicle.id,
       vehicleNumber: vehicle.plateNumber,
-      uploadedAt: latestDispatch?.uploadedAt ? new Date(latestDispatch.uploadedAt).toLocaleDateString("ko-KR") : "",
+      uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
-      damagedVehicle: latestDispatch ? `${latestDispatch.customerCarNumber} / ${latestDispatch.customerCarModel}` : "-",
+      damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
       orderer: latestDispatch?.orderedBy ?? "-",
-      repairShopOrParking: latestDispatch?.repairShop || vehicle.location,
-      status: vehicle.status,
-      dispatchStatus: latestDispatch?.status,
+      repairShopOrParking,
+      intakeType: latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : ""),
     };
   });
   const recordCount = dispatches.length + returns.length;
@@ -57,7 +62,7 @@ export default function AdminDashboardPage() {
                 <th className="px-4 py-3">피해차량</th>
                 <th className="px-4 py-3">오더자</th>
                 <th className="px-4 py-3">수리처 / 주차위치</th>
-                <th className="px-4 py-3">상태</th>
+                <th className="px-4 py-3">구분</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -75,8 +80,13 @@ export default function AdminDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.orderer}</td>
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.repairShopOrParking}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-black text-primary">{row.status}</span>
-                    {row.dispatchStatus && <span className="ml-2 rounded-md bg-field px-2 py-1 text-xs font-black text-gray-600">{row.dispatchStatus}</span>}
+                    {row.intakeType ? (
+                      <span className={`rounded-md px-2 py-1 text-xs font-black ${getIntakeTypeClass(row.intakeType)}`}>
+                        {formatIntakeType(row.intakeType)}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-400">-</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -89,4 +99,26 @@ export default function AdminDashboardPage() {
       </div>
     </AdminShell>
   );
+}
+
+function formatDamagedVehicle(vehicleNumber: string, model: string) {
+  const normalizedVehicleNumber = vehicleNumber.trim();
+  const normalizedModel = model.trim();
+
+  if (!normalizedVehicleNumber || normalizedVehicleNumber === "-") return normalizedModel || "-";
+  if (!normalizedModel || normalizedModel === "-") return normalizedVehicleNumber;
+
+  return `${normalizedVehicleNumber} / ${normalizedModel}`;
+}
+
+function formatIntakeType(value: string) {
+  if (value === "selfPay") return "자차";
+  if (value === "selfService") return "셀프";
+  return "보험";
+}
+
+function getIntakeTypeClass(value: string) {
+  if (value === "selfPay") return "bg-emerald-100 text-emerald-700";
+  if (value === "selfService") return "bg-blue-100 text-blue-700";
+  return "bg-red-100 text-red-700";
 }
