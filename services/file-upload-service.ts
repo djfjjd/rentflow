@@ -124,8 +124,22 @@ async function uploadFileToDrive(file: File, metadata: UploadFileMetadata & { fi
   });
 
   if (!response.ok) {
-    throw new Error(`Google Drive upload failed: ${response.status}`);
+    const errorMessage = await readUploadError(response);
+    throw new Error(errorMessage || `Google Drive upload failed: ${response.status}`);
   }
 
   return (await response.json()) as DriveUploadResponse;
+}
+
+async function readUploadError(response: Response) {
+  try {
+    const data = await response.json();
+
+    if (typeof data.error === "string") return data.error;
+    if (typeof data.message === "string") return data.message;
+  } catch {
+    return response.statusText;
+  }
+
+  return response.statusText;
 }

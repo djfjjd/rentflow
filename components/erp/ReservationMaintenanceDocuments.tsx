@@ -15,54 +15,31 @@ import {
 } from "@/lib/erp-data";
 
 export function ReservationBoard() {
-  const days = ["2026-06-13", "2026-06-14", "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18", "2026-06-19"];
-  const [factoryQuery, setFactoryQuery] = useState("");
-  const [selectedFactory, setSelectedFactory] = useState<Partner | null>(partners[0]);
-  const factoryMatches = partners
-    .filter((partner) => ["정비공장", "공업사"].includes(partner.type))
-    .filter((partner) => !factoryQuery || partner.name.includes(factoryQuery) || partner.region.includes(factoryQuery))
-    .slice(0, 4);
+  const days = Array.from({ length: 30 }, (_, i) => `2026-06-${String(i + 1).padStart(2, "0")}`);
+  
+  const upcomingReservations = [...reservations].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
   return (
     <div className="space-y-5">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-ink">예약 등록 공장 자동완성</h2>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[320px_1fr]">
-          <div>
-            <input value={factoryQuery} onChange={(event) => setFactoryQuery(event.target.value)} placeholder="공장명 또는 지역 입력" className="min-h-11 w-full rounded-lg border border-line px-3" />
-            <div className="mt-2 grid gap-2">
-              {factoryMatches.map((partner) => (
-                <button key={partner.id} type="button" onClick={() => setSelectedFactory(partner)} className="rounded-lg border border-line p-3 text-left hover:border-primary/40">
-                  <span className="block font-black text-ink">{partner.name}</span>
-                  <span className="mt-1 block text-xs text-gray-500">{partner.address} · {partner.phone}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg bg-field p-4 text-sm leading-7">
-            <p><strong>공장명</strong> {selectedFactory?.name}</p>
-            <p><strong>주소</strong> {selectedFactory?.address} {selectedFactory?.detailAddress}</p>
-            <p><strong>연락처</strong> {selectedFactory?.phone || selectedFactory?.mobile}</p>
-            <p><strong>담당자</strong> {selectedFactory?.managerName}</p>
-            <p><strong>메모</strong> {selectedFactory?.memo}</p>
-          </div>
-        </div>
-      </section>
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
         <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-ink">캘린더 형태</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-7">
+          <h2 className="text-lg font-black text-ink">월간 예약 현황</h2>
+          <div className="mt-4 grid gap-2 grid-cols-2 sm:grid-cols-4 md:grid-cols-7">
             {days.map((day) => {
               const dayItems = reservations.filter((item) => item.date === day);
+              const isToday = day === "2026-06-13";
               return (
-                <article key={day} className="min-h-40 rounded-lg border border-line bg-field p-3">
-                  <p className="text-sm font-black text-ink">{day.slice(5)}</p>
-                  <div className="mt-3 space-y-2">
+                <article key={day} className={`min-h-[120px] rounded-lg border border-line p-2 ${isToday ? "bg-primary/5 border-primary/20" : "bg-field"}`}>
+                  <p className={`text-xs font-black ${isToday ? "text-primary" : "text-ink"}`}>
+                    {day.slice(8)}일
+                    {isToday && <span className="ml-1 text-[10px] font-bold">(오늘)</span>}
+                  </p>
+                  <div className="mt-2 space-y-1">
                     {dayItems.map((item) => (
-                      <div key={item.id} className="rounded-md bg-white p-2 text-xs shadow-sm">
-                        <p className="font-black text-primary">{item.time}</p>
-                        <p className="mt-1 font-bold text-ink">{item.vehicleNumber}</p>
-                        <p className="text-gray-500">{item.customerName}</p>
+                      <div key={item.id} className="rounded-md bg-white p-1.5 text-[10px] shadow-sm border border-line/50">
+                        <p className="font-black text-primary leading-none">{item.time}</p>
+                        <p className="mt-1 font-bold text-ink truncate">{item.vehicleNumber}</p>
+                        <p className="text-gray-500 truncate">{item.customerName}</p>
                       </div>
                     ))}
                   </div>
@@ -72,10 +49,10 @@ export function ReservationBoard() {
           </div>
         </section>
         <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-ink">리스트 형태</h2>
-          <div className="mt-4 space-y-3">
-            {reservations.map((item) => (
-              <article key={item.id} className="rounded-lg bg-field p-4">
+          <h2 className="text-lg font-black text-ink">다가오는 일정</h2>
+          <div className="mt-4 space-y-3 max-h-[800px] overflow-y-auto pr-1">
+            {upcomingReservations.map((item) => (
+              <article key={item.id} className="rounded-lg bg-field p-4 border border-line/50 hover:border-primary/30 transition-colors">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-black text-ink">{item.date} {item.time}</p>
                   <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{item.status}</span>

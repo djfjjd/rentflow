@@ -59,10 +59,24 @@ export async function onRequestPost({ request, env }: UploadContext) {
       customerPhone: metadata.customerPhone,
       driverLicenseInfo: metadata.driverLicenseInfo,
       ocrTargets: metadata.ocrTargets,
+      parkingZone: metadata.parkingZone,
       memo: metadata.memo,
     },
   };
-  const driveResult = await callAppsScript(env, payload);
+  let driveResult: Record<string, unknown>;
+
+  try {
+    driveResult = await callAppsScript(env, payload);
+  } catch (error) {
+    return Response.json(
+      {
+        stored: false,
+        error: error instanceof Error ? error.message : "Google Drive upload failed.",
+      },
+      { status: 502 },
+    );
+  }
+
   const record = toDriveFileRecord(driveResult, payload.metadata);
 
   return Response.json({

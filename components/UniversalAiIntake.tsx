@@ -60,6 +60,8 @@ export function UniversalAiIntake() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [selectedVehicleNumber, setSelectedVehicleNumber] = useState("");
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
+  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
+  const [uploadError, setUploadError] = useState("");
   const [aiCategory, setAiCategory] = useState<AiCategory>("일반메모");
   const [autoReturnPreview, setAutoReturnPreview] = useState<AutoReturnPreview | null>(null);
   const [parkingUpdatePreview, setParkingUpdatePreview] = useState<ParkingUpdatePreview | null>(null);
@@ -85,6 +87,8 @@ export function UniversalAiIntake() {
     setAnalyzed(false);
     setUploadComplete(false);
     setUploadStatus("idle");
+    setUploadProgress({ done: 0, total: newFiles.length });
+    setUploadError("");
     setAutoReturnPreview(null);
     setParkingUpdatePreview(null);
     
@@ -105,6 +109,8 @@ export function UniversalAiIntake() {
     setAnalyzed(false);
     setUploadComplete(false);
     setUploadStatus("uploading");
+    setUploadProgress({ done: 0, total: files.length });
+    setUploadError("");
 
     try {
       const parkingUpdate = parseParkingUpdate(text, selectedVehicleNumber);
@@ -146,6 +152,7 @@ export function UniversalAiIntake() {
 
         // 2. Upload to Drive (Mock)
         await uploadFilesToDrive([file], metadata);
+        setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
 
       setAnalyzed(true);
@@ -155,6 +162,7 @@ export function UniversalAiIntake() {
     } catch (error) {
       console.error("AI Upload Error:", error);
       setUploadStatus("idle");
+      setUploadError(error instanceof Error ? error.message : "업로드 중 오류가 발생했습니다.");
     } finally {
       setIsUploading(false);
     }
@@ -306,7 +314,7 @@ export function UniversalAiIntake() {
             {isUploading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                업로드 중...
+                업로드 중... {uploadProgress.done}/{uploadProgress.total || files.length}
               </>
             ) : (
               <>
@@ -318,7 +326,12 @@ export function UniversalAiIntake() {
           {uploadStatus === "uploading" && (
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-primary/15 bg-primary/5 p-3 text-sm font-bold text-primary">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Google Drive 업로드를 처리하고 있습니다.
+              Google Drive 업로드를 처리하고 있습니다. {uploadProgress.done}/{uploadProgress.total || files.length}
+            </div>
+          )}
+          {uploadError && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              업로드 실패: {uploadError}
             </div>
           )}
           {uploadComplete && (
