@@ -4,6 +4,7 @@ import { CheckCircle2, FileImage, ImagePlus, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
+import { vehicles } from "@/lib/erp-data";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
 
@@ -36,6 +37,8 @@ export function UniversalAiIntake() {
   const [customerCar, setCustomerCar] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [selectedVehicleNumber, setSelectedVehicleNumber] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
 
   const mainAnalysis = useMemo(() => {
     const firstFileName = files[0]?.name || "";
@@ -57,6 +60,7 @@ export function UniversalAiIntake() {
     setFiles(newFiles);
     setAnalyzed(false);
     setUploadComplete(false);
+    setUploadStatus("idle");
     
     previews.forEach((url) => URL.revokeObjectURL(url));
     const newPreviews = newFiles.map(file => 
@@ -73,6 +77,8 @@ export function UniversalAiIntake() {
 
     setIsUploading(true);
     setAnalyzed(false);
+    setUploadComplete(false);
+    setUploadStatus("uploading");
 
     try {
       // 1. Analyze each file and text to determine metadata
@@ -85,7 +91,7 @@ export function UniversalAiIntake() {
         const fileCategory = classifyUploadedFile(file.name, fileAnalysis.situation);
 
         const metadata: UploadFileMetadata = {
-          vehicleNumber: fileAnalysis.fields.find(f => f.label === "차량번호")?.value || "unknown",
+          vehicleNumber: selectedVehicleNumber || fileAnalysis.fields.find(f => f.label === "차량번호")?.value || "unknown",
           claimNumber: fileAnalysis.fields.find(f => f.label === "보험접수번호")?.value,
           businessFolder: fileCategory.businessFolder,
           fileKind: fileCategory.fileKind,
@@ -106,11 +112,28 @@ export function UniversalAiIntake() {
 
       setAnalyzed(true);
       setUploadComplete(true);
+      setUploadStatus("complete");
+      resetForm();
     } catch (error) {
       console.error("AI Upload Error:", error);
+      setUploadStatus("idle");
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const resetForm = () => {
+    previews.forEach((url) => URL.revokeObjectURL(url));
+    setFiles([]);
+    setPreviews([]);
+    setText("");
+    setOrderer("");
+    setRepairShop("");
+    setCustomerCar("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setSelectedVehicleNumber("");
+    setAnalyzed(false);
   };
 
   return (
@@ -183,6 +206,24 @@ export function UniversalAiIntake() {
               ))}
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <label className="block">
+                <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
+                <select
+                  value={selectedVehicleNumber}
+                  onChange={(event) => {
+                    setSelectedVehicleNumber(event.target.value);
+                    setAnalyzed(false);
+                  }}
+                  className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+                >
+                  <option value="">차량번호 선택</option>
+                  {vehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.plateNumber}>
+                      {vehicle.plateNumber} · {vehicle.model}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {(intakeType === "insurance" || intakeType === "selfPay") && (
                 <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
               )}
@@ -233,10 +274,16 @@ export function UniversalAiIntake() {
               </>
             )}
           </button>
+          {uploadStatus === "uploading" && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-primary/15 bg-primary/5 p-3 text-sm font-bold text-primary">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Google Drive 업로드를 처리하고 있습니다.
+            </div>
+          )}
           {uploadComplete && (
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-600">
               <CheckCircle2 className="h-5 w-5" />
-              사진과 입력 내용이 분석되어 Google Drive에 자동 저장되었습니다.
+              업로드 완료. 입력 내용이 초기화되었습니다.
             </div>
           )}
       </div>
