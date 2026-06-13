@@ -45,7 +45,7 @@ const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입
 const parkingZones = ["독도", "울릉도", "아파트", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
 
 export function UniversalAiIntake() {
-  const { vehicles, updateVehicle, addDispatch } = useERPState();
+  const { vehicles, dispatches, updateVehicle, addDispatch } = useERPState();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -128,7 +128,7 @@ export function UniversalAiIntake() {
         const fileAnalysis = analyzeIntake(text, file.name, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
         
         const fileCategory = classifyUploadedFile(file.name, fileAnalysis.situation);
-        const mockReturn = buildMockReturnPreview(file.name, selectedVehicleNumber);
+        const mockReturn = buildMockReturnPreview(file.name, selectedVehicleNumber, vehicles, dispatches);
 
         if (mockReturn) {
           setAutoReturnPreview(mockReturn);
@@ -536,7 +536,12 @@ function classifyAiInbox(value: string): AiCategory {
   return "일반메모";
 }
 
-function buildMockReturnPreview(fileName: string, selectedVehicleNumber: string): AutoReturnPreview | null {
+function buildMockReturnPreview(
+  fileName: string,
+  selectedVehicleNumber: string,
+  vehicles: Array<{ plateNumber: string; fuelLevel?: number; mileage?: number }>,
+  dispatches: Array<{ id: string; customerName: string; status: string; rentalCarNumber: string }>,
+): AutoReturnPreview | null {
   if (!["회차계기판", "return-dashboard", "return_dash"].some((keyword) => fileName.toLowerCase().includes(keyword))) {
     return null;
   }
