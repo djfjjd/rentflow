@@ -29,6 +29,12 @@ type AutoReturnPreview = {
   report: string;
 };
 
+type ParkingUpdatePreview = {
+  plateNumber: string;
+  parkingZone: string;
+  memo: string;
+};
+
 const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
   { value: "insurance", label: "보험건" },
   { value: "selfPay", label: "자차건" },
@@ -36,6 +42,7 @@ const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
 ];
 
 const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입금", "예약", "일반메모"];
+const parkingZones = ["독도", "울릉도", "아파트", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
 
 export function UniversalAiIntake() {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -55,6 +62,7 @@ export function UniversalAiIntake() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
   const [aiCategory, setAiCategory] = useState<AiCategory>("일반메모");
   const [autoReturnPreview, setAutoReturnPreview] = useState<AutoReturnPreview | null>(null);
+  const [parkingUpdatePreview, setParkingUpdatePreview] = useState<ParkingUpdatePreview | null>(null);
 
   const mainAnalysis = useMemo(() => {
     const firstFileName = files[0]?.name || "";
@@ -78,6 +86,7 @@ export function UniversalAiIntake() {
     setUploadComplete(false);
     setUploadStatus("idle");
     setAutoReturnPreview(null);
+    setParkingUpdatePreview(null);
     
     previews.forEach((url) => URL.revokeObjectURL(url));
     const newPreviews = newFiles.map(file => 
@@ -98,6 +107,12 @@ export function UniversalAiIntake() {
     setUploadStatus("uploading");
 
     try {
+      const parkingUpdate = parseParkingUpdate(text, selectedVehicleNumber);
+
+      if (parkingUpdate) {
+        setParkingUpdatePreview(parkingUpdate);
+      }
+
       // 1. Analyze each file and text to determine metadata
       // In a real scenario, this would call a generative AI API (like Gemini or OpenAI)
       // to extract vehicle number, claim number, and category from each image/text.
@@ -125,6 +140,7 @@ export function UniversalAiIntake() {
           customerPhone,
           driverLicenseInfo: fileAnalysis.fields.find(f => f.label === "면허정보")?.value,
           ocrTargets: ["차량번호", "보험접수번호", "면허정보", "고객명"],
+          parkingZone: parkingUpdate?.parkingZone,
           memo: text,
         };
 
@@ -279,22 +295,8 @@ export function UniversalAiIntake() {
             }}
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="AI 접수함: 정비요망, 사고접수, 계약서등록, 면허증등록, 청구서발행, 입금확인, 차량이상, 예약변경"
+            placeholder="AI 접수함: 정비요망, 사고접수, 회차 후 계기판사진, 125하4208 독도, 독도"
           />
-          <div className="mt-3 rounded-lg border border-line bg-field p-3">
-            <label className="block">
-              <span className="text-xs font-bold text-gray-500">AI 분류 결과</span>
-              <select
-                value={aiCategory}
-                onChange={(event) => setAiCategory(event.target.value as AiCategory)}
-                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-              >
-                {aiCategories.map((category) => (
-                  <option key={category}>{category}</option>
-                ))}
-              </select>
-            </label>
-          </div>
           <button
             type="button"
             disabled={!canAnalyze || isUploading}
@@ -342,6 +344,16 @@ export function UniversalAiIntake() {
                   </button>
                 ))}
               </div>
+            </section>
+          )}
+          {parkingUpdatePreview && (
+            <section className="mt-4 rounded-lg border border-primary/20 bg-white p-4">
+              <p className="text-sm font-black text-primary">주차위치 최신화 감지</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <InfoPill label="차량번호" value={parkingUpdatePreview.plateNumber} />
+                <InfoPill label="주차구역" value={parkingUpdatePreview.parkingZone} />
+              </div>
+              <p className="mt-3 rounded-lg bg-field p-3 text-sm font-semibold text-gray-700">{parkingUpdatePreview.memo}</p>
             </section>
           )}
       </div>
@@ -495,6 +507,23 @@ function buildMockReturnPreview(fileName: string, selectedVehicleNumber: string)
     dispatchInfo,
     confidenceScore: plateNumber === "차량번호 확인필요" ? 48 : 88,
     report,
+  };
+}
+
+function parseParkingUpdate(text: string, selectedVehicleNumber: string): ParkingUpdatePreview | null {
+  const source = text.trim();
+  if (!source) return null;
+
+  const parkingZone = parkingZones.find((zone) => source.includes(zone));
+  if (!parkingZone) return null;
+
+  const plateNumber = source.match(/\d{2,3}[가-힣]\d{4}/)?.[0] || selectedVehicleNumber;
+  if (!plateNumber) return null;
+
+  return {
+    plateNumber,
+    parkingZone,
+    memo: `${plateNumber} 차량 주차위치를 본사주차장 ${parkingZone} 구역으로 최신화합니다.`,
   };
 }
 

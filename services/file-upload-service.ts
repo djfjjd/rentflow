@@ -21,6 +21,7 @@ export type UploadFileMetadata = {
   customerPhone?: string;
   driverLicenseInfo?: string;
   ocrTargets?: string[];
+  parkingZone?: string;
   memo?: string;
 };
 
