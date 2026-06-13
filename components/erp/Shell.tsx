@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type ShellNavItem = {
@@ -45,6 +46,30 @@ export function AdminShell({
           </div>
         </aside>
         <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
+          <details className="mb-4 rounded-lg border border-line bg-white shadow-sm lg:hidden">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-black text-ink">
+              <span className="inline-flex items-center gap-2">
+                <Menu className="h-4 w-4 text-primary" aria-hidden="true" />
+                관리자 메뉴
+              </span>
+              <span className="text-xs font-bold text-primary">전체 화면</span>
+            </summary>
+            <nav className="grid max-h-80 gap-1 overflow-y-auto border-t border-line p-3 sm:grid-cols-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-bold text-gray-600 hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </details>
           <header className="mb-5 rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>

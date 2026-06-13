@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
 
+type IntakeType = "insurance" | "selfPay" | "selfService";
+
 type IntakeAnalysis = {
   title: string;
   confidence: number;
@@ -14,6 +16,12 @@ type IntakeAnalysis = {
   actions: string[];
 };
 
+const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
+  { value: "insurance", label: "보험건" },
+  { value: "selfPay", label: "자차건" },
+  { value: "selfService", label: "셀프건" },
+];
+
 export function UniversalAiIntake() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -22,11 +30,17 @@ export function UniversalAiIntake() {
   const [analyzed, setAnalyzed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
+  const [intakeType, setIntakeType] = useState<IntakeType>("insurance");
+  const [orderer, setOrderer] = useState("");
+  const [repairShop, setRepairShop] = useState("");
+  const [customerCar, setCustomerCar] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
   const mainAnalysis = useMemo(() => {
     const firstFileName = files[0]?.name || "";
-    return analyzeIntake(text, firstFileName);
-  }, [files, text]);
+    return analyzeIntake(text, firstFileName, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
+  }, [customerCar, customerName, customerPhone, files, intakeType, orderer, repairShop, text]);
 
   const canAnalyze = Boolean(files.length > 0 || text.trim());
 
@@ -66,7 +80,7 @@ export function UniversalAiIntake() {
       // to extract vehicle number, claim number, and category from each image/text.
       
       for (const file of files) {
-        const fileAnalysis = analyzeIntake(text, file.name);
+        const fileAnalysis = analyzeIntake(text, file.name, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
         
         // Map situation to Drive folders
         const folderMap: Record<IntakeAnalysis["situation"], DriveBusinessFolder> = {
@@ -83,6 +97,13 @@ export function UniversalAiIntake() {
           claimNumber: fileAnalysis.fields.find(f => f.label === "보험접수번호")?.value,
           businessFolder: folderMap[fileAnalysis.situation],
           fileKind: fileAnalysis.situation === "사고" ? "사진" : "정비",
+          intakeType,
+          orderer,
+          repairShop,
+          customerCar,
+          customerName,
+          customerPhone,
+          memo: text,
         };
 
         // 2. Upload to Drive (Mock)
@@ -146,6 +167,43 @@ export function UniversalAiIntake() {
               ))}
             </div>
           )}
+          <div className="mt-4 rounded-lg border border-line bg-white p-4">
+            <div className="grid grid-cols-3 gap-2">
+              {intakeTypeOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className={option.value === intakeType ? "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-primary bg-primary px-3 text-sm font-black text-white" : "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-line bg-field px-3 text-sm font-black text-gray-600"}
+                >
+                  <input
+                    type="radio"
+                    name="intakeType"
+                    value={option.value}
+                    checked={option.value === intakeType}
+                    onChange={() => {
+                      setIntakeType(option.value);
+                      setAnalyzed(false);
+                    }}
+                    className="sr-only"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(intakeType === "insurance" || intakeType === "selfPay") && (
+                <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
+              )}
+              {intakeType === "insurance" && (
+                <>
+                  <LabeledInput label="수리처" value={repairShop} onChange={setRepairShop} onDirty={() => setAnalyzed(false)} placeholder="수리처 입력" />
+                  <LabeledInput label="고객차종(배기량)" value={customerCar} onChange={setCustomerCar} onDirty={() => setAnalyzed(false)} placeholder="예: K5 2.0" />
+                </>
+              )}
+              {intakeType === "selfService" && (
+                <LabeledInput label="고객명" value={customerName} onChange={setCustomerName} onDirty={() => setAnalyzed(false)} placeholder="고객명 입력" />
+              )}
+            </div>
+          </div>
           <textarea
             value={text}
             onChange={(event) => {
@@ -155,6 +213,17 @@ export function UniversalAiIntake() {
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="차량번호, 오더자, 수리처, 고객 차종, 정비내역, 사고부위, 접수번호"
+          />
+          <input
+            type="tel"
+            value={customerPhone}
+            onChange={(event) => {
+              setCustomerPhone(event.target.value);
+              setAnalyzed(false);
+            }}
+            className="mt-3 min-h-12 w-full rounded-lg border border-line bg-white px-4 text-base font-semibold text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
+            placeholder="고객 휴대폰번호"
+            inputMode="tel"
           />
           <button
             type="button"
@@ -192,7 +261,7 @@ export function UniversalAiIntake() {
               {uploadComplete && (
                 <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-600 border border-emerald-100">
                   <CheckCircle2 className="h-5 w-5" />
-                  모든 사진이 분석되어 Google Drive에 자동 저장되었습니다.
+                  모든 사진이 분석되어 Google Drive와 Cloudflare 저장소에 자동 저장되었습니다.
                 </div>
               )}
               <p className="mt-4 rounded-lg bg-white p-3 text-sm font-semibold leading-6 text-gray-700">{mainAnalysis.summary}</p>
@@ -232,14 +301,34 @@ export function UniversalAiIntake() {
   );
 }
 
-function analyzeIntake(text: string, fileName = ""): IntakeAnalysis {
-  const source = `${text} ${fileName}`;
+function analyzeIntake(
+  text: string,
+  fileName = "",
+  form: {
+    intakeType: IntakeType;
+    orderer: string;
+    repairShop: string;
+    customerCar: string;
+    customerName: string;
+    customerPhone: string;
+  },
+): IntakeAnalysis {
+  const source = [
+    text,
+    fileName,
+    form.orderer,
+    form.repairShop,
+    form.customerCar,
+    form.customerName,
+    form.customerPhone,
+  ].join(" ");
   const lower = source.toLowerCase();
   const plateNumber = source.match(/\d{2,3}[가-힣]\d{4}/)?.[0] ?? "-";
   const claimNumber = source.match(/(?:접수번호|보험접수|접수)[:\s-]*(\d{6,})/)?.[1] ?? source.match(/\b\d{7,12}\b/)?.[0] ?? "-";
-  const orderer = readField(source, ["오더자", "발주자", "담당자", "요청자"]);
-  const repairShop = readField(source, ["수리처", "공업사", "정비소", "수리공장"]);
-  const customerCar = readField(source, ["고객차종", "고객 차종", "상대차종", "차종"]);
+  const orderer = form.orderer || readField(source, ["오더자", "발주자", "담당자", "요청자"]);
+  const repairShop = form.repairShop || readField(source, ["수리처", "공업사", "정비소", "수리공장"]);
+  const customerCar = form.customerCar || readField(source, ["고객차종", "고객 차종", "상대차종", "차종"]);
+  const customerName = form.customerName || readField(source, ["고객명", "고객"]);
   const maintenance = readField(source, ["정비내역", "수리내역", "작업내용", "메모"]);
   const hasAccident = ["사고", "범퍼", "파손", "기스", "추돌", "보험", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
   const hasMaintenance = ["정비", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
@@ -276,10 +365,41 @@ function analyzeIntake(text: string, fileName = ""): IntakeAnalysis {
       { label: "오더자", value: orderer || "-" },
       { label: "수리처", value: repairShop || "-" },
       { label: "고객 차종", value: customerCar || "-" },
+      { label: "고객명", value: customerName || "-" },
+      { label: "고객 휴대폰", value: form.customerPhone || "-" },
       { label: "정비/작업", value: maintenance || detectWork(source) },
     ],
     actions: actionsMap[situation],
   };
+}
+
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  onDirty,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onDirty: () => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-bold text-gray-500">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          onDirty();
+        }}
+        className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
+        placeholder={placeholder}
+      />
+    </label>
+  );
 }
 
 function readField(source: string, labels: string[]) {
