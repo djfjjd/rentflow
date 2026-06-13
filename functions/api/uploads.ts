@@ -1,7 +1,7 @@
 type UploadEnv = {
   GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
   GOOGLE_APPS_SCRIPT_TOKEN?: string;
-  FILES?: any; // R2Bucket
+  RENTFLOW_UPLOADS?: any; // R2Bucket
 };
 
 type UploadContext = {
@@ -43,10 +43,10 @@ export async function onRequestPost({ request, env }: UploadContext) {
   let r2Key = "";
   let r2Url = "";
   
-  if (env.FILES) {
+  if (env.RENTFLOW_UPLOADS) {
     const timestamp = Date.now();
     r2Key = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${fileName}`;
-    await env.FILES.put(r2Key, await file.arrayBuffer(), {
+    await env.RENTFLOW_UPLOADS.put(r2Key, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type || "application/octet-stream" },
     });
     // In production, this would be a custom domain or a proxy route
@@ -94,8 +94,8 @@ export async function onRequestGet({ request, env }: UploadContext) {
   const key = url.searchParams.get("key");
 
   // Handle R2 file download/view
-  if (key && env.FILES) {
-    const object = await env.FILES.get(key);
+  if (key && env.RENTFLOW_UPLOADS) {
+    const object = await env.RENTFLOW_UPLOADS.get(key);
     if (!object) return new Response("File not found", { status: 404 });
 
     const headers = new Headers();
@@ -131,8 +131,8 @@ export async function onRequestDelete({ request, env }: UploadContext) {
   const key = url.searchParams.get("key");
   const driveFileId = url.searchParams.get("driveFileId");
 
-  if (key && env.FILES) {
-    await env.FILES.delete(key);
+  if (key && env.RENTFLOW_UPLOADS) {
+    await env.RENTFLOW_UPLOADS.delete(key);
   }
 
   if (driveFileId && env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
