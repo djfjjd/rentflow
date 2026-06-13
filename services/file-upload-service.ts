@@ -112,7 +112,7 @@ async function uploadFileToDrive(file: File, metadata: UploadFileMetadata & { fi
   formData.append("file", file);
   formData.append("metadata", JSON.stringify({
     ...metadata,
-    storedFileName: metadata.fileName,
+    fileName: metadata.fileName,
     originalFileName: file.name,
     mimeType: file.type || "application/octet-stream",
     size: file.size,

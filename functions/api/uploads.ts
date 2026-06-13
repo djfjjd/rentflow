@@ -37,30 +37,17 @@ export async function onRequestPost({ request, env }: UploadContext) {
   }
 
   const uploadedAt = new Date().toISOString();
-  const fileName = String(metadata.storedFileName || file.name);
+  const fileName = String(metadata.fileName || metadata.storedFileName || file.name);
   const payload = {
     action: "upload",
     fileName,
-    originalFileName: file.name,
     mimeType: file.type || "application/octet-stream",
     base64: arrayBufferToBase64(await file.arrayBuffer()),
     metadata: {
+      ...metadata,
       fileName,
-      vehicleNumber: String(metadata.vehicleNumber || ""),
-      insuranceNumber: String(metadata.insuranceNumber || metadata.claimNumber || ""),
-      customerName: String(metadata.customerName || ""),
+      originalFileName: file.name,
       uploadedAt,
-      businessFolder: metadata.businessFolder,
-      fileKind: metadata.fileKind,
-      folderPath: metadata.folderPath,
-      orderer: metadata.orderer,
-      repairShop: metadata.repairShop,
-      customerCar: metadata.customerCar,
-      customerPhone: metadata.customerPhone,
-      driverLicenseInfo: metadata.driverLicenseInfo,
-      ocrTargets: metadata.ocrTargets,
-      parkingZone: metadata.parkingZone,
-      memo: metadata.memo,
     },
   };
   let driveResult: Record<string, unknown>;
