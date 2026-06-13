@@ -1,21 +1,34 @@
 export type DriveBusinessFolder =
   | "배차"
   | "회차"
+  | "차량외관사진"
   | "사고사진"
   | "면허증"
   | "계약서"
   | "청구서"
-  | "정비";
+  | "정비"
+  | "정비사진"
+  | "보험접수자료"
+  | "재직증명서"
+  | "세금계산서"
+  | "입금증";
 
 export type DriveFileKind =
   | "사진"
   | "영상"
   | "문서"
   | "PDF"
+  | "차량외관사진"
+  | "사고사진"
   | "면허증"
   | "계약서"
   | "청구서"
-  | "정비";
+  | "정비"
+  | "정비사진"
+  | "보험접수자료"
+  | "재직증명서"
+  | "세금계산서"
+  | "입금증";
 
 export type DriveUploadInput = {
   file: File;
@@ -51,11 +64,17 @@ export type GoogleAccountState = {
 export const driveBusinessFolders: DriveBusinessFolder[] = [
   "배차",
   "회차",
+  "차량외관사진",
   "사고사진",
   "면허증",
   "계약서",
   "청구서",
   "정비",
+  "정비사진",
+  "보험접수자료",
+  "재직증명서",
+  "세금계산서",
+  "입금증",
 ];
 
 export const mockGoogleAccount: GoogleAccountState = {

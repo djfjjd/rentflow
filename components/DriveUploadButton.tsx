@@ -57,7 +57,7 @@ export function DriveUploadButton({
             {mockGoogleAccount.connected ? `구글 계정 연동됨 · ${mockGoogleAccount.email}` : "구글 계정 연동 필요"}
           </p>
           <h3 className="mt-1 text-lg font-black text-ink">{label}</h3>
-          <p className="mt-1 text-sm text-gray-500">원본 파일은 Drive에 저장하고 DB에는 driveFileId와 driveUrl만 저장합니다.</p>
+          <p className="mt-1 text-sm text-gray-500">원본 파일은 Google Drive에 저장하고 ERP에는 Drive 메타데이터만 저장합니다.</p>
         </div>
         <select
           value={selectedFolder}
@@ -97,10 +97,10 @@ export function DriveUploadButton({
             <article key={file.driveFileId} className="rounded-lg bg-field p-3">
               <p className="flex items-center gap-2 text-sm font-bold text-primary">
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                DB 저장 mock 완료
+                Google Drive 저장 완료
               </p>
-              <p className="mt-1 break-all text-sm font-semibold text-ink">{file.storedFileName}</p>
-              <p className="mt-1 break-all text-xs text-gray-500">{file.folderPath}</p>
+              <p className="mt-1 break-all text-sm font-semibold text-ink">{file.fileName}</p>
+              <p className="mt-1 break-all text-xs text-gray-500">{file.driveFolderId || "Drive 폴더 정보 대기"}</p>
             </article>
           ))}
         </div>

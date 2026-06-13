@@ -261,7 +261,7 @@ export function UniversalAiIntake() {
               {uploadComplete && (
                 <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-600 border border-emerald-100">
                   <CheckCircle2 className="h-5 w-5" />
-                  모든 사진이 분석되어 Google Drive와 Cloudflare 저장소에 자동 저장되었습니다.
+                  모든 사진이 분석되어 Google Drive에 자동 저장되었습니다.
                 </div>
               )}
               <p className="mt-4 rounded-lg bg-white p-3 text-sm font-semibold leading-6 text-gray-700">{mainAnalysis.summary}</p>

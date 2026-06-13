@@ -1,9 +1,6 @@
-type R2BucketLike = {
-  put: (key: string, value: ArrayBuffer, options?: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> }) => Promise<unknown>;
-};
-
 type UploadEnv = {
-  RENTFLOW_UPLOADS?: R2BucketLike;
+  GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
+  GOOGLE_APPS_SCRIPT_TOKEN?: string;
 };
 
 type UploadContext = {
@@ -11,40 +8,135 @@ type UploadContext = {
   env: UploadEnv;
 };
 
+type DriveFileRecord = {
+  fileName: string;
+  driveFileId: string;
+  driveUrl: string;
+  driveFolderId: string;
+  driveFolderUrl?: string;
+  vehicleNumber: string;
+  insuranceNumber?: string;
+  customerName?: string;
+  vehicleFolderUrl?: string;
+  insuranceFolderUrl?: string;
+  customerFolderUrl?: string;
+  uploadedAt: string;
+};
+
 export async function onRequestPost({ request, env }: UploadContext) {
   const formData = await request.formData();
   const file = formData.get("file");
-  const metadataValue = formData.get("metadata");
+  const metadata = parseMetadata(formData.get("metadata"));
 
   if (!(file instanceof File)) {
     return Response.json({ stored: false, error: "file is required" }, { status: 400 });
   }
 
-  const metadata = parseMetadata(metadataValue);
-  const key = buildUploadKey(metadata, file);
-  const bucket = env.RENTFLOW_UPLOADS;
-
-  if (!bucket) {
-    return Response.json({
-      stored: false,
-      fallback: true,
-      key,
-      message: "RENTFLOW_UPLOADS R2 binding is not configured.",
-    });
+  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
+    return Response.json({ stored: false, error: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { status: 500 });
   }
 
-  await bucket.put(key, await file.arrayBuffer(), {
-    httpMetadata: {
-      contentType: file.type || "application/octet-stream",
+  const uploadedAt = new Date().toISOString();
+  const fileName = String(metadata.storedFileName || file.name);
+  const payload = {
+    action: "upload",
+    fileName,
+    originalFileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    base64: arrayBufferToBase64(await file.arrayBuffer()),
+    metadata: {
+      fileName,
+      vehicleNumber: String(metadata.vehicleNumber || ""),
+      insuranceNumber: String(metadata.insuranceNumber || metadata.claimNumber || ""),
+      customerName: String(metadata.customerName || ""),
+      uploadedAt,
+      businessFolder: metadata.businessFolder,
+      fileKind: metadata.fileKind,
+      folderPath: metadata.folderPath,
     },
-    customMetadata: toStringMetadata(metadata),
-  });
+  };
+  const driveResult = await callAppsScript(env, payload);
+  const record = toDriveFileRecord(driveResult, payload.metadata);
 
   return Response.json({
     stored: true,
-    key,
-    url: `/uploads/${key}`,
+    ...record,
   });
+}
+
+export async function onRequestGet({ request, env }: UploadContext) {
+  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
+    return Response.json({ files: [], fallback: true, message: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." });
+  }
+
+  const url = new URL(request.url);
+  const query = url.searchParams.get("query") || "";
+  const result = await callAppsScript(env, {
+    action: "list",
+    query,
+  });
+  const files = Array.isArray(result.files) ? result.files : [];
+
+  return Response.json({
+    files: files.map((file) => toDriveFileRecord(file as Record<string, unknown>, {})),
+  });
+}
+
+export async function onRequestDelete({ request, env }: UploadContext) {
+  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
+    return Response.json({ deleted: false, error: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { status: 500 });
+  }
+
+  const url = new URL(request.url);
+  const driveFileId = url.searchParams.get("driveFileId");
+
+  if (!driveFileId) {
+    return Response.json({ deleted: false, error: "driveFileId is required" }, { status: 400 });
+  }
+
+  await callAppsScript(env, {
+    action: "delete",
+    driveFileId,
+  });
+
+  return Response.json({ deleted: true, driveFileId });
+}
+
+async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) {
+  const response = await fetch(env.GOOGLE_APPS_SCRIPT_UPLOAD_URL || "", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(env.GOOGLE_APPS_SCRIPT_TOKEN ? { authorization: `Bearer ${env.GOOGLE_APPS_SCRIPT_TOKEN}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google Apps Script request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as Record<string, unknown>;
+}
+
+function toDriveFileRecord(result: Record<string, unknown>, fallback: Record<string, unknown>): DriveFileRecord {
+  const driveFileId = String(result.driveFileId || result.fileId || result.id || "");
+  const driveFolderId = String(result.driveFolderId || result.folderId || "");
+
+  return {
+    fileName: String(result.fileName || fallback.fileName || ""),
+    driveFileId,
+    driveUrl: String(result.driveUrl || result.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
+    driveFolderId,
+    driveFolderUrl: String(result.driveFolderUrl || result.folderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : "")),
+    vehicleNumber: String(result.vehicleNumber || fallback.vehicleNumber || ""),
+    insuranceNumber: String(result.insuranceNumber || result.claimNumber || fallback.insuranceNumber || ""),
+    customerName: String(result.customerName || fallback.customerName || ""),
+    vehicleFolderUrl: String(result.vehicleFolderUrl || ""),
+    insuranceFolderUrl: String(result.insuranceFolderUrl || ""),
+    customerFolderUrl: String(result.customerFolderUrl || ""),
+    uploadedAt: String(result.uploadedAt || fallback.uploadedAt || new Date().toISOString()),
+  };
 }
 
 function parseMetadata(value: FormDataEntryValue | null) {
@@ -57,26 +149,15 @@ function parseMetadata(value: FormDataEntryValue | null) {
   }
 }
 
-function buildUploadKey(metadata: Record<string, unknown>, file: File) {
-  const uploadedAt = typeof metadata.uploadedAt === "string" ? new Date(metadata.uploadedAt) : new Date();
-  const year = String(uploadedAt.getUTCFullYear());
-  const month = String(uploadedAt.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(uploadedAt.getUTCDate()).padStart(2, "0");
-  const intakeType = sanitizeSegment(String(metadata.intakeType || "general"));
-  const vehicleNumber = sanitizeSegment(String(metadata.vehicleNumber || "unknown"));
-  const storedFileName = sanitizeSegment(String(metadata.storedFileName || file.name || "upload.bin"));
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
 
-  return [year, month, day, intakeType, vehicleNumber, storedFileName].join("/");
-}
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
 
-function sanitizeSegment(value: string) {
-  return value.trim().replace(/[\\/:*?"<>|#%{}^~[\]`]/g, "-") || "unknown";
-}
-
-function toStringMetadata(metadata: Record<string, unknown>) {
-  return Object.fromEntries(
-    Object.entries(metadata)
-      .filter(([, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => [key, String(value).slice(0, 1024)]),
-  );
+  return btoa(binary);
 }
