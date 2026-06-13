@@ -1,6 +1,7 @@
 type UploadEnv = {
   GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
   GOOGLE_APPS_SCRIPT_TOKEN?: string;
+  FILES?: any; // R2Bucket
 };
 
 type UploadContext = {
@@ -8,11 +9,14 @@ type UploadContext = {
   env: UploadEnv;
 };
 
-type DriveFileRecord = {
+type FileRecord = {
   fileName: string;
-  driveFileId: string;
-  driveUrl: string;
-  driveFolderId: string;
+  r2Url: string;
+  r2Key: string;
+  driveBackupStatus: "success" | "failed" | "none";
+  driveFileId?: string;
+  driveUrl?: string;
+  driveFolderId?: string;
   driveFolderUrl?: string;
   vehicleNumber: string;
   insuranceNumber?: string;
@@ -32,39 +36,52 @@ export async function onRequestPost({ request, env }: UploadContext) {
     return Response.json({ stored: false, error: "file is required" }, { status: 400 });
   }
 
-  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    return Response.json({ stored: false, error: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { status: 500 });
-  }
-
   const uploadedAt = new Date().toISOString();
   const fileName = String(metadata.fileName || metadata.storedFileName || file.name);
-  const payload = {
-    action: "upload",
-    fileName,
-    mimeType: file.type || "application/octet-stream",
-    base64: arrayBufferToBase64(await file.arrayBuffer()),
-    metadata: {
-      ...metadata,
-      fileName,
-      originalFileName: file.name,
-      uploadedAt,
-    },
-  };
-  let driveResult: Record<string, unknown>;
-
-  try {
-    driveResult = await callAppsScript(env, payload);
-  } catch (error) {
-    return Response.json(
-      {
-        stored: false,
-        error: error instanceof Error ? error.message : "Google Drive upload failed.",
-      },
-      { status: 502 },
-    );
+  
+  // 1. Primary Storage: Cloudflare R2
+  let r2Key = "";
+  let r2Url = "";
+  
+  if (env.FILES) {
+    const timestamp = Date.now();
+    r2Key = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${fileName}`;
+    await env.FILES.put(r2Key, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type || "application/octet-stream" },
+    });
+    // In production, this would be a custom domain or a proxy route
+    r2Url = `/api/uploads?key=${encodeURIComponent(r2Key)}`;
   }
 
-  const record = toDriveFileRecord(driveResult, payload.metadata);
+  // 2. Secondary Storage: Google Drive (Backup)
+  let driveBackupStatus: "success" | "failed" | "none" = "none";
+  let driveResult: Record<string, unknown> = {};
+
+  if (env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
+    try {
+      const payload = {
+        action: "upload",
+        fileName,
+        mimeType: file.type || "application/octet-stream",
+        base64: arrayBufferToBase64(await file.arrayBuffer()),
+        metadata: {
+          ...metadata,
+          fileName,
+          originalFileName: file.name,
+          uploadedAt,
+          r2Key,
+          r2Url,
+        },
+      };
+      driveResult = await callAppsScript(env, payload);
+      driveBackupStatus = "success";
+    } catch (error) {
+      console.error("Google Drive Backup Failed:", error);
+      driveBackupStatus = "failed";
+    }
+  }
+
+  const record = toFileRecord(r2Key, r2Url, driveBackupStatus, driveResult, metadata);
 
   return Response.json({
     stored: true,
@@ -73,41 +90,63 @@ export async function onRequestPost({ request, env }: UploadContext) {
 }
 
 export async function onRequestGet({ request, env }: UploadContext) {
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key");
+
+  // Handle R2 file download/view
+  if (key && env.FILES) {
+    const object = await env.FILES.get(key);
+    if (!object) return new Response("File not found", { status: 404 });
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    
+    return new Response(object.body, { headers });
+  }
+
+  // Handle listing (from Drive if configured)
   if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
     return Response.json({ files: [], fallback: true, message: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." });
   }
 
-  const url = new URL(request.url);
   const query = url.searchParams.get("query") || "";
-  const result = await callAppsScript(env, {
-    action: "list",
-    query,
-  });
-  const files = Array.isArray(result.files) ? result.files : [];
+  try {
+    const result = await callAppsScript(env, {
+      action: "list",
+      query,
+    });
+    const files = Array.isArray(result.files) ? result.files : [];
 
-  return Response.json({
-    files: files.map((file) => toDriveFileRecord(file as Record<string, unknown>, {})),
-  });
+    return Response.json({
+      files: files.map((file) => toFileRecord("", "", "success", file as Record<string, unknown>, {})),
+    });
+  } catch (error) {
+    return Response.json({ files: [], error: String(error) });
+  }
 }
 
 export async function onRequestDelete({ request, env }: UploadContext) {
-  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    return Response.json({ deleted: false, error: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { status: 500 });
-  }
-
   const url = new URL(request.url);
+  const key = url.searchParams.get("key");
   const driveFileId = url.searchParams.get("driveFileId");
 
-  if (!driveFileId) {
-    return Response.json({ deleted: false, error: "driveFileId is required" }, { status: 400 });
+  if (key && env.FILES) {
+    await env.FILES.delete(key);
   }
 
-  await callAppsScript(env, {
-    action: "delete",
-    driveFileId,
-  });
+  if (driveFileId && env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
+    try {
+      await callAppsScript(env, {
+        action: "delete",
+        driveFileId,
+      });
+    } catch (error) {
+      console.error("Google Drive Delete Failed:", error);
+    }
+  }
 
-  return Response.json({ deleted: true, driveFileId });
+  return Response.json({ deleted: true });
 }
 
 async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) {
@@ -127,23 +166,32 @@ async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) 
   return (await response.json()) as Record<string, unknown>;
 }
 
-function toDriveFileRecord(result: Record<string, unknown>, fallback: Record<string, unknown>): DriveFileRecord {
-  const driveFileId = String(result.driveFileId || result.fileId || result.id || "");
-  const driveFolderId = String(result.driveFolderId || result.folderId || "");
+function toFileRecord(
+  r2Key: string, 
+  r2Url: string, 
+  driveBackupStatus: "success" | "failed" | "none",
+  driveResult: Record<string, unknown>, 
+  fallback: Record<string, unknown>
+): FileRecord {
+  const driveFileId = String(driveResult.driveFileId || driveResult.fileId || driveResult.id || "");
+  const driveFolderId = String(driveResult.driveFolderId || driveResult.folderId || "");
 
   return {
-    fileName: String(result.fileName || fallback.fileName || ""),
+    fileName: String(driveResult.fileName || fallback.fileName || fallback.storedFileName || ""),
+    r2Key: r2Key || String(driveResult.r2Key || ""),
+    r2Url: r2Url || String(driveResult.r2Url || ""),
+    driveBackupStatus: driveBackupStatus === "success" || driveFileId ? "success" : driveBackupStatus,
     driveFileId,
-    driveUrl: String(result.driveUrl || result.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
+    driveUrl: String(driveResult.driveUrl || driveResult.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
     driveFolderId,
-    driveFolderUrl: String(result.driveFolderUrl || result.folderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : "")),
-    vehicleNumber: String(result.vehicleNumber || fallback.vehicleNumber || ""),
-    insuranceNumber: String(result.insuranceNumber || result.claimNumber || fallback.insuranceNumber || ""),
-    customerName: String(result.customerName || fallback.customerName || ""),
-    vehicleFolderUrl: String(result.vehicleFolderUrl || ""),
-    insuranceFolderUrl: String(result.insuranceFolderUrl || ""),
-    customerFolderUrl: String(result.customerFolderUrl || ""),
-    uploadedAt: String(result.uploadedAt || fallback.uploadedAt || new Date().toISOString()),
+    driveFolderUrl: String(driveResult.driveFolderUrl || driveResult.folderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : "")),
+    vehicleNumber: String(driveResult.vehicleNumber || fallback.vehicleNumber || ""),
+    insuranceNumber: String(driveResult.insuranceNumber || driveResult.claimNumber || fallback.insuranceNumber || ""),
+    customerName: String(driveResult.customerName || fallback.customerName || ""),
+    vehicleFolderUrl: String(driveResult.vehicleFolderUrl || ""),
+    insuranceFolderUrl: String(driveResult.insuranceFolderUrl || ""),
+    customerFolderUrl: String(driveResult.customerFolderUrl || ""),
+    uploadedAt: String(driveResult.uploadedAt || fallback.uploadedAt || new Date().toISOString()),
   };
 }
 

@@ -27,6 +27,9 @@ export type UploadFileMetadata = {
 
 export type StoredFileMetadata = {
   fileName: string;
+  r2Url: string;
+  r2Key: string;
+  driveBackupStatus: "success" | "failed" | "none";
   driveFileId: string;
   driveUrl: string;
   driveFolderId: string;
@@ -40,6 +43,8 @@ export type StoredFileMetadata = {
   uploadedAt: string;
   supabasePayload: {
     fileName: string;
+    r2Url: string;
+    r2Key: string;
     driveFileId: string;
     driveUrl: string;
     driveFolderId: string;
@@ -83,6 +88,9 @@ export async function uploadFilesToDrive(files: File[], metadata: UploadFileMeta
 function toStoredFileMetadata(result: DriveUploadResponse): StoredFileMetadata {
   return {
     fileName: result.fileName,
+    r2Url: result.r2Url,
+    r2Key: result.r2Key,
+    driveBackupStatus: result.driveBackupStatus,
     driveFileId: result.driveFileId,
     driveUrl: result.driveUrl,
     driveFolderId: result.driveFolderId,
@@ -96,6 +104,8 @@ function toStoredFileMetadata(result: DriveUploadResponse): StoredFileMetadata {
     uploadedAt: result.uploadedAt,
     supabasePayload: {
       fileName: result.fileName,
+      r2Url: result.r2Url,
+      r2Key: result.r2Key,
       driveFileId: result.driveFileId,
       driveUrl: result.driveUrl,
       driveFolderId: result.driveFolderId,

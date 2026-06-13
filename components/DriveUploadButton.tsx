@@ -23,7 +23,7 @@ export function DriveUploadButton({
   fileKind = "사진",
   accept = "image/*,video/*,.pdf,.doc,.docx",
   multiple = true,
-  label = "구글드라이브 업로드",
+  label = "파일 저장 (R2 + Drive)",
   onUploaded,
 }: DriveUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -36,16 +36,22 @@ export function DriveUploadButton({
     if (fileArray.length === 0) return;
 
     setIsUploading(true);
-    const uploaded = await uploadFilesToDrive(fileArray, {
-      vehicleNumber,
-      claimNumber,
-      businessFolder: selectedFolder,
-      fileKind,
-      uploadedBy: mockGoogleAccount.email,
-    });
-    setLastUploaded(uploaded);
-    setIsUploading(false);
-    onUploaded?.(uploaded);
+    try {
+      const uploaded = await uploadFilesToDrive(fileArray, {
+        vehicleNumber,
+        claimNumber,
+        businessFolder: selectedFolder,
+        fileKind,
+        uploadedBy: mockGoogleAccount.email,
+      });
+      setLastUploaded(uploaded);
+      onUploaded?.(uploaded);
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("파일 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -54,10 +60,10 @@ export function DriveUploadButton({
         <div>
           <p className="flex items-center gap-2 text-sm font-bold text-primary">
             <Link2 className="h-4 w-4" aria-hidden="true" />
-            {mockGoogleAccount.connected ? `구글 계정 연동됨 · ${mockGoogleAccount.email}` : "구글 계정 연동 필요"}
+            R2 기본 저장 + Drive 선택 백업
           </p>
           <h3 className="mt-1 text-lg font-black text-ink">{label}</h3>
-          <p className="mt-1 text-sm text-gray-500">원본 파일은 Google Drive에 저장하고 ERP에는 Drive 메타데이터만 저장합니다.</p>
+          <p className="mt-1 text-sm text-gray-500">Cloudflare R2에 우선 저장하며, Google Drive 백업을 병행합니다.</p>
         </div>
         <select
           value={selectedFolder}
@@ -77,7 +83,7 @@ export function DriveUploadButton({
         className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-base font-bold text-white disabled:opacity-60"
       >
         {isUploading ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <Cloud className="h-5 w-5" aria-hidden="true" />}
-        {isUploading ? "Drive 업로드중" : "파일 선택 후 Drive 저장"}
+        {isUploading ? "저장중..." : "파일 선택 후 통합 저장"}
       </button>
       <input
         ref={inputRef}
@@ -94,13 +100,18 @@ export function DriveUploadButton({
       {lastUploaded.length > 0 && (
         <div className="mt-4 space-y-2">
           {lastUploaded.map((file) => (
-            <article key={file.driveFileId} className="rounded-lg bg-field p-3">
+            <article key={file.r2Key || file.driveFileId} className="rounded-lg bg-field p-3">
               <p className="flex items-center gap-2 text-sm font-bold text-primary">
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Google Drive 저장 완료
+                저장 완료
+                {file.driveBackupStatus === "success" ? (
+                  <span className="text-[10px] text-emerald-600">(Drive 백업됨)</span>
+                ) : file.driveBackupStatus === "failed" ? (
+                  <span className="text-[10px] text-rose-600">(Drive 백업실패)</span>
+                ) : null}
               </p>
               <p className="mt-1 break-all text-sm font-semibold text-ink">{file.fileName}</p>
-              <p className="mt-1 break-all text-xs text-gray-500">{file.driveFolderId || "Drive 폴더 정보 대기"}</p>
+              <p className="mt-1 break-all text-[10px] text-gray-500">{file.r2Key}</p>
             </article>
           ))}
         </div>
