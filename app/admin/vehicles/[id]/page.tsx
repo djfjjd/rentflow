@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { DriveFileList } from "@/components/DriveFileList";
 import { DriverAssignmentManager } from "@/components/erp/DriverAssignmentManager";
-import { AccidentHistoryBoard, AutoReturnProcessBoard, MaintenanceHistoryBoard, RevenueBoard } from "@/components/erp/HistoryBoards";
+import { AutoReturnProcessBoard, RevenueBoard } from "@/components/erp/HistoryBoards";
 import { ReceivableManager } from "@/components/erp/ReceivableManager";
 import { AdminShell } from "@/components/erp/Shell";
+import { VehicleDetailStateSections } from "@/components/erp/VehicleDetailStateSections";
 import { receivables } from "@/lib/finance-ops-data";
-import { adminNavItems, vehicleHistory, vehicles } from "@/lib/erp-data";
+import { adminNavItems, vehicles } from "@/lib/erp-data";
 
 export function generateStaticParams() {
   return vehicles.map((vehicle) => ({ id: vehicle.id }));
@@ -36,23 +37,14 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </div>
         <p className="mt-4 rounded-lg bg-field p-4 text-sm leading-6 text-gray-600">{vehicle.memo}</p>
       </section>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <History title="배차이력" items={vehicleHistory.dispatch} />
-        <History title="회차이력" items={vehicleHistory.return} />
-        <History title="예약이력" items={vehicleHistory.reservation} />
-        <History title="기본 정비이력" items={vehicleHistory.maintenance} />
+      <div className="mt-5">
+        <VehicleDetailStateSections plateNumber={vehicle.plateNumber} />
       </div>
       <div className="mt-5">
         <DriverAssignmentManager plateNumber={vehicle.plateNumber} />
       </div>
       <div className="mt-5">
         <ReceivableManager plateNumber={vehicle.plateNumber} />
-      </div>
-      <div className="mt-5">
-        <MaintenanceHistoryBoard plateNumber={vehicle.plateNumber} />
-      </div>
-      <div className="mt-5">
-        <AccidentHistoryBoard plateNumber={vehicle.plateNumber} />
       </div>
       <div className="mt-5">
         <AutoReturnProcessBoard plateNumber={vehicle.plateNumber} />
@@ -73,18 +65,5 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-bold text-gray-500">{label}</p>
       <p className="mt-2 text-lg font-black text-ink">{value}</p>
     </div>
-  );
-}
-
-function History({ title, items }: { title: string; items: string[] }) {
-  return (
-    <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-black text-ink">{title}</h2>
-      <ul className="mt-4 space-y-3">
-        {items.map((item) => (
-          <li key={item} className="rounded-lg bg-field p-3 text-sm font-semibold text-gray-700">{item}</li>
-        ))}
-      </ul>
-    </section>
   );
 }

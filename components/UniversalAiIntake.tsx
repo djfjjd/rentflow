@@ -2,9 +2,10 @@
 
 import { CheckCircle2, FileImage, ImagePlus, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
-import { uploadFilesToDrive, type UploadFileMetadata } from "@/services/file-upload-service";
+import { uploadFilesToDrive, type StoredFileMetadata, type UploadFileMetadata } from "@/services/file-upload-service";
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
 import { useERPState } from "@/lib/erp-state";
+import type { AccidentHistory, Dispatch, MaintenanceHistory, ReturnRecord, Vehicle } from "@/lib/erp-data";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
 
@@ -45,7 +46,16 @@ const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입
 const parkingZones = ["독도", "울릉도", "아파트", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
 
 export function UniversalAiIntake() {
-  const { vehicles, dispatches, updateVehicle, addDispatch } = useERPState();
+  const {
+    vehicles,
+    dispatches,
+    updateVehicle,
+    addDispatch,
+    addReturn,
+    addUploadedFile,
+    addMaintenanceHistory,
+    addAccidentHistory,
+  } = useERPState();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -101,11 +111,6 @@ export function UniversalAiIntake() {
   };
 
   const handleAiProcess = async () => {
-    if (files.length === 0) {
-      setAnalyzed(true);
-      return;
-    }
-
     setIsUploading(true);
     setAnalyzed(false);
     setUploadComplete(false);
@@ -115,14 +120,15 @@ export function UniversalAiIntake() {
 
     try {
       const parkingUpdate = parseParkingUpdate(text, selectedVehicleNumber);
+      const fallbackFileName = files[0]?.name || "";
+      const analysis = analyzeIntake(text, fallbackFileName, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
+      const inferredVehicleNumber = selectedVehicleNumber || getAnalysisField(analysis, "차량번호") || parkingUpdate?.plateNumber || "unknown";
+      const plateNumber = inferredVehicleNumber === "-" ? "unknown" : inferredVehicleNumber;
+      const uploadedFiles: StoredFileMetadata[] = [];
 
       if (parkingUpdate) {
         setParkingUpdatePreview(parkingUpdate);
       }
-
-      // 1. Analyze each file and text to determine metadata
-      // In a real scenario, this would call a generative AI API (like Gemini or OpenAI)
-      // to extract vehicle number, claim number, and category from each image/text.
       
       for (const file of files) {
         const fileAnalysis = analyzeIntake(text, file.name, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
@@ -135,8 +141,8 @@ export function UniversalAiIntake() {
         }
 
         const metadata: UploadFileMetadata = {
-          vehicleNumber: selectedVehicleNumber || fileAnalysis.fields.find(f => f.label === "차량번호")?.value || "unknown",
-          claimNumber: fileAnalysis.fields.find(f => f.label === "보험접수번호")?.value,
+          vehicleNumber: selectedVehicleNumber || getAnalysisField(fileAnalysis, "차량번호") || plateNumber,
+          claimNumber: getAnalysisField(fileAnalysis, "보험접수번호"),
           businessFolder: fileCategory.businessFolder,
           fileKind: fileCategory.fileKind,
           intakeType,
@@ -145,60 +151,33 @@ export function UniversalAiIntake() {
           customerCar,
           customerName,
           customerPhone,
-          driverLicenseInfo: fileAnalysis.fields.find(f => f.label === "면허정보")?.value,
+          driverLicenseInfo: getAnalysisField(fileAnalysis, "면허정보"),
           ocrTargets: ["차량번호", "보험접수번호", "면허정보", "고객명"],
           parkingZone: parkingUpdate?.parkingZone,
           memo: text,
         };
 
-        // 2. Upload to Drive (Mock)
-        await uploadFilesToDrive([file], metadata);
-        
-        // 3. PERSIST ERP DATA
-        const plateNumber = metadata.vehicleNumber;
-        if (plateNumber && plateNumber !== "unknown") {
-          if (fileAnalysis.situation === "회차") {
-            updateVehicle(plateNumber, {
-              status: "대기중",
-              location: "본사 주차장",
-              fuelLevel: mockReturn?.fuelLevel ?? 85,
-              mileage: mockReturn?.mileage,
-            });
-          } else if (fileAnalysis.situation === "배차") {
-            updateVehicle(plateNumber, {
-              status: "배차중",
-              location: repairShop || "성수 제일공업사",
-            });
-            addDispatch({
-              id: `d-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-              claimNumber: metadata.claimNumber || "미접수",
-              customerName: customerName || "미확인",
-              customerPhone: customerPhone || "-",
-              customerCarNumber: "-",
-              customerCarModel: customerCar || "-",
-              rentalCarNumber: plateNumber,
-              orderedBy: orderer || "AI 접수",
-              repairShop: repairShop || "성수 제일공업사",
-              pickupAddress: "-",
-              deliveryAddress: "-",
-              fuelLevel: 85,
-              notes: text,
-              status: "출발보고",
-              uploadedAt: new Date().toISOString(),
-            });
-          } else if (fileAnalysis.situation === "정비" || fileAnalysis.situation === "사고") {
-            updateVehicle(plateNumber, {
-              status: fileAnalysis.situation === "사고" ? "사고" : "정비중",
-            });
-          } else if (parkingUpdate) {
-             updateVehicle(plateNumber, {
-               location: `본사주차장 ${parkingUpdate.parkingZone}구역`,
-             });
-          }
-        }
+        const uploaded = await uploadFilesToDrive([file], metadata);
+        uploadedFiles.push(...uploaded);
         
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
+
+      uploadedFiles.forEach(addUploadedFile);
+      persistAnalyzedIntake({
+        analysis,
+        plateNumber,
+        uploadedFiles,
+        parkingUpdate,
+        mockReturn: autoReturnPreview || buildMockReturnPreview(fallbackFileName, selectedVehicleNumber, vehicles, dispatches),
+        vehicles,
+        updateVehicle,
+        addDispatch,
+        addReturn,
+        addMaintenanceHistory,
+        addAccidentHistory,
+        form: { orderer, repairShop, customerCar, customerName, customerPhone, text },
+      });
 
       setAnalyzed(true);
       setUploadComplete(true);
@@ -449,9 +428,9 @@ function analyzeIntake(
   const customerName = form.customerName || readField(source, ["고객명", "고객"]);
   const driverLicenseInfo = readField(source, ["면허번호", "운전면허", "면허정보", "면허"]);
   const maintenance = readField(source, ["정비내역", "수리내역", "작업내용", "메모"]);
-  const hasAccident = ["사고", "범퍼", "파손", "기스", "추돌", "보험", "접수", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
-  const hasMaintenance = ["정비", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
-  const hasReturn = ["회차", "반납", "입고"].some((keyword) => lower.includes(keyword));
+  const hasAccident = ["사고", "파손", "범퍼", "휀다", "접촉", "보험접수", "기스", "추돌", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
+  const hasMaintenance = ["정비", "정비요망", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
+  const hasReturn = ["회차", "반납", "입고", "회차계기판"].some((keyword) => lower.includes(keyword));
   const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword));
   const hasReservation = ["예약", "예정", "스케줄"].some((keyword) => lower.includes(keyword));
 
@@ -588,6 +567,195 @@ function parseParkingUpdate(text: string, selectedVehicleNumber: string): Parkin
     parkingZone,
     memo: `${plateNumber} 차량 주차위치를 본사주차장 ${parkingZone} 구역으로 최신화합니다.`,
   };
+}
+
+function persistAnalyzedIntake({
+  analysis,
+  plateNumber,
+  uploadedFiles,
+  parkingUpdate,
+  mockReturn,
+  vehicles,
+  updateVehicle,
+  addDispatch,
+  addReturn,
+  addMaintenanceHistory,
+  addAccidentHistory,
+  form,
+}: {
+  analysis: IntakeAnalysis;
+  plateNumber: string;
+  uploadedFiles: StoredFileMetadata[];
+  parkingUpdate: ParkingUpdatePreview | null;
+  mockReturn: AutoReturnPreview | null;
+  vehicles: Vehicle[];
+  updateVehicle: (plateNumber: string, updates: Partial<Vehicle>) => void;
+  addDispatch: (dispatch: Dispatch) => void;
+  addReturn: (record: ReturnRecord) => void;
+  addMaintenanceHistory: (record: MaintenanceHistory) => void;
+  addAccidentHistory: (record: AccidentHistory) => void;
+  form: {
+    orderer: string;
+    repairShop: string;
+    customerCar: string;
+    customerName: string;
+    customerPhone: string;
+    text: string;
+  };
+}) {
+  if (!plateNumber || plateNumber === "unknown" || plateNumber === "-") return;
+
+  const now = new Date().toISOString();
+  const vehicle = vehicles.find((item) => item.plateNumber === plateNumber);
+  const photoRefs = uploadedFiles.map((file) => file.r2Url || file.driveUrl || file.fileName).filter(Boolean);
+  const locationUpdate = parkingUpdate ? { location: `본사주차장 ${parkingUpdate.parkingZone}구역` } : {};
+
+  if (analysis.situation === "배차") {
+    updateVehicle(plateNumber, {
+      status: "배차중",
+      location: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : form.repairShop || "성수 제일공업사",
+    });
+    addDispatch({
+      id: buildRecordId("d"),
+      claimNumber: getAnalysisField(analysis, "보험접수번호") || "미접수",
+      customerName: form.customerName || getAnalysisField(analysis, "고객명") || "미확인",
+      customerPhone: form.customerPhone || getAnalysisField(analysis, "고객 휴대폰") || "-",
+      customerCarNumber: "-",
+      customerCarModel: form.customerCar || getAnalysisField(analysis, "고객 차종") || "-",
+      rentalCarNumber: plateNumber,
+      orderedBy: form.orderer || getAnalysisField(analysis, "오더자") || "AI 접수",
+      repairShop: form.repairShop || getAnalysisField(analysis, "수리처") || "성수 제일공업사",
+      pickupAddress: "-",
+      deliveryAddress: "-",
+      fuelLevel: vehicle?.fuelLevel ?? 85,
+      notes: buildRecordMemo(form.text, uploadedFiles),
+      status: "출발보고",
+      uploadedAt: now,
+    });
+    return;
+  }
+
+  if (analysis.situation === "회차") {
+    const nextFuelLevel = mockReturn?.fuelLevel || vehicle?.fuelLevel || 85;
+    const nextMileage = mockReturn?.mileage || vehicle?.mileage || 0;
+    updateVehicle(plateNumber, {
+      status: "대기중",
+      location: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "본사 주차장",
+      fuelLevel: nextFuelLevel,
+      mileage: nextMileage,
+    });
+    addReturn({
+      id: buildRecordId("r"),
+      rentalCarNumber: plateNumber,
+      returnAddress: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "회차지 확인필요",
+      arrivalAddress: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "본사 주차장",
+      fuelLevel: nextFuelLevel,
+      mileage: nextMileage,
+      notes: buildRecordMemo(form.text, uploadedFiles),
+      status: "회차등록",
+    });
+    return;
+  }
+
+  if (analysis.situation === "정비") {
+    updateVehicle(plateNumber, { status: "정비필요", ...locationUpdate });
+    addMaintenanceHistory({
+      id: buildRecordId("mh"),
+      vehicleId: vehicle?.id || "",
+      plateNumber,
+      maintenanceType: detectMaintenanceType(form.text),
+      title: getAnalysisField(analysis, "정비/작업") || "AI 접수 정비요망",
+      description: form.text || analysis.summary,
+      repairShopName: form.repairShop || getAnalysisField(analysis, "수리처") || "확인필요",
+      foundDate: now.slice(0, 10),
+      mileage: vehicle?.mileage || 0,
+      cost: 0,
+      priority: "보통",
+      status: "정비필요",
+      photos: photoRefs,
+      videos: [],
+      documents: [],
+      memo: buildRecordMemo(form.text, uploadedFiles),
+      createdBy: "AI 접수",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return;
+  }
+
+  if (analysis.situation === "사고") {
+    updateVehicle(plateNumber, { status: "사고", ...locationUpdate });
+    addAccidentHistory({
+      id: buildRecordId("ah"),
+      vehicleId: vehicle?.id || "",
+      plateNumber,
+      insuranceNumber: getAnalysisField(analysis, "보험접수번호") || "미접수",
+      accidentDate: now.slice(0, 10),
+      accidentLocation: parkingUpdate?.parkingZone || "확인필요",
+      accidentType: "기타",
+      accidentPart: detectAccidentPart(form.text),
+      description: form.text || analysis.summary,
+      customerName: form.customerName || getAnalysisField(analysis, "고객명") || "미확인",
+      customerCarNumber: "-",
+      customerCarModel: form.customerCar || getAnalysisField(analysis, "고객 차종") || "-",
+      insuranceCompany: "확인필요",
+      repairShopName: form.repairShop || getAnalysisField(analysis, "수리처") || "확인필요",
+      repairCost: 0,
+      claimAmount: 0,
+      photos: photoRefs,
+      videos: [],
+      documents: [],
+      status: "접수",
+      memo: buildRecordMemo(form.text, uploadedFiles),
+      createdBy: "AI 접수",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return;
+  }
+
+  if (parkingUpdate) {
+    updateVehicle(plateNumber, locationUpdate);
+  }
+}
+
+function getAnalysisField(analysis: IntakeAnalysis, label: string) {
+  const value = analysis.fields.find((field) => field.label === label)?.value?.trim();
+  return value && value !== "-" ? value : "";
+}
+
+function buildRecordId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildRecordMemo(text: string, uploadedFiles: StoredFileMetadata[]) {
+  const uploadedSummary = uploadedFiles.map((file) => file.fileName).filter(Boolean).join(", ");
+  return [text, uploadedSummary ? `업로드 파일: ${uploadedSummary}` : ""].filter(Boolean).join("\n");
+}
+
+function detectMaintenanceType(text: string): MaintenanceHistory["maintenanceType"] {
+  if (text.includes("엔진오일")) return "엔진오일";
+  if (text.includes("타이어")) return "타이어";
+  if (text.includes("브레이크")) return "브레이크";
+  if (text.includes("배터리")) return "배터리";
+  if (text.includes("범퍼")) return "범퍼";
+  if (text.includes("도색")) return "도색";
+  if (text.includes("판금")) return "판금";
+  if (text.includes("유리")) return "유리";
+  return "기타";
+}
+
+function detectAccidentPart(text: string): AccidentHistory["accidentPart"] {
+  if (text.includes("앞범퍼") || text.includes("전범퍼")) return "앞범퍼";
+  if (text.includes("뒤범퍼") || text.includes("후범퍼") || text.includes("범퍼")) return "뒤범퍼";
+  if (text.includes("휀다") || text.includes("도어") || text.includes("문")) return "기타";
+  if (text.includes("유리")) return "유리";
+  if (text.includes("휠")) return "휠";
+  if (text.includes("타이어")) return "타이어";
+  return "기타";
 }
 
 function InfoPill({ label, value }: { label: string; value: string }) {

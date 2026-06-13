@@ -7,12 +7,17 @@ import {
   reservations as initialReservations,
   maintenanceItems as initialMaintenance,
   returns as initialReturns,
+  maintenanceHistories as initialMaintenanceHistories,
+  accidentHistories as initialAccidentHistories,
   type Vehicle,
   type Dispatch,
   type Reservation,
   type Maintenance,
   type ReturnRecord,
+  type MaintenanceHistory,
+  type AccidentHistory,
 } from "./erp-data";
+import type { StoredFileMetadata } from "@/services/file-upload-service";
 
 type ERPContextType = {
   vehicles: Vehicle[];
@@ -20,6 +25,9 @@ type ERPContextType = {
   reservations: Reservation[];
   maintenance: Maintenance[];
   returns: ReturnRecord[];
+  uploadedFiles: StoredFileMetadata[];
+  maintenanceHistories: MaintenanceHistory[];
+  accidentHistories: AccidentHistory[];
   isLoaded: boolean;
   updateVehicle: (plateNumber: string, updates: Partial<Vehicle>) => void;
   addDispatch: (dispatch: Dispatch) => void;
@@ -29,6 +37,9 @@ type ERPContextType = {
   addVehicle: (vehicle: Vehicle) => void;
   removeVehicle: (id: string) => void;
   addReturn: (record: ReturnRecord) => void;
+  addUploadedFile: (file: StoredFileMetadata) => void;
+  addMaintenanceHistory: (record: MaintenanceHistory) => void;
+  addAccidentHistory: (record: AccidentHistory) => void;
 };
 
 const ERPContext = createContext<ERPContextType | undefined>(undefined);
@@ -38,6 +49,9 @@ const DISPATCHES_KEY = "rentflow_dispatches";
 const RESERVATIONS_KEY = "rentflow_reservations";
 const MAINTENANCE_KEY = "rentflow_maintenance";
 const RETURNS_KEY = "rentflow_returns";
+const UPLOADED_FILES_KEY = "rentflow_uploaded_files";
+const MAINTENANCE_HISTORIES_KEY = "rentflow_maintenance_histories";
+const ACCIDENT_HISTORIES_KEY = "rentflow_accident_histories";
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -45,6 +59,9 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
   const [maintenance, setMaintenance] = useState<Maintenance[]>(initialMaintenance);
   const [returns, setReturns] = useState<ReturnRecord[]>(initialReturns);
+  const [uploadedFiles, setUploadedFiles] = useState<StoredFileMetadata[]>([]);
+  const [maintenanceHistories, setMaintenanceHistories] = useState<MaintenanceHistory[]>(initialMaintenanceHistories);
+  const [accidentHistories, setAccidentHistories] = useState<AccidentHistory[]>(initialAccidentHistories);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -53,12 +70,18 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     const savedReservations = localStorage.getItem(RESERVATIONS_KEY);
     const savedMaintenance = localStorage.getItem(MAINTENANCE_KEY);
     const savedReturns = localStorage.getItem(RETURNS_KEY);
+    const savedUploadedFiles = localStorage.getItem(UPLOADED_FILES_KEY);
+    const savedMaintenanceHistories = localStorage.getItem(MAINTENANCE_HISTORIES_KEY);
+    const savedAccidentHistories = localStorage.getItem(ACCIDENT_HISTORIES_KEY);
 
     if (savedVehicles) setVehicles(JSON.parse(savedVehicles));
     if (savedDispatches) setDispatches(JSON.parse(savedDispatches));
     if (savedReservations) setReservations(JSON.parse(savedReservations));
     if (savedMaintenance) setMaintenance(JSON.parse(savedMaintenance));
     if (savedReturns) setReturns(JSON.parse(savedReturns));
+    if (savedUploadedFiles) setUploadedFiles(JSON.parse(savedUploadedFiles));
+    if (savedMaintenanceHistories) setMaintenanceHistories(JSON.parse(savedMaintenanceHistories));
+    if (savedAccidentHistories) setAccidentHistories(JSON.parse(savedAccidentHistories));
 
     setIsLoaded(true);
   }, []);
@@ -130,6 +153,30 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const addUploadedFile = (file: StoredFileMetadata) => {
+    setUploadedFiles((current) => {
+      const next = [file, ...current];
+      localStorage.setItem(UPLOADED_FILES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const addMaintenanceHistory = (record: MaintenanceHistory) => {
+    setMaintenanceHistories((current) => {
+      const next = [record, ...current];
+      localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const addAccidentHistory = (record: AccidentHistory) => {
+    setAccidentHistories((current) => {
+      const next = [record, ...current];
+      localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const saveReservations = (newReservations: Reservation[]) => {
     setReservations(newReservations);
     localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(newReservations));
@@ -147,6 +194,9 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       reservations,
       maintenance,
       returns,
+      uploadedFiles,
+      maintenanceHistories,
+      accidentHistories,
       isLoaded,
       updateVehicle,
       addDispatch,
@@ -155,7 +205,10 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       saveMaintenance,
       addVehicle,
       removeVehicle,
-      addReturn
+      addReturn,
+      addUploadedFile,
+      addMaintenanceHistory,
+      addAccidentHistory
     }}>
       {children}
     </ERPContext.Provider>

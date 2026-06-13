@@ -6,22 +6,22 @@ import { adminNavItems } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
 
 export default function AdminDashboardPage() {
-  const { vehicles, dispatches, isLoaded } = useERPState();
+  const { vehicles, dispatches, returns, isLoaded } = useERPState();
 
-  const boardRows = vehicles.map((vehicle) => {
-    const dispatch = dispatches.find((item) => item.rentalCarNumber === vehicle.plateNumber);
+  const boardRows = dispatches.map((dispatch) => {
+    const vehicle = vehicles.find((item) => item.plateNumber === dispatch.rentalCarNumber);
 
     return {
-      vehicleNumber: vehicle.plateNumber,
-      uploadedAt: dispatch?.uploadedAt ? new Date(dispatch.uploadedAt).toLocaleDateString("ko-KR") : (dispatch ? "2026-06-13" : ""),
-      fuelLevel: dispatch?.fuelLevel ?? vehicle.fuelLevel,
-      damagedVehicle: dispatch ? `${dispatch.customerCarNumber} / ${dispatch.customerCarModel}` : "-",
-      orderer: dispatch?.orderedBy ?? "-",
-      repairShopOrParking: dispatch?.repairShop ?? vehicle.location,
-      status: dispatch?.status ?? vehicle.status,
+      vehicleNumber: dispatch.rentalCarNumber,
+      uploadedAt: dispatch.uploadedAt ? new Date(dispatch.uploadedAt).toLocaleDateString("ko-KR") : "2026-06-13",
+      fuelLevel: dispatch.fuelLevel ?? vehicle?.fuelLevel ?? 0,
+      damagedVehicle: `${dispatch.customerCarNumber} / ${dispatch.customerCarModel}`,
+      orderer: dispatch.orderedBy,
+      repairShopOrParking: dispatch.repairShop || vehicle?.location || "-",
+      status: dispatch.status,
     };
   });
-  const activeRows = boardRows.filter((row) => row.orderer !== "-").length;
+  const recordCount = dispatches.length + returns.length;
 
   if (!isLoaded) {
     return (
@@ -35,8 +35,8 @@ export default function AdminDashboardPage() {
     <AdminShell title="전체 대시보드" description="사진 업로드일을 기준으로 배차 차량, 피해차량, 오더자, 수리처와 주차위치를 한눈에 확인합니다." navItems={adminNavItems}>
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="전체 차량" value={`${vehicles.length}`} hint="차량번호 현황판" />
-        <StatCard label="접수/배차 기록" value={`${activeRows}`} hint="사진 업로드 연동 대상" />
-        <StatCard label="대기/주차 차량" value={`${vehicles.length - activeRows}`} hint="주차위치 표시" />
+        <StatCard label="접수/배차 기록" value={`${recordCount}`} hint="배차 + 회차 기록" />
+        <StatCard label="대기/주차 차량" value={`${vehicles.filter((vehicle) => vehicle.status === "대기중").length}`} hint="주차위치 표시" />
       </div>
 
       <section className="mt-5 overflow-hidden rounded-lg border border-line bg-white shadow-sm">

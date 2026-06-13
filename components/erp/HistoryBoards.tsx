@@ -3,16 +3,16 @@
 import { AlertTriangle, CheckCircle2, FileDown, Wrench } from "lucide-react";
 import { cardTransactions, getCardExpenseByPlate } from "@/lib/corporate-card-data";
 import {
-  accidentHistories,
-  maintenanceHistories,
   notifications,
   vehicleRevenues,
   type AccidentHistory,
   type MaintenanceHistory,
 } from "@/lib/erp-data";
 import { buildReturnReport, returnAutoProcesses } from "@/lib/auto-return-data";
+import { useERPState } from "@/lib/erp-state";
 
 export function MaintenanceHistoryBoard({ plateNumber }: { plateNumber?: string }) {
+  const { maintenanceHistories } = useERPState();
   const items = plateNumber ? maintenanceHistories.filter((item) => item.plateNumber === plateNumber) : maintenanceHistories;
   const totalCost = items.reduce((sum, item) => sum + item.cost, 0);
 
@@ -31,6 +31,7 @@ export function MaintenanceHistoryBoard({ plateNumber }: { plateNumber?: string 
 }
 
 export function AccidentHistoryBoard({ plateNumber }: { plateNumber?: string }) {
+  const { accidentHistories } = useERPState();
   const items = plateNumber ? accidentHistories.filter((item) => item.plateNumber === plateNumber) : accidentHistories;
   const totalRepair = items.reduce((sum, item) => sum + item.repairCost, 0);
   const totalClaim = items.reduce((sum, item) => sum + item.claimAmount, 0);
