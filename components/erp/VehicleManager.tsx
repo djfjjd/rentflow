@@ -118,11 +118,15 @@ export function VehicleManager() {
                   <td>{item.fuelLevel}%</td>
                   <td>{item.mileage.toLocaleString()}km</td>
                   <td>{item.location}</td>
-                  <td><StatusPill status={item.status} /></td>
+                  <td>
+                    <StatusPill status={item.status} />
+                  </td>
                   <td>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setEditing(item)} className="rounded-md border border-line px-3 py-2 text-xs font-bold">수정</button>
-                      <button type="button" onClick={() => remove(item.id)} className="rounded-md border border-red-200 px-3 py-2 text-xs font-bold text-red-600">
+                      <button type="button" onClick={() => setEditing(item)} className="rounded-md border border-line px-3 py-2 text-xs font-bold">
+                        수정
+                      </button>
+                      <button type="button" onClick={() => removeVehicle(item.id)} className="rounded-md border border-red-200 px-3 py-2 text-xs font-bold text-red-600">
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </div>
