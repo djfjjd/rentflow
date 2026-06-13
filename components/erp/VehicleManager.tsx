@@ -5,7 +5,6 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { vehicleStatuses, type Vehicle, type VehicleStatus } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
-import { formatParkingLocation } from "@/lib/vehicle-utils";
 
 const emptyVehicle: Vehicle = {
   id: "",
@@ -95,7 +94,7 @@ export function VehicleManager() {
           </label>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[700px] text-left text-sm">
             <thead className="border-b border-line text-xs text-gray-500">
               <tr>
                 <th className="py-3">차량번호</th>
@@ -103,8 +102,6 @@ export function VehicleManager() {
                 <th>유종</th>
                 <th>유량</th>
                 <th>주행거리</th>
-                <th>현재위치</th>
-                <th>상태</th>
                 <th>관리</th>
               </tr>
             </thead>
@@ -118,10 +115,6 @@ export function VehicleManager() {
                   <td>{item.fuelType}</td>
                   <td>{item.fuelLevel}%</td>
                   <td>{item.mileage.toLocaleString()}km</td>
-                  <td>{formatParkingLocation(item.location) || item.location}</td>
-                  <td>
-                    <StatusPill status={item.status} />
-                  </td>
                   <td>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => setEditing(item)} className="rounded-md border border-line px-3 py-2 text-xs font-bold">
@@ -161,8 +154,4 @@ function NumberField({ label, value, onChange, suffix }: { label: string; value:
       </span>
     </label>
   );
-}
-
-function StatusPill({ status }: { status: VehicleStatus }) {
-  return <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{status}</span>;
 }

@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { useState } from "react";
-import { ReportTools } from "@/components/erp/ReportTools";
 import { useERPState } from "@/lib/erp-state";
 
 type Tab = "dispatches" | "returns";
@@ -35,9 +34,6 @@ export function DispatchReturnManager() {
                 </div>
                 <span className="rounded-md bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{item.status}</span>
               </div>
-              <div className="mt-4">
-                <ReportTools type="dispatch" record={item} />
-              </div>
             </article>
           ))}
           {dispatches.length === 0 && <Empty text="배차 기록이 없습니다. AI 접수 업로드 후 이곳에 표시됩니다." />}
@@ -52,9 +48,6 @@ export function DispatchReturnManager() {
                   <p className="mt-1 text-sm text-gray-500">{item.returnAddress} {"->"} {item.arrivalAddress}</p>
                 </div>
                 <span className="rounded-md bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{item.status}</span>
-              </div>
-              <div className="mt-4">
-                <ReportTools type="return" record={item} />
               </div>
             </article>
           ))}

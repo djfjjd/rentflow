@@ -24,7 +24,7 @@ export default function AdminDashboardPage() {
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
       damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
-      ordererAndRepairShop: latestDispatch ? formatOrdererAndRepairShop(latestDispatch.orderedBy, latestDispatch.repairShop) : repairShopOrParking,
+      ordererAndRepairShop: latestDispatch ? formatOrdererAndRepairShop(latestDispatch) : repairShopOrParking,
       intakeType: latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : ""),
     };
   });
@@ -120,9 +120,13 @@ function getIntakeTypeClass(value: string) {
   return "bg-red-100 text-red-700";
 }
 
-function formatOrdererAndRepairShop(orderer: string, repairShop: string) {
-  const normalizedOrderer = normalizeDispatchCellValue(orderer);
-  const normalizedRepairShop = normalizeDispatchCellValue(repairShop);
+function formatOrdererAndRepairShop(dispatch: { orderedBy: string; repairShop: string; customerName: string; intakeType?: string }) {
+  if (dispatch.intakeType === "selfService") {
+    return normalizeDispatchCellValue(dispatch.customerName) || "?";
+  }
+
+  const normalizedOrderer = normalizeDispatchCellValue(dispatch.orderedBy);
+  const normalizedRepairShop = normalizeDispatchCellValue(dispatch.repairShop);
 
   return `${normalizedOrderer || "?"}/${normalizedRepairShop || "?"}`;
 }

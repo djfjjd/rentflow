@@ -52,6 +52,7 @@ const RETURNS_KEY = "rentflow_returns";
 const UPLOADED_FILES_KEY = "rentflow_uploaded_files";
 const MAINTENANCE_HISTORIES_KEY = "rentflow_maintenance_histories";
 const ACCIDENT_HISTORIES_KEY = "rentflow_accident_histories";
+const RESTORED_1146_KEY = "rentflow_restored_vehicle_1146";
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
@@ -74,7 +75,13 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     const savedMaintenanceHistories = localStorage.getItem(MAINTENANCE_HISTORIES_KEY);
     const savedAccidentHistories = localStorage.getItem(ACCIDENT_HISTORIES_KEY);
 
-    if (savedVehicles) setVehicles(JSON.parse(savedVehicles));
+    if (savedVehicles) {
+      const parsedVehicles = JSON.parse(savedVehicles);
+      const next = localStorage.getItem(RESTORED_1146_KEY) ? parsedVehicles : restoreVehicle1146(parsedVehicles);
+      setVehicles(next);
+      localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
+      localStorage.setItem(RESTORED_1146_KEY, "true");
+    }
     if (savedDispatches) {
       const next = filterSeedDispatches(JSON.parse(savedDispatches));
       setDispatches(next);
@@ -269,4 +276,12 @@ function filterSeedMaintenanceHistories(items: MaintenanceHistory[]) {
 
 function filterSeedAccidentHistories(items: AccidentHistory[]) {
   return items.filter((item) => item.id !== "ah-1");
+}
+
+function restoreVehicle1146(items: Vehicle[]) {
+  if (items.some((item) => item.plateNumber === "142호1146")) return items;
+
+  const restored = initialVehicles.find((item) => item.plateNumber === "142호1146");
+
+  return restored ? [...items, restored] : items;
 }
