@@ -43,7 +43,7 @@ const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
 ];
 
 const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입금", "예약", "일반메모"];
-const parkingZones = ["독도", "울릉도", "아파트", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
+const parkingZones = ["독도", "울릉도", "아파트", "현대맨션", "구로", "신정", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
 
 export function UniversalAiIntake() {
   const {
@@ -565,7 +565,7 @@ function parseParkingUpdate(text: string, selectedVehicleNumber: string): Parkin
   return {
     plateNumber,
     parkingZone,
-    memo: `${plateNumber} 차량 주차위치를 본사주차장 ${parkingZone} 구역으로 최신화합니다.`,
+    memo: `${plateNumber} 차량 주차위치를 ${parkingZone}으로 최신화합니다.`,
   };
 }
 
@@ -608,12 +608,13 @@ function persistAnalyzedIntake({
   const now = new Date().toISOString();
   const vehicle = vehicles.find((item) => item.plateNumber === plateNumber);
   const photoRefs = uploadedFiles.map((file) => file.r2Url || file.driveUrl || file.fileName).filter(Boolean);
-  const locationUpdate = parkingUpdate ? { location: `본사주차장 ${parkingUpdate.parkingZone}구역` } : {};
+  const parkingLocation = parkingUpdate?.parkingZone || "";
+  const locationUpdate = parkingLocation ? { location: parkingLocation } : {};
 
   if (analysis.situation === "배차") {
     updateVehicle(plateNumber, {
       status: "배차중",
-      location: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : form.repairShop || "성수 제일공업사",
+      location: parkingLocation || form.repairShop || "성수 제일공업사",
     });
     addDispatch({
       id: buildRecordId("d"),
@@ -640,15 +641,15 @@ function persistAnalyzedIntake({
     const nextMileage = mockReturn?.mileage || vehicle?.mileage || 0;
     updateVehicle(plateNumber, {
       status: "대기중",
-      location: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "본사 주차장",
+      location: parkingLocation || "본사 주차장",
       fuelLevel: nextFuelLevel,
       mileage: nextMileage,
     });
     addReturn({
       id: buildRecordId("r"),
       rentalCarNumber: plateNumber,
-      returnAddress: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "회차지 확인필요",
-      arrivalAddress: parkingUpdate ? `본사주차장 ${parkingUpdate.parkingZone}구역` : "본사 주차장",
+      returnAddress: parkingLocation || "회차지 확인필요",
+      arrivalAddress: parkingLocation || "본사 주차장",
       fuelLevel: nextFuelLevel,
       mileage: nextMileage,
       notes: buildRecordMemo(form.text, uploadedFiles),

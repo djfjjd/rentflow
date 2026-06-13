@@ -8,20 +8,24 @@ import { useERPState } from "@/lib/erp-state";
 export default function AdminDashboardPage() {
   const { vehicles, dispatches, returns, isLoaded } = useERPState();
 
-  const boardRows = dispatches.map((dispatch) => {
-    const vehicle = vehicles.find((item) => item.plateNumber === dispatch.rentalCarNumber);
+  const boardRows = vehicles.map((vehicle) => {
+    const vehicleDispatches = dispatches.filter((item) => item.rentalCarNumber === vehicle.plateNumber);
+    const latestDispatch = vehicleDispatches[0];
 
     return {
-      vehicleNumber: dispatch.rentalCarNumber,
-      uploadedAt: dispatch.uploadedAt ? new Date(dispatch.uploadedAt).toLocaleDateString("ko-KR") : "2026-06-13",
-      fuelLevel: dispatch.fuelLevel ?? vehicle?.fuelLevel ?? 0,
-      damagedVehicle: `${dispatch.customerCarNumber} / ${dispatch.customerCarModel}`,
-      orderer: dispatch.orderedBy,
-      repairShopOrParking: dispatch.repairShop || vehicle?.location || "-",
-      status: dispatch.status,
+      id: vehicle.id,
+      vehicleNumber: vehicle.plateNumber,
+      uploadedAt: latestDispatch?.uploadedAt ? new Date(latestDispatch.uploadedAt).toLocaleDateString("ko-KR") : "",
+      fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
+      damagedVehicle: latestDispatch ? `${latestDispatch.customerCarNumber} / ${latestDispatch.customerCarModel}` : "-",
+      orderer: latestDispatch?.orderedBy ?? "-",
+      repairShopOrParking: latestDispatch?.repairShop || vehicle.location,
+      status: vehicle.status,
+      dispatchStatus: latestDispatch?.status,
     };
   });
   const recordCount = dispatches.length + returns.length;
+  const activeDispatchCount = vehicles.filter((vehicle) => vehicle.status === "배차중").length;
 
   if (!isLoaded) {
     return (
@@ -36,13 +40,13 @@ export default function AdminDashboardPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="전체 차량" value={`${vehicles.length}`} hint="차량번호 현황판" />
         <StatCard label="접수/배차 기록" value={`${recordCount}`} hint="배차 + 회차 기록" />
-        <StatCard label="대기/주차 차량" value={`${vehicles.filter((vehicle) => vehicle.status === "대기중").length}`} hint="주차위치 표시" />
+        <StatCard label="배차중 / 대기" value={`${activeDispatchCount} / ${vehicles.filter((vehicle) => vehicle.status === "대기중").length}`} hint="차량 상태 기준" />
       </div>
 
       <section className="mt-5 overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="border-b border-line px-5 py-4">
-          <h2 className="text-lg font-black text-ink">배차 현황판</h2>
-          <p className="mt-1 text-sm text-gray-500">날짜는 사진 업로드 완료 시 기록되는 업로드일 기준으로 표시합니다.</p>
+          <h2 className="text-lg font-black text-ink">차량 현황판</h2>
+          <p className="mt-1 text-sm text-gray-500">전체 차량을 기준으로 표시하고, 배차 업로드가 있으면 최신 배차 정보를 함께 보여줍니다.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-[920px] w-full border-collapse text-left text-sm">
@@ -58,10 +62,10 @@ export default function AdminDashboardPage() {
             </thead>
             <tbody className="divide-y divide-line">
               {boardRows.map((row) => (
-                <tr key={row.vehicleNumber} className="hover:bg-primary/5">
+                <tr key={row.id} className="hover:bg-primary/5">
                   <td className="px-4 py-3 font-black text-primary">{row.vehicleNumber}</td>
                   <td className="px-4 py-3 font-bold text-ink">
-                    {row.repairShopOrParking.includes("본사") ? (
+                    {!row.uploadedAt || row.repairShopOrParking.includes("본사") ? (
                       <span className="rounded-md bg-field px-2 py-1 text-xs text-gray-600">주유 {row.fuelLevel}%</span>
                     ) : (
                       row.uploadedAt
@@ -72,6 +76,7 @@ export default function AdminDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.repairShopOrParking}</td>
                   <td className="px-4 py-3">
                     <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-black text-primary">{row.status}</span>
+                    {row.dispatchStatus && <span className="ml-2 rounded-md bg-field px-2 py-1 text-xs font-black text-gray-600">{row.dispatchStatus}</span>}
                   </td>
                 </tr>
               ))}

@@ -46,7 +46,11 @@ export function DriveFileList({ initialQuery = "", files }: DriveFileListProps) 
   const [isLoading, setIsLoading] = useState(!files);
 
   useEffect(() => {
-    if (files) return;
+    if (files) {
+      setRemoteFiles(files);
+      setIsLoading(false);
+      return;
+    }
 
     const controller = new AbortController();
     setIsLoading(true);
