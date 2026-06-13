@@ -48,8 +48,11 @@ export default function AdminDashboardPage() {
                 <tr key={row.vehicleNumber} className="hover:bg-primary/5">
                   <td className="px-4 py-3 font-black text-primary">{row.vehicleNumber}</td>
                   <td className="px-4 py-3 font-bold text-ink">
-                    {row.uploadedAt || "사진 업로드 대기"}
-                    <span className="ml-2 rounded-md bg-field px-2 py-1 text-xs text-gray-600">주유 {row.fuelLevel}%</span>
+                    {row.repairShopOrParking.includes("본사") ? (
+                      <span className="rounded-md bg-field px-2 py-1 text-xs text-gray-600">주유 {row.fuelLevel}%</span>
+                    ) : (
+                      row.uploadedAt
+                    )}
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.damagedVehicle}</td>
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.orderer}</td>
