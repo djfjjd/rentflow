@@ -24,7 +24,7 @@ export function AdminShell({
       <div className="mx-auto grid min-h-screen max-w-7xl lg:grid-cols-[260px_1fr]">
         <aside className="hidden border-r border-line bg-white lg:block">
           <div className="sticky top-0 p-5">
-            <Link href="/admin/dashboard" className="block">
+            <Link href="/" className="block">
               <p className="text-sm font-bold text-primary">Rent ERP</p>
               <h1 className="mt-1 text-xl font-black text-ink">관리자 웹사이트</h1>
             </Link>
@@ -52,7 +52,7 @@ export function AdminShell({
                 <Menu className="h-4 w-4 text-primary" aria-hidden="true" />
                 관리자 메뉴
               </span>
-              <span className="text-xs font-bold text-primary">전체 화면</span>
+              <span className="text-xs font-bold text-primary">더보기</span>
             </summary>
             <nav className="grid max-h-80 gap-1 overflow-y-auto border-t border-line p-3 sm:grid-cols-2">
               {navItems.map((item) => {
@@ -73,8 +73,7 @@ export function AdminShell({
           <header className="mb-5 rounded-lg border border-line bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-sm font-bold text-primary">admin · role: admin/staff</p>
-                <h2 className="mt-1 text-2xl font-black text-ink">{title}</h2>
+                <h2 className="text-2xl font-black text-ink">{title}</h2>
                 <p className="mt-2 text-sm leading-6 text-gray-500">{description}</p>
               </div>
               <Link
