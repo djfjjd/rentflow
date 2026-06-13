@@ -45,6 +45,17 @@ export function AdminShell({
           </div>
         </aside>
         <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mb-4 flex items-center justify-between lg:hidden">
+            <Link href="/" className="inline-flex items-center">
+              <h1 className="text-xl font-black text-primary">렌트플로우</h1>
+            </Link>
+            <Link
+              href="/admin/settings"
+              className="text-xs font-bold text-gray-500 hover:text-primary"
+            >
+              관리자 설정
+            </Link>
+          </div>
           <details className="mb-4 rounded-lg border border-line bg-white shadow-sm lg:hidden">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-black text-ink">
               <span className="inline-flex items-center gap-2">
@@ -104,6 +115,12 @@ export function MobileAppShell({
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto min-h-screen w-full max-w-xl px-4 pb-24 pt-5">
+        <div className="mb-4 flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center">
+            <h1 className="text-xl font-black text-primary">렌트플로우</h1>
+          </Link>
+          <span className="text-[10px] font-bold text-gray-400">PWA STAFF</span>
+        </div>
         <header className="mb-5 rounded-lg border border-line bg-white p-5 shadow-sm">
           <p className="text-sm font-bold text-primary">mobile PWA · role: staff/driver</p>
           <h1 className="mt-1 text-2xl font-black text-ink">{title}</h1>
