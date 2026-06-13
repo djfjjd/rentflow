@@ -9,7 +9,7 @@ type PartnerDocumentAssistProps = {
 
 export function PartnerDocumentAssist({ mode }: PartnerDocumentAssistProps) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Partner | null>(partners[0]);
+  const [selected, setSelected] = useState<Partner | null>(partners[0] ?? null);
 
   const matches = partners
     .filter((partner) => ["거래처", "보험사", "렌터카업체", "공업사", "정비공장"].includes(partner.type))
@@ -32,6 +32,7 @@ export function PartnerDocumentAssist({ mode }: PartnerDocumentAssistProps) {
                 <span className="mt-1 block text-xs text-gray-500">{partner.businessNumber} · {partner.managerName}</span>
               </button>
             ))}
+            {matches.length === 0 && <div className="rounded-lg bg-field p-3 text-sm font-bold text-gray-500">저장된 거래처가 없습니다.</div>}
           </div>
         </div>
         <div className="rounded-lg bg-field p-4">

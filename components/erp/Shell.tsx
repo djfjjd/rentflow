@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { notifications } from "@/lib/erp-data";
 
 export type ShellNavItem = {
   href: string;
@@ -49,12 +50,7 @@ export function AdminShell({
             <Link href="/" className="inline-flex items-center">
               <h1 className="text-xl font-black text-primary">렌트플로우</h1>
             </Link>
-            <Link
-              href="/admin/settings"
-              className="text-xs font-bold text-gray-500 hover:text-primary"
-            >
-              관리자 설정
-            </Link>
+            <NotificationMenu />
           </div>
           <details className="mb-4 rounded-lg border border-line bg-white shadow-sm lg:hidden">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-black text-ink">
@@ -98,6 +94,31 @@ export function AdminShell({
         </section>
       </div>
     </main>
+  );
+}
+
+function NotificationMenu() {
+  return (
+    <details className="relative">
+      <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-line bg-white text-primary shadow-sm">
+        <Bell className="h-5 w-5" aria-hidden="true" />
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-lg border border-line bg-white shadow-lg">
+        <div className="border-b border-line px-4 py-3">
+          <h2 className="text-sm font-black text-ink">알림 목록</h2>
+        </div>
+        <div className="max-h-96 overflow-y-auto p-2">
+          {notifications.map((item) => (
+            <article key={item.id} className="rounded-lg p-3 hover:bg-field">
+              <p className="text-xs font-black text-primary">{item.type}</p>
+              <p className="mt-1 text-sm font-black text-ink">{item.title}</p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">{item.message}</p>
+            </article>
+          ))}
+          {notifications.length === 0 && <div className="p-4 text-center text-sm font-bold text-gray-500">알림이 없습니다.</div>}
+        </div>
+      </div>
+    </details>
   );
 }
 

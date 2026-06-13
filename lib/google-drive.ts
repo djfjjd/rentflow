@@ -162,49 +162,7 @@ export async function mockDriveUpload(input: DriveUploadInput): Promise<DriveUpl
   };
 }
 
-export const mockDriveFiles: DriveUploadResult[] = [
-  {
-    driveFileId: "mock-drive-accident-001",
-    driveUrl: "https://drive.google.com/file/d/mock-drive-accident-001/view",
-    folderPath: "렌터카ERP/2026/06/125하0000/사고사진",
-    storedFileName: "20260613_125하0000_123456789_사진_01.jpg",
-    originalFileName: "accident-front.jpg",
-    mimeType: "image/jpeg",
-    size: 2481200,
-    vehicleNumber: "125하0000",
-    claimNumber: "123456789",
-    businessFolder: "사고사진",
-    fileKind: "사진",
-    uploadedAt: "2026-06-13T01:30:00.000Z",
-  },
-  {
-    driveFileId: "mock-drive-contract-001",
-    driveUrl: "https://drive.google.com/file/d/mock-drive-contract-001/view",
-    folderPath: "렌터카ERP/2026/06/125하0000/계약서",
-    storedFileName: "20260613_125하0000_123456789_계약서_01.pdf",
-    originalFileName: "contract.pdf",
-    mimeType: "application/pdf",
-    size: 881200,
-    vehicleNumber: "125하0000",
-    claimNumber: "123456789",
-    businessFolder: "계약서",
-    fileKind: "계약서",
-    uploadedAt: "2026-06-13T02:10:00.000Z",
-  },
-  {
-    driveFileId: "mock-drive-maintenance-001",
-    driveUrl: "https://drive.google.com/file/d/mock-drive-maintenance-001/view",
-    folderPath: "렌터카ERP/2026/06/210호7788/정비",
-    storedFileName: "20260613_210호7788_미접수_정비_01.pdf",
-    originalFileName: "maintenance-estimate.pdf",
-    mimeType: "application/pdf",
-    size: 512940,
-    vehicleNumber: "210호7788",
-    businessFolder: "정비",
-    fileKind: "정비",
-    uploadedAt: "2026-06-13T04:00:00.000Z",
-  },
-];
+export const mockDriveFiles: DriveUploadResult[] = [];
 
 function sanitizePathSegment(value: string) {
   return value.trim().replace(/[\\/:*?"<>|]/g, "-") || "미지정";

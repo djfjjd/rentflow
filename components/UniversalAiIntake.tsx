@@ -168,9 +168,11 @@ export function UniversalAiIntake() {
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
 
+      const persistedAnalysis = analysis.situation === "일반" && plateNumber !== "unknown" ? { ...analysis, situation: "배차" as const } : analysis;
+
       uploadedFiles.forEach(addUploadedFile);
       persistAnalyzedIntake({
-        analysis,
+        analysis: persistedAnalysis,
         plateNumber,
         uploadedFiles,
         parkingUpdate,
@@ -260,25 +262,7 @@ export function UniversalAiIntake() {
             </div>
           )}
           <div className="mt-4 rounded-lg border border-line bg-white p-4">
-            <label className="block">
-              <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
-              <select
-                value={selectedVehicleNumber}
-                onChange={(event) => {
-                  setSelectedVehicleNumber(event.target.value);
-                  setAnalyzed(false);
-                }}
-                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-              >
-                <option value="">차량번호 선택</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.plateNumber}>
-                    {vehicle.plateNumber} · {vehicle.model}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {intakeTypeOptions.map((option) => (
                 <label
                   key={option.value}
@@ -299,6 +283,24 @@ export function UniversalAiIntake() {
                 </label>
               ))}
             </div>
+            <label className="mt-3 block">
+              <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
+              <select
+                value={selectedVehicleNumber}
+                onChange={(event) => {
+                  setSelectedVehicleNumber(event.target.value);
+                  setAnalyzed(false);
+                }}
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+              >
+                <option value="">차량번호 선택</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.plateNumber}>
+                    {vehicle.plateNumber} · {vehicle.model}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="mt-3 grid gap-3 md:grid-cols-4">
               {(intakeType === "insurance" || intakeType === "selfPay") && (
                 <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
@@ -332,7 +334,7 @@ export function UniversalAiIntake() {
             }}
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="AI 접수함: 정비요망, 사고접수, 회차 후 계기판사진, 125하4208 독도, 독도"
+            placeholder="AI 텍스트 입력 (선택): 정비요망, 사고접수, 회차 후 계기판사진, 125하4208 독도"
           />
           <button
             type="button"
@@ -436,7 +438,7 @@ function analyzeIntake(
   const hasAccident = ["사고", "파손", "범퍼", "휀다", "접촉", "보험접수", "기스", "추돌", "도어", "휠", "유리"].some((keyword) => lower.includes(keyword));
   const hasMaintenance = ["정비", "정비요망", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
   const hasReturn = ["회차", "반납", "입고", "회차계기판"].some((keyword) => lower.includes(keyword));
-  const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword)) || Boolean(form.orderer && form.repairShop);
+  const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword)) || Boolean(form.orderer || form.repairShop);
   const hasReservation = ["예약", "예정", "스케줄"].some((keyword) => lower.includes(keyword));
 
   const situation = hasReturn ? "회차" : hasDispatch ? "배차" : hasReservation ? "예약" : hasAccident ? "사고" : hasMaintenance ? "정비" : "일반";
@@ -620,7 +622,7 @@ function persistAnalyzedIntake({
   if (analysis.situation === "배차") {
     updateVehicle(plateNumber, {
       status: "배차중",
-      location: parkingLocation || form.repairShop || "성수 제일공업사",
+      location: parkingLocation || form.repairShop || "배차지 확인필요",
     });
     addDispatch({
       id: buildRecordId("d"),
@@ -630,8 +632,8 @@ function persistAnalyzedIntake({
       customerCarNumber: "-",
       customerCarModel: form.customerCar || getAnalysisField(analysis, "고객 차종") || "-",
       rentalCarNumber: plateNumber,
-      orderedBy: form.orderer || getAnalysisField(analysis, "오더자") || "AI 접수",
-      repairShop: form.repairShop || getAnalysisField(analysis, "수리처") || "성수 제일공업사",
+      orderedBy: form.orderer || getAnalysisField(analysis, "오더자") || "-",
+      repairShop: form.repairShop || getAnalysisField(analysis, "수리처") || "확인필요",
       pickupAddress: "-",
       deliveryAddress: "-",
       fuelLevel: vehicle?.fuelLevel ?? 85,

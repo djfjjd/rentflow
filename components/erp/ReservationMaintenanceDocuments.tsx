@@ -126,7 +126,7 @@ export function MaintenanceBoard() {
 
 export function DocumentCenter() {
   const [items, setItems] = useState<DocumentRecord[]>(seedDocuments);
-  const [selected, setSelected] = useState<DocumentRecord | null>(seedDocuments[0]);
+  const [selected, setSelected] = useState<DocumentRecord | null>(seedDocuments[0] ?? null);
   const [type, setType] = useState<DocumentType>("계약서");
   const [title, setTitle] = useState("");
 

@@ -24,8 +24,7 @@ export default function AdminDashboardPage() {
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
       damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
-      orderer: latestDispatch?.orderedBy ?? "-",
-      repairShopOrParking,
+      ordererAndRepairShop: latestDispatch ? formatOrdererAndRepairShop(latestDispatch.orderedBy, latestDispatch.repairShop) : repairShopOrParking,
       intakeType: latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : ""),
     };
   });
@@ -60,8 +59,7 @@ export default function AdminDashboardPage() {
                 <th className="px-4 py-3">차량번호</th>
                 <th className="px-4 py-3">날짜 / 주유량</th>
                 <th className="px-4 py-3">피해차량</th>
-                <th className="px-4 py-3">오더자</th>
-                <th className="px-4 py-3">수리처 / 주차위치</th>
+                <th className="px-4 py-3">오더자/수리처</th>
                 <th className="px-4 py-3">구분</th>
               </tr>
             </thead>
@@ -70,15 +68,14 @@ export default function AdminDashboardPage() {
                 <tr key={row.id} className="hover:bg-primary/5">
                   <td className="px-4 py-3 font-black text-primary">{row.vehicleNumber}</td>
                   <td className="px-4 py-3 font-bold text-ink">
-                    {!row.uploadedAt || row.repairShopOrParking.includes("본사") ? (
+                    {!row.uploadedAt ? (
                       <span className="rounded-md bg-field px-2 py-1 text-xs text-gray-600">주유 {row.fuelLevel}%</span>
                     ) : (
                       row.uploadedAt
                     )}
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-700">{row.damagedVehicle}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-700">{row.orderer}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-700">{row.repairShopOrParking}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-700">{row.ordererAndRepairShop}</td>
                   <td className="px-4 py-3">
                     {row.intakeType ? (
                       <span className={`rounded-md px-2 py-1 text-xs font-black ${getIntakeTypeClass(row.intakeType)}`}>
@@ -121,4 +118,17 @@ function getIntakeTypeClass(value: string) {
   if (value === "selfPay") return "bg-emerald-100 text-emerald-700";
   if (value === "selfService") return "bg-blue-100 text-blue-700";
   return "bg-red-100 text-red-700";
+}
+
+function formatOrdererAndRepairShop(orderer: string, repairShop: string) {
+  const normalizedOrderer = normalizeDispatchCellValue(orderer);
+  const normalizedRepairShop = normalizeDispatchCellValue(repairShop);
+
+  return `${normalizedOrderer || "?"}/${normalizedRepairShop || "?"}`;
+}
+
+function normalizeDispatchCellValue(value: string) {
+  const trimmed = value.trim();
+
+  return trimmed && trimmed !== "-" && trimmed !== "확인필요" ? trimmed : "";
 }

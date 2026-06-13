@@ -3,13 +3,25 @@ import { PartnerHistory } from "@/components/erp/PartnerManager";
 import { AdminShell } from "@/components/erp/Shell";
 import { adminNavItems, partners } from "@/lib/erp-data";
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
-  return partners.map((partner) => ({ id: partner.id }));
+  return partners.length > 0 ? partners.map((partner) => ({ id: partner.id })) : [{ id: "empty" }];
 }
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const partner = partners.find((item) => item.id === id) ?? partners[0];
+  const partner = partners.find((item) => item.id === id);
+
+  if (!partner) {
+    return (
+      <AdminShell title="거래처 상세" description="저장된 거래처 정보를 확인합니다." navItems={adminNavItems}>
+        <section className="rounded-lg border border-line bg-white p-5 text-sm font-bold text-gray-500 shadow-sm">
+          저장된 거래처가 없습니다.
+        </section>
+      </AdminShell>
+    );
+  }
 
   return (
     <AdminShell title={`${partner.name} 상세`} description="거래처 기본 정보와 차량번호/보험접수번호로 연결된 공장 이력을 확인합니다." navItems={adminNavItems}>

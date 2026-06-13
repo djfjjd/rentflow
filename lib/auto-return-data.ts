@@ -19,21 +19,7 @@ export type ReturnAutoProcess = {
   createdAt: string;
 };
 
-export const returnAutoProcesses: ReturnAutoProcess[] = [
-  {
-    id: "rap-1",
-    smartInboxItemId: "smart-20260613-001",
-    plateNumber: "125하4208",
-    extractedMileage: 23549,
-    extractedFuelLevel: 85,
-    matchedDispatchId: "d-1",
-    createdReturnId: "auto-return-1",
-    confidenceScore: 92,
-    status: "자동회차완료",
-    memo: "회차계기판 사진 업로드로 자동 회차 처리",
-    createdAt: "2026-06-13T09:10:00.000Z",
-  },
-];
+export const returnAutoProcesses: ReturnAutoProcess[] = [];
 
 export function buildReturnReport(process: ReturnAutoProcess) {
   return [

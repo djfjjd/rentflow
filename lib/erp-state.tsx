@@ -75,13 +75,37 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     const savedAccidentHistories = localStorage.getItem(ACCIDENT_HISTORIES_KEY);
 
     if (savedVehicles) setVehicles(JSON.parse(savedVehicles));
-    if (savedDispatches) setDispatches(JSON.parse(savedDispatches));
-    if (savedReservations) setReservations(JSON.parse(savedReservations));
-    if (savedMaintenance) setMaintenance(JSON.parse(savedMaintenance));
-    if (savedReturns) setReturns(JSON.parse(savedReturns));
+    if (savedDispatches) {
+      const next = filterSeedDispatches(JSON.parse(savedDispatches));
+      setDispatches(next);
+      localStorage.setItem(DISPATCHES_KEY, JSON.stringify(next));
+    }
+    if (savedReservations) {
+      const next = filterSeedReservations(JSON.parse(savedReservations));
+      setReservations(next);
+      localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(next));
+    }
+    if (savedMaintenance) {
+      const next = filterSeedMaintenance(JSON.parse(savedMaintenance));
+      setMaintenance(next);
+      localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(next));
+    }
+    if (savedReturns) {
+      const next = filterSeedReturns(JSON.parse(savedReturns));
+      setReturns(next);
+      localStorage.setItem(RETURNS_KEY, JSON.stringify(next));
+    }
     if (savedUploadedFiles) setUploadedFiles(JSON.parse(savedUploadedFiles));
-    if (savedMaintenanceHistories) setMaintenanceHistories(JSON.parse(savedMaintenanceHistories));
-    if (savedAccidentHistories) setAccidentHistories(JSON.parse(savedAccidentHistories));
+    if (savedMaintenanceHistories) {
+      const next = filterSeedMaintenanceHistories(JSON.parse(savedMaintenanceHistories));
+      setMaintenanceHistories(next);
+      localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(next));
+    }
+    if (savedAccidentHistories) {
+      const next = filterSeedAccidentHistories(JSON.parse(savedAccidentHistories));
+      setAccidentHistories(next);
+      localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(next));
+    }
 
     setIsLoaded(true);
   }, []);
@@ -221,4 +245,28 @@ export function useERPState() {
     throw new Error("useERPState must be used within an ERPProvider");
   }
   return context;
+}
+
+function filterSeedDispatches(items: Dispatch[]) {
+  return items.filter((item) => item.id !== "d-1");
+}
+
+function filterSeedReturns(items: ReturnRecord[]) {
+  return items.filter((item) => item.id !== "r-1");
+}
+
+function filterSeedReservations(items: Reservation[]) {
+  return items.filter((item) => !["res-1", "res-2", "res-3"].includes(item.id));
+}
+
+function filterSeedMaintenance(items: Maintenance[]) {
+  return items.filter((item) => !["m-1", "m-2", "m-3"].includes(item.id));
+}
+
+function filterSeedMaintenanceHistories(items: MaintenanceHistory[]) {
+  return items.filter((item) => !["mh-1", "mh-2"].includes(item.id));
+}
+
+function filterSeedAccidentHistories(items: AccidentHistory[]) {
+  return items.filter((item) => item.id !== "ah-1");
 }
