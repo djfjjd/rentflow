@@ -17,13 +17,21 @@ export function ReservationBoard() {
   const today = new Date();
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
+
+  // 이번 달의 첫 번째 날 요일 (0: 일요일, ..., 6: 토요일)
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const monthDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  // 캘린더 그리드를 위한 일자 배열 생성 (빈 칸 포함)
   const days = Array.from({ length: monthDays }, (_, i) => formatDateKey(new Date(currentYear, currentMonth, i + 1)));
-  
+  const calendarCells = [
+    ...Array.from({ length: firstDayOfMonth }, () => null), // 시작 전 빈 칸
+    ...days,
+  ];
+
+  const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+
   const upcomingReservations = [...reservations].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-  const reservedDays = days
-    .map((day) => ({ day, items: reservations.filter((item) => item.date === day).sort((a, b) => a.time.localeCompare(b.time)) }))
-    .filter((group) => group.items.length > 0);
 
   if (!isLoaded) return <div className="p-5 text-sm font-bold text-gray-500">예약 데이터를 불러오는 중입니다...</div>;
 
@@ -31,49 +39,44 @@ export function ReservationBoard() {
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
         <section className="rounded-lg border border-line bg-white p-5 shadow-sm overflow-hidden">
-          <h2 className="text-lg font-black text-ink">월간 예약 현황</h2>
-          <div className="mt-4 grid grid-cols-4 gap-2 md:grid-cols-7">
-            {days.map((day) => {
+          <h2 className="text-lg font-black text-ink">월간 예약 현황 ({currentYear}년 {currentMonth + 1}월)</h2>
+          
+          {/* 요일 헤더 */}
+          <div className="mt-4 grid grid-cols-7 border-b border-line pb-2">
+            {weekDays.map((day, i) => (
+              <div key={day} className={`text-center text-xs font-black ${i === 0 ? "text-red-500" : i === 6 ? "text-primary" : "text-gray-400"}`}>
+                {day}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-px bg-line">
+            {calendarCells.map((day, index) => {
+              if (!day) return <div key={`empty-${index}`} className="min-h-[100px] bg-field/30 sm:min-h-[120px]" />;
+              
               const dayItems = reservations.filter((item) => item.date === day);
               const isToday = day === formatDateKey(today);
+              const dayOfMonth = day.slice(8);
+              const dayOfWeek = index % 7;
+
               return (
-                <article key={day} className={`min-h-[120px] rounded-lg border border-line p-2 ${isToday ? "bg-primary/5 border-primary/20" : "bg-field"}`}>
-                  <p className={`text-xs font-black ${isToday ? "text-primary" : "text-ink"}`}>
-                    {day.slice(8)}일
-                    {isToday && <span className="ml-1 text-[10px] font-bold">(오늘)</span>}
+                <article key={day} className={`min-h-[100px] bg-white p-1.5 transition-colors hover:bg-slate-50 sm:min-h-[120px] sm:p-2 ${isToday ? "bg-primary/5 ring-1 ring-inset ring-primary/20" : ""}`}>
+                  <p className={`text-[11px] font-black sm:text-xs ${isToday ? "text-primary" : dayOfWeek === 0 ? "text-red-500" : dayOfWeek === 6 ? "text-primary" : "text-ink"}`}>
+                    {dayOfMonth}
+                    {isToday && <span className="ml-0.5 hidden text-[8px] font-bold sm:inline">(오늘)</span>}
                   </p>
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-1.5 space-y-0.5 sm:mt-2 sm:space-y-1">
                     {dayItems.map((item) => (
-                      <div key={item.id} className="rounded-md bg-white p-1.5 text-[10px] shadow-sm border border-line/50">
-                        <p className="font-black text-primary leading-none">{formatReservationTime(item)}</p>
-                        <p className="mt-1 font-bold text-ink truncate">{item.vehicleNumber}</p>
-                        <p className="text-gray-500 truncate">{item.customerName}</p>
+                      <div key={item.id} className="rounded bg-white p-1 text-[8px] border border-line/50 shadow-sm sm:rounded-md sm:p-1.5 sm:text-[10px]">
+                        <p className="font-black text-primary leading-tight truncate">{formatReservationTime(item)}</p>
+                        <p className="mt-0.5 font-bold text-ink truncate leading-tight">{item.vehicleNumber}</p>
+                        <p className="hidden text-gray-500 truncate leading-tight md:block">{item.customerName}</p>
                       </div>
                     ))}
                   </div>
                 </article>
               );
             })}
-          </div>
-          <div className="mt-4 space-y-3 sm:hidden">
-            {reservedDays.map(({ day, items }) => (
-              <article key={day} className="rounded-lg border border-line bg-field p-3">
-                <h3 className="text-sm font-black text-ink">{formatKoreanDate(day)}</h3>
-                <div className="mt-3 space-y-2">
-                  {items.map((item) => (
-                    <div key={item.id} className="rounded-lg border border-line/60 bg-white p-3 text-sm shadow-sm">
-                      <p className="font-black text-primary">{formatReservationTime(item)}</p>
-                      <p className="mt-1 leading-5 text-ink">
-                        {[item.customerName, item.route, item.vehicleNumber].filter(Boolean).join(" ")}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-            {reservedDays.length === 0 && (
-              <div className="rounded-lg border border-dashed border-line bg-field p-5 text-center text-sm font-bold text-gray-500">이번 달 예약 일정이 없습니다.</div>
-            )}
           </div>
         </section>
         <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
