@@ -103,11 +103,19 @@ export type Reservation = {
   id: string;
   date: string;
   time: string;
+  endTime?: string;
   vehicleNumber: string;
+  rentCarNumber?: string;
   customerName: string;
+  customerCarNumber?: string;
+  factoryName?: string;
+  pickupLocation?: string;
+  deliveryLocation?: string;
+  orderPerson?: string;
+  memo?: string;
   route: string;
   repairShopPartnerId?: string;
-  status: "예약" | "배차예정" | "진행중" | "완료";
+  status: "예약" | "예약대기" | "배차예정" | "진행중" | "완료";
 };
 
 export type Maintenance = {
@@ -254,21 +262,22 @@ export const appNavItems = [
 
 export const adminNavItems = [
   { href: "/admin/dashboard", label: "전체 대시보드", icon: Home },
+  { href: "/admin/search", label: "통합검색", icon: Search },
   { href: "/admin/vehicles", label: "차량관리", icon: Car },
-  { href: "/admin/contracts", label: "계약서관리", icon: FileText },
-  { href: "/admin/billing", label: "청구서관리", icon: ReceiptText },
+  { href: "/admin/dispatches", label: "배차관리", icon: ClipboardList },
+  { href: "/admin/returns", label: "배회차관리", icon: ClipboardList },
   { href: "/admin/reservations", label: "예약 캘린더", icon: CalendarDays },
-  { href: "/admin/dispatches", label: "배회차관리", icon: ClipboardList },
+  { href: "/admin/maintenance-history", label: "사고, 정비기록", icon: Wrench },
   { href: "/admin/lost-items", label: "분실물관리", icon: FileArchive },
   { href: "/admin/partners", label: "거래처관리", icon: Handshake },
   { href: "/admin/insurers", label: "보험사관리", icon: ShieldCheck },
-  { href: "/admin/maintenance-history", label: "사고, 정비기록", icon: Wrench },
-  { href: "/admin/revenue", label: "차량별 매출분석", icon: BarChart3 },
-  { href: "/admin/corporate-cards", label: "법인카드 관리", icon: CreditCard },
+  { href: "/admin/contracts", label: "계약서관리", icon: FileText },
+  { href: "/admin/billing", label: "청구서관리", icon: ReceiptText },
+  { href: "/admin/tax-invoices", label: "세금계산서관리", icon: ShieldCheck },
   { href: "/admin/receivables", label: "미수금 관리", icon: ReceiptText },
   { href: "/admin/payments", label: "입금 관리", icon: ReceiptText },
-  { href: "/admin/tax-invoices", label: "세금계산서관리", icon: ShieldCheck },
-  { href: "/admin/search", label: "통합검색", icon: Search },
+  { href: "/admin/corporate-cards", label: "법인카드 관리", icon: CreditCard },
+  { href: "/admin/revenue", label: "차량별 매출분석", icon: BarChart3 },
   { href: "/admin/settings", label: "설정", icon: Settings },
 ];
 

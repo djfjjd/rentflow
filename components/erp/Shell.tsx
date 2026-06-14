@@ -9,6 +9,14 @@ export type ShellNavItem = {
   icon: LucideIcon;
 };
 
+const adminNavGroups: Array<{ title: string; labels: string[] }> = [
+  { title: "현황", labels: ["전체 대시보드", "통합검색"] },
+  { title: "차량 운영", labels: ["차량관리", "배차관리", "배회차관리", "예약 캘린더", "사고, 정비기록", "분실물관리"] },
+  { title: "거래처/보험", labels: ["거래처관리", "보험사관리"] },
+  { title: "서류/정산", labels: ["계약서관리", "청구서관리", "세금계산서관리", "미수금 관리", "입금 관리", "법인카드 관리", "차량별 매출분석"] },
+  { title: "시스템", labels: ["설정"] },
+];
+
 export function AdminShell({
   title,
   description,
@@ -28,20 +36,8 @@ export function AdminShell({
             <Link href="/" className="block">
               <h1 className="text-2xl font-black text-primary">렌트플로우</h1>
             </Link>
-            <nav className="mt-6 space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-gray-600 hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <nav className="mt-5 max-h-[calc(100vh-88px)] space-y-2 overflow-y-auto pr-1">
+              <GroupedNav navItems={navItems} />
             </nav>
           </div>
         </aside>
@@ -60,26 +56,54 @@ export function AdminShell({
               </span>
               <span className="text-xs font-bold text-primary">더보기</span>
             </summary>
-            <nav className="grid max-h-80 gap-1 overflow-y-auto border-t border-line p-3 sm:grid-cols-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-bold text-gray-600 hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <nav className="flex max-h-80 flex-col gap-1 overflow-y-auto border-t border-line p-2">
+              <GroupedNav navItems={navItems} compact />
             </nav>
           </details>
           {children}
         </section>
       </div>
     </main>
+  );
+}
+
+function GroupedNav({ navItems, compact = false }: { navItems: ShellNavItem[]; compact?: boolean }) {
+  const renderedLabels = new Set<string>();
+  const groupedItems = adminNavGroups
+    .map((group) => {
+      const items = group.labels
+        .map((label) => navItems.find((item) => item.label === label))
+        .filter((item): item is ShellNavItem => Boolean(item));
+      items.forEach((item) => renderedLabels.add(item.label));
+      return { ...group, items };
+    })
+    .filter((group) => group.items.length > 0);
+  const ungroupedItems = navItems.filter((item) => !renderedLabels.has(item.label));
+  const groups = ungroupedItems.length > 0 ? [...groupedItems, { title: "기타", labels: [], items: ungroupedItems }] : groupedItems;
+
+  return (
+    <>
+      {groups.map((group, index) => (
+        <div key={group.title} className={index > 0 ? "border-t border-line pt-2" : ""}>
+          <p className={`px-3 font-black text-gray-400 ${compact ? "py-1 text-[10px]" : "pb-1 text-[11px]"}`}>{group.title}</p>
+          <div className="flex flex-col gap-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={`${group.title}-${item.href}-${item.label}`}
+                  href={item.href}
+                  className={`flex min-w-0 items-center gap-3 rounded-lg px-3 text-sm font-bold text-gray-600 hover:bg-primary/10 hover:text-primary ${compact ? "min-h-9" : "min-h-10"} whitespace-nowrap`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
 

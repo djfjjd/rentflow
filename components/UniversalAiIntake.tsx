@@ -6,7 +6,7 @@ import { uploadFilesToDrive, type StoredFileMetadata, type UploadFileMetadata } 
 import { type DriveBusinessFolder, type DriveFileKind } from "@/lib/google-drive";
 import { useERPState } from "@/lib/erp-state";
 import { resolveVehiclePlateNumber } from "@/lib/vehicle-utils";
-import type { AccidentHistory, Dispatch, MaintenanceHistory, ReturnRecord, Vehicle } from "@/lib/erp-data";
+import type { AccidentHistory, Dispatch, MaintenanceHistory, Reservation, ReturnRecord, Vehicle } from "@/lib/erp-data";
 
 type IntakeType = "insurance" | "selfPay" | "selfService";
 
@@ -52,6 +52,7 @@ export function UniversalAiIntake() {
     dispatches,
     updateVehicle,
     addDispatch,
+    addReservation,
     addReturn,
     addUploadedFile,
     addMaintenanceHistory,
@@ -74,6 +75,7 @@ export function UniversalAiIntake() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadError, setUploadError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [aiCategory, setAiCategory] = useState<AiCategory>("일반메모");
   const [autoReturnPreview, setAutoReturnPreview] = useState<AutoReturnPreview | null>(null);
   const [parkingUpdatePreview, setParkingUpdatePreview] = useState<ParkingUpdatePreview | null>(null);
@@ -101,6 +103,7 @@ export function UniversalAiIntake() {
     setUploadStatus("idle");
     setUploadProgress({ done: 0, total: newFiles.length });
     setUploadError("");
+    setSuccessMessage("");
     setAutoReturnPreview(null);
     setParkingUpdatePreview(null);
     
@@ -118,6 +121,7 @@ export function UniversalAiIntake() {
     setUploadStatus("uploading");
     setUploadProgress({ done: 0, total: files.length });
     setUploadError("");
+    setSuccessMessage("");
 
     try {
       const fileNames = files.map((file) => file.name).join(" ");
@@ -126,6 +130,7 @@ export function UniversalAiIntake() {
       const parkingUpdate = parseParkingUpdate(text, resolvedVehicleNumber, vehicles);
       const fallbackFileName = files[0]?.name || "";
       const analysis = analyzeIntake(text, fallbackFileName, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
+      const scheduleReservation = parseScheduleFromText(text, vehicles);
       const inferredVehicleNumber = resolvedVehicleNumber || getAnalysisField(analysis, "차량번호") || parkingUpdate?.plateNumber || "unknown";
       const plateNumber = inferredVehicleNumber === "-" ? "unknown" : inferredVehicleNumber;
       const uploadedFiles: StoredFileMetadata[] = [];
@@ -171,6 +176,9 @@ export function UniversalAiIntake() {
       const persistedAnalysis = analysis.situation === "일반" && plateNumber !== "unknown" ? { ...analysis, situation: "배차" as const } : analysis;
 
       uploadedFiles.forEach(addUploadedFile);
+      if (scheduleReservation) {
+        addReservation(scheduleReservation);
+      }
       persistAnalyzedIntake({
         analysis: persistedAnalysis,
         plateNumber,
@@ -189,6 +197,7 @@ export function UniversalAiIntake() {
       setAnalyzed(true);
       setUploadComplete(true);
       setUploadStatus("complete");
+      setSuccessMessage(scheduleReservation ? "예약 캘린더에 일정이 추가되었습니다" : "업로드 완료. 입력 내용이 초기화되었습니다.");
       resetForm();
     } catch (error) {
       console.error("AI Upload Error:", error);
@@ -283,7 +292,7 @@ export function UniversalAiIntake() {
                 </label>
               ))}
             </div>
-            <label className="mt-3 block">
+            <label className="mt-3 block w-full min-w-0">
               <span className="text-xs font-bold text-gray-500">배차 차량번호</span>
               <select
                 value={selectedVehicleNumber}
@@ -291,7 +300,7 @@ export function UniversalAiIntake() {
                   setSelectedVehicleNumber(event.target.value);
                   setAnalyzed(false);
                 }}
-                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+                className="mt-1 min-h-12 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
               >
                 <option value="">차량번호 선택</option>
                 {vehicles.map((vehicle) => (
@@ -301,7 +310,7 @@ export function UniversalAiIntake() {
                 ))}
               </select>
             </label>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-4">
               {(intakeType === "insurance" || intakeType === "selfPay") && (
                 <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
               )}
@@ -368,7 +377,7 @@ export function UniversalAiIntake() {
           {uploadComplete && (
             <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-600">
               <CheckCircle2 className="h-5 w-5" />
-              업로드 완료. 입력 내용이 초기화되었습니다.
+              {successMessage || "업로드 완료. 입력 내용이 초기화되었습니다."}
             </div>
           )}
           {autoReturnPreview && (
@@ -439,7 +448,7 @@ function analyzeIntake(
   const hasMaintenance = ["정비", "정비요망", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
   const hasReturn = ["회차", "반납", "입고", "회차계기판"].some((keyword) => lower.includes(keyword));
   const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword)) || Boolean(form.orderer || form.repairShop);
-  const hasReservation = ["예약", "예정", "스케줄"].some((keyword) => lower.includes(keyword));
+  const hasReservation = ["예약", "대차", "얘기됨", "예정", "스케줄", "시간", "월", "일", "시"].some((keyword) => lower.includes(keyword));
 
   const situation = hasReturn ? "회차" : hasDispatch ? "배차" : hasReservation ? "예약" : hasAccident ? "사고" : hasMaintenance ? "정비" : "일반";
   const titleMap = {
@@ -517,9 +526,102 @@ function classifyAiInbox(value: string): AiCategory {
   if (["계약", "계약서"].some((keyword) => source.includes(keyword))) return "계약";
   if (["청구", "청구서"].some((keyword) => source.includes(keyword))) return "청구";
   if (["입금", "입금확인"].some((keyword) => source.includes(keyword))) return "입금";
-  if (["예약", "예약변경"].some((keyword) => source.includes(keyword))) return "예약";
+  if (["예약", "예약변경", "대차", "얘기됨", "예정", "시간", "월", "일", "시"].some((keyword) => source.includes(keyword))) return "예약";
 
   return "일반메모";
+}
+
+export function parseScheduleFromText(text: string, vehicles: Vehicle[] = []): Reservation | null {
+  const source = text.trim();
+  if (!source) return null;
+
+  const hasScheduleKeyword = ["예약", "대차", "얘기됨", "예정", "시간", "월", "일", "시"].some((keyword) => source.includes(keyword));
+  if (!hasScheduleKeyword) return null;
+
+  const dateParts = parseScheduleDate(source);
+  const timeParts = parseScheduleTime(source);
+  if (!dateParts || !timeParts) return null;
+
+  const lastFour = source.match(/(?:^|\D)(\d{4})(?!\d)/)?.[1] || "";
+  const matchedVehicle = lastFour ? vehicles.find((vehicle) => vehicle.plateNumber.endsWith(lastFour)) : undefined;
+  const partnerName = inferPartnerName(source);
+  const vehicleModel = inferVehicleModel(source, matchedVehicle?.model);
+  const route = vehicleModel ? `${vehicleModel} 대차` : "대차 예약";
+
+  return {
+    id: `r-${Date.now()}`,
+    date: dateParts,
+    time: timeParts.time,
+    endTime: timeParts.endTime,
+    vehicleNumber: matchedVehicle?.plateNumber || lastFour || "",
+    rentCarNumber: matchedVehicle?.plateNumber || lastFour || "",
+    customerName: partnerName,
+    customerCarNumber: "",
+    factoryName: partnerName,
+    pickupLocation: partnerName,
+    deliveryLocation: "",
+    orderPerson: partnerName,
+    memo: source,
+    route,
+    status: "예약대기",
+  };
+}
+
+function parseScheduleDate(source: string) {
+  const year = new Date().getFullYear();
+  const matched =
+    source.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/) ||
+    source.match(/(\d{1,2})\s*\/\s*(\d{1,2})/) ||
+    source.match(/(\d{1,2})\s*\.\s*(\d{1,2})/);
+
+  if (!matched) return null;
+
+  const month = Number(matched[1]);
+  const day = Number(matched[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseScheduleTime(source: string) {
+  const rangeMatched = source.match(/(오전|오후)?\s*(\d{1,2})(?::(\d{2}))?\s*시?\s*[~-]\s*(오전|오후)?\s*(\d{1,2})(?::(\d{2}))?\s*시?/);
+  if (rangeMatched) {
+    return {
+      time: formatScheduleHour(rangeMatched[2], rangeMatched[3], rangeMatched[1]),
+      endTime: formatScheduleHour(rangeMatched[5], rangeMatched[6], rangeMatched[4] || rangeMatched[1]),
+    };
+  }
+
+  const singleMatched = source.match(/(오전|오후)?\s*(\d{1,2})(?::(\d{2}))?\s*시/);
+  if (!singleMatched) return null;
+
+  return {
+    time: formatScheduleHour(singleMatched[2], singleMatched[3], singleMatched[1]),
+    endTime: "",
+  };
+}
+
+function formatScheduleHour(hourText: string, minuteText = "00", meridiem = "") {
+  let hour = Number(hourText);
+  if (meridiem === "오후" && hour < 12) hour += 12;
+  if (meridiem === "오전" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${minuteText.padStart(2, "0")}`;
+}
+
+function inferPartnerName(source: string) {
+  const knownPartners = ["베스트카"];
+  const matchedKnownPartner = knownPartners.find((partner) => source.includes(partner));
+  if (matchedKnownPartner) return matchedKnownPartner;
+
+  const matched = source.match(/([가-힣A-Za-z0-9]+(?:카|렌트|모터스|공업사|정비|보험))/);
+  return matched?.[1] || "";
+}
+
+function inferVehicleModel(source: string, matchedModel = "") {
+  const knownModels = ["싼타페", "쏘렌토", "그랜저", "아반떼", "쏘나타", "카니발", "투싼", "스포티지", "K5", "K7", "K8", "G80", "GV70", "레이", "모닝", "스타리아", "코나"];
+  const matchedKnownModel = knownModels.find((model) => source.toLowerCase().includes(model.toLowerCase()));
+  if (matchedKnownModel) return matchedKnownModel;
+  return matchedModel.replace(/^더뉴|^디올뉴|^올 뉴|^더 뉴/, "").split(" ")[0] || "";
 }
 
 function buildMockReturnPreview(
@@ -793,7 +895,7 @@ function LabeledInput({
   inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
-    <label className="block">
+    <label className="block w-full min-w-0">
       <span className="text-xs font-bold text-gray-500">{label}</span>
       <input
         value={value}

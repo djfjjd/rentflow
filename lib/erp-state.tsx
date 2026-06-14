@@ -32,6 +32,7 @@ type ERPContextType = {
   updateVehicle: (plateNumber: string, updates: Partial<Vehicle>) => void;
   addDispatch: (dispatch: Dispatch) => void;
   updateDispatch: (id: string, updates: Partial<Dispatch>) => void;
+  addReservation: (reservation: Reservation) => void;
   saveReservations: (newReservations: Reservation[]) => void;
   saveMaintenance: (newMaintenance: Maintenance[]) => void;
   addVehicle: (vehicle: Vehicle) => void;
@@ -171,6 +172,14 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const addReservation = (reservation: Reservation) => {
+    setReservations((current) => {
+      const next = [reservation, ...current];
+      localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const updateDispatch = (id: string, updates: Partial<Dispatch>) => {
     setDispatches((current) => {
       const next = current.map((d) => 
@@ -237,6 +246,7 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       updateVehicle,
       addDispatch,
       updateDispatch,
+      addReservation,
       saveReservations,
       saveMaintenance,
       addVehicle,

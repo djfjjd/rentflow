@@ -7,7 +7,7 @@ import { useERPState } from "@/lib/erp-state";
 import { formatParkingLocation, isVehicleNumberMatch } from "@/lib/vehicle-utils";
 
 export default function AdminDashboardPage() {
-  const { vehicles, dispatches, returns, uploadedFiles, isLoaded } = useERPState();
+  const { vehicles, dispatches, returns, reservations, uploadedFiles, isLoaded } = useERPState();
 
   const boardRows = vehicles.map((vehicle) => {
     const vehicleDispatches = dispatches.filter((item) => isVehicleNumberMatch(item.rentalCarNumber, vehicle.plateNumber));
@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
     <AdminShell title="전체 대시보드" description="사진 업로드일을 기준으로 배차 차량, 피해차량, 오더자, 수리처와 주차위치를 한눈에 확인합니다." navItems={adminNavItems}>
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="전체 차량" value={`${vehicles.length}`} hint="차량번호 현황판" />
-        <StatCard label="접수/배차 기록" value={`${recordCount}`} hint="배차 + 회차 기록" />
+        <StatCard label="접수/배차/예약" value={`${recordCount + reservations.length}`} hint={`예약 ${reservations.length}건 포함`} />
         <StatCard label="배차중 / 대기" value={`${activeDispatchCount} / ${vehicles.filter((vehicle) => vehicle.status === "대기중").length}`} hint="차량 상태 기준" />
       </div>
 
