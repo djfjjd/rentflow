@@ -73,6 +73,7 @@ export async function uploadFilesToDrive(files: File[], metadata: UploadFileMeta
         sequence: index + 1,
         extension: getFileExtension(file.name, file.type),
       });
+
       const result = await uploadFileToDrive(file, {
         ...metadata,
         insuranceNumber: metadata.insuranceNumber || metadata.claimNumber,
@@ -119,16 +120,23 @@ function toStoredFileMetadata(result: DriveUploadResponse): StoredFileMetadata {
   };
 }
 
-async function uploadFileToDrive(file: File, metadata: UploadFileMetadata & { fileName: string; folderPath: string; uploadedAt: string }) {
+async function uploadFileToDrive(
+  file: File,
+  metadata: UploadFileMetadata & { fileName: string; folderPath: string; uploadedAt: string },
+): Promise<DriveUploadResponse> {
   const formData = new FormData();
+
   formData.append("file", file);
-  formData.append("metadata", JSON.stringify({
-    ...metadata,
-    fileName: metadata.fileName,
-    originalFileName: file.name,
-    mimeType: file.type || "application/octet-stream",
-    size: file.size,
-  }));
+  formData.append(
+    "metadata",
+    JSON.stringify({
+      ...metadata,
+      fileName: metadata.fileName,
+      originalFileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+    }),
+  );
 
   const response = await fetch("/api/uploads", {
     method: "POST",
@@ -143,12 +151,27 @@ async function uploadFileToDrive(file: File, metadata: UploadFileMetadata & { fi
   return (await response.json()) as DriveUploadResponse;
 }
 
-async function readUploadError(response: Response) {
+async function readUploadError(response: Response): Promise<string> {
   try {
-    const data = await response.json();
+    const data: unknown = await response.json();
 
-    if (typeof data.error === "string") return data.error;
-    if (typeof data.message === "string") return data.message;
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      "error" in data &&
+      typeof (data as { error?: unknown }).error === "string"
+    ) {
+      return (data as { error: string }).error;
+    }
+
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      "message" in data &&
+      typeof (data as { message?: unknown }).message === "string"
+    ) {
+      return (data as { message: string }).message;
+    }
   } catch {
     return response.statusText;
   }
