@@ -85,6 +85,8 @@ export function UniversalAiIntake() {
     return analyzeIntake(text, firstFileName, { intakeType, orderer, repairShop, customerCar, customerName, customerPhone });
   }, [customerCar, customerName, customerPhone, files, intakeType, orderer, repairShop, text]);
 
+  const liveSchedule = useMemo(() => parseScheduleFromText(text, vehicles), [text, vehicles]);
+
   const canAnalyze = Boolean(files.length > 0 || text.trim());
 
   useEffect(() => {
@@ -345,6 +347,22 @@ export function UniversalAiIntake() {
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
             placeholder="AI 텍스트 입력 (선택): 정비요망, 사고접수, 회차 후 계기판사진, 주차위치, 주유량"
           />
+
+          {liveSchedule && (
+            <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <p className="text-xs font-black text-primary uppercase tracking-wider">AI 실시간 일정 분석</p>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <InfoPill label="날짜" value={liveSchedule.date} />
+                <InfoPill label="시간" value={liveSchedule.time + (liveSchedule.endTime ? ` ~ ${liveSchedule.endTime}` : "")} />
+                <InfoPill label="고객/업체" value={liveSchedule.customerName || "미지정"} />
+                <InfoPill label="차량번호" value={liveSchedule.vehicleNumber || "미지정"} />
+              </div>
+              <p className="mt-3 text-xs font-bold text-gray-500">
+                ✨ 업로드 시 예약 캘린더에 <span className="text-primary">[{liveSchedule.route}]</span> 일정이 자동으로 추가됩니다.
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             disabled={!canAnalyze || isUploading}
@@ -448,7 +466,7 @@ function analyzeIntake(
   const hasMaintenance = ["정비", "정비요망", "수리", "엔진오일", "타이어", "브레이크", "배터리", "견적", "교체"].some((keyword) => lower.includes(keyword));
   const hasReturn = ["회차", "반납", "입고", "회차계기판"].some((keyword) => lower.includes(keyword));
   const hasDispatch = ["배차", "출고", "탁송", "전달"].some((keyword) => lower.includes(keyword)) || Boolean(form.orderer || form.repairShop);
-  const hasReservation = ["예약", "대차", "얘기됨", "예정", "스케줄", "시간", "월", "일", "시"].some((keyword) => lower.includes(keyword));
+  const hasReservation = ["예약", "대차", "얘기됨", "예정", "스케줄", "시간", "월", "일", "시", "소개", "셀프건", "보험건"].some((keyword) => lower.includes(keyword));
 
   const situation = hasReturn ? "회차" : hasDispatch ? "배차" : hasReservation ? "예약" : hasAccident ? "사고" : hasMaintenance ? "정비" : "일반";
   const titleMap = {
