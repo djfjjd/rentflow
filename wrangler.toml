@@ -5,3 +5,8 @@ pages_build_output_dir = "out"
 [[r2_buckets]]
 binding = "RENTFLOW_UPLOADS"
 bucket_name = "rentflow-uploads"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rentflow_db"
+database_id = "00000000-0000-0000-0000-000000000000" # Placeholder, user will need to update with real ID if needed for production

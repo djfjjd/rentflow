@@ -64,13 +64,6 @@ export function AdminShell({
             </div>
             <div className="relative flex items-center gap-3">
               <NotificationBell />
-
-              <Link
-                href="/app/inbox"
-                className="hidden min-h-10 items-center justify-center rounded-lg border border-line bg-white px-4 text-xs font-black text-ink shadow-sm transition-colors hover:bg-slate-50 sm:inline-flex"
-              >
-                모바일 앱으로
-              </Link>
             </div>
           </header>
 

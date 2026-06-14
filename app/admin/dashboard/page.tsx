@@ -21,6 +21,7 @@ export default function AdminDashboardPage() {
     return {
       id: vehicle.id,
       vehicleNumber: vehicle.plateNumber,
+      customerPhone: latestDispatch?.customerPhone || "-",
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
       damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
@@ -57,6 +58,7 @@ export default function AdminDashboardPage() {
             <thead className="bg-field text-xs font-black text-gray-500">
               <tr>
                 <th className="px-4 py-3">차량번호</th>
+                <th className="px-4 py-3">연락처</th>
                 <th className="px-4 py-3">날짜 / 주유량</th>
                 <th className="px-4 py-3">피해차량</th>
                 <th className="px-4 py-3">오더자/수리처</th>
@@ -67,6 +69,7 @@ export default function AdminDashboardPage() {
               {boardRows.map((row) => (
                 <tr key={row.id} className="hover:bg-primary/5">
                   <td className="px-4 py-3 font-black text-primary">{row.vehicleNumber}</td>
+                  <td className="px-4 py-3 font-medium text-gray-600">{row.customerPhone}</td>
                   <td className="px-4 py-3 font-bold text-ink">
                     {!row.uploadedAt ? (
                       <span className="rounded-md bg-field px-2 py-1 text-xs text-gray-600">주유 {row.fuelLevel}%</span>

@@ -57,17 +57,18 @@ const RESTORED_1146_KEY = "rentflow_restored_vehicle_1146";
 const RESTORED_1146_POSITION_KEY = "rentflow_restored_vehicle_1146_position";
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
-  const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
-  const [maintenance, setMaintenance] = useState<Maintenance[]>(initialMaintenance);
-  const [returns, setReturns] = useState<ReturnRecord[]>(initialReturns);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [dispatches, setDispatches] = useState<Dispatch[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
+  const [returns, setReturns] = useState<ReturnRecord[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<StoredFileMetadata[]>([]);
-  const [maintenanceHistories, setMaintenanceHistories] = useState<MaintenanceHistory[]>(initialMaintenanceHistories);
-  const [accidentHistories, setAccidentHistories] = useState<AccidentHistory[]>(initialAccidentHistories);
+  const [maintenanceHistories, setMaintenanceHistories] = useState<MaintenanceHistory[]>([]);
+  const [accidentHistories, setAccidentHistories] = useState<AccidentHistory[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    // 1. Load from cache (localStorage) first for instant UI
     const savedVehicles = localStorage.getItem(VEHICLES_KEY);
     const savedDispatches = localStorage.getItem(DISPATCHES_KEY);
     const savedReservations = localStorage.getItem(RESERVATIONS_KEY);
@@ -77,66 +78,65 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     const savedMaintenanceHistories = localStorage.getItem(MAINTENANCE_HISTORIES_KEY);
     const savedAccidentHistories = localStorage.getItem(ACCIDENT_HISTORIES_KEY);
 
-    if (savedVehicles) {
-      const parsedVehicles = JSON.parse(savedVehicles);
-      const restoredVehicles = localStorage.getItem(RESTORED_1146_POSITION_KEY)
-        ? parsedVehicles
-        : restoreVehicle1146(parsedVehicles);
-      const next = orderVehicle1146(restoredVehicles);
-      setVehicles(next);
-      localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
-      localStorage.setItem(RESTORED_1146_KEY, "true");
-      localStorage.setItem(RESTORED_1146_POSITION_KEY, "true");
-    }
-    if (savedDispatches) {
-      const next = cleanDispatches(filterSeedDispatches(JSON.parse(savedDispatches)));
-      setDispatches(next);
-      localStorage.setItem(DISPATCHES_KEY, JSON.stringify(next));
-    }
-    if (savedReservations) {
-      const next = filterSeedReservations(JSON.parse(savedReservations));
-      setReservations(next);
-      localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(next));
-    }
-    if (savedMaintenance) {
-      const next = filterSeedMaintenance(JSON.parse(savedMaintenance));
-      setMaintenance(next);
-      localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(next));
-    }
-    if (savedReturns) {
-      const next = filterSeedReturns(JSON.parse(savedReturns));
-      setReturns(next);
-      localStorage.setItem(RETURNS_KEY, JSON.stringify(next));
-    }
+    if (savedVehicles) setVehicles(JSON.parse(savedVehicles));
+    if (savedDispatches) setDispatches(JSON.parse(savedDispatches));
+    if (savedReservations) setReservations(JSON.parse(savedReservations));
+    if (savedMaintenance) setMaintenance(JSON.parse(savedMaintenance));
+    if (savedReturns) setReturns(JSON.parse(savedReturns));
     if (savedUploadedFiles) setUploadedFiles(JSON.parse(savedUploadedFiles));
-    if (savedMaintenanceHistories) {
-      const next = filterSeedMaintenanceHistories(JSON.parse(savedMaintenanceHistories));
-      setMaintenanceHistories(next);
-      localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(next));
-    }
-    if (savedAccidentHistories) {
-      const next = filterSeedAccidentHistories(JSON.parse(savedAccidentHistories));
-      setAccidentHistories(next);
-      localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(next));
-    }
+    if (savedMaintenanceHistories) setMaintenanceHistories(JSON.parse(savedMaintenanceHistories));
+    if (savedAccidentHistories) setAccidentHistories(JSON.parse(savedAccidentHistories));
 
-    setIsLoaded(true);
+    // 2. Fetch from Server API
+    Promise.all([
+      fetch("/api/vehicles").then(r => r.json()),
+      fetch("/api/dispatches").then(r => r.json()),
+      fetch("/api/reservations").then(r => r.json()),
+      fetch("/api/maintenance").then(r => r.json()),
+      fetch("/api/returns").then(r => r.json()),
+      fetch("/api/uploaded-files").then(r => r.json()),
+      fetch("/api/maintenance-histories").then(r => r.json()),
+      fetch("/api/accident-histories").then(r => r.json()),
+    ]).then(([v, d, res, m, ret, f, mh, ah]) => {
+      if (Array.isArray(v)) {
+        const next = orderVehicle1146(v);
+        setVehicles(next);
+        localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
+      }
+      if (Array.isArray(d)) {
+        setDispatches(d);
+        localStorage.setItem(DISPATCHES_KEY, JSON.stringify(d));
+      }
+      if (Array.isArray(res)) {
+        setReservations(res);
+        localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(res));
+      }
+      if (Array.isArray(m)) {
+        setMaintenance(m);
+        localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(m));
+      }
+      if (Array.isArray(ret)) {
+        setReturns(ret);
+        localStorage.setItem(RETURNS_KEY, JSON.stringify(ret));
+      }
+      if (Array.isArray(f)) {
+        setUploadedFiles(f);
+        localStorage.setItem(UPLOADED_FILES_KEY, JSON.stringify(f));
+      }
+      if (Array.isArray(mh)) {
+        setMaintenanceHistories(mh);
+        localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(mh));
+      }
+      if (Array.isArray(ah)) {
+        setAccidentHistories(ah);
+        localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(ah));
+      }
+      setIsLoaded(true);
+    }).catch(err => {
+      console.error("Failed to fetch ERP data:", err);
+      setIsLoaded(true);
+    });
   }, []);
-
-  const saveVehicles = (newVehicles: Vehicle[]) => {
-    setVehicles(newVehicles);
-    localStorage.setItem(VEHICLES_KEY, JSON.stringify(newVehicles));
-  };
-
-  const saveDispatches = (newDispatches: Dispatch[]) => {
-    setDispatches(newDispatches);
-    localStorage.setItem(DISPATCHES_KEY, JSON.stringify(newDispatches));
-  };
-
-  const saveReturns = (newReturns: ReturnRecord[]) => {
-    setReturns(newReturns);
-    localStorage.setItem(RETURNS_KEY, JSON.stringify(newReturns));
-  };
 
   const updateVehicle = (plateNumber: string, updates: Partial<Vehicle>) => {
     setVehicles((current) => {
@@ -146,6 +146,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
       return next;
     });
+    // API Call
+    fetch(`/api/vehicles?plateNumber=${encodeURIComponent(plateNumber)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
   };
 
   const addVehicle = (vehicle: Vehicle) => {
@@ -153,6 +159,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       const next = [vehicle, ...current];
       localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
       return next;
+    });
+    // API Call
+    fetch("/api/vehicles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vehicle),
     });
   };
 
@@ -162,6 +174,10 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
       return next;
     });
+    // API Call
+    fetch(`/api/vehicles?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   };
 
   const addDispatch = (dispatch: Dispatch) => {
@@ -170,13 +186,11 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(DISPATCHES_KEY, JSON.stringify(next));
       return next;
     });
-  };
-
-  const addReservation = (reservation: Reservation) => {
-    setReservations((current) => {
-      const next = [reservation, ...current];
-      localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(next));
-      return next;
+    // API Call
+    fetch("/api/dispatches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dispatch),
     });
   };
 
@@ -188,6 +202,48 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(DISPATCHES_KEY, JSON.stringify(next));
       return next;
     });
+    // API Call
+    fetch(`/api/dispatches?id=${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+  };
+
+  const addReservation = (reservation: Reservation) => {
+    setReservations((current) => {
+      const next = [reservation, ...current];
+      localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(next));
+      return next;
+    });
+    // API Call
+    fetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reservation),
+    });
+  };
+
+  const saveReservations = (newReservations: Reservation[]) => {
+    setReservations(newReservations);
+    localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(newReservations));
+    // API Call
+    fetch("/api/reservations", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newReservations),
+    });
+  };
+
+  const saveMaintenance = (newMaintenance: Maintenance[]) => {
+    setMaintenance(newMaintenance);
+    localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(newMaintenance));
+    // API Call
+    fetch("/api/maintenance", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newMaintenance),
+    });
   };
 
   const addReturn = (record: ReturnRecord) => {
@@ -195,6 +251,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       const next = [record, ...current];
       localStorage.setItem(RETURNS_KEY, JSON.stringify(next));
       return next;
+    });
+    // API Call
+    fetch("/api/returns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record),
     });
   };
 
@@ -204,6 +266,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(UPLOADED_FILES_KEY, JSON.stringify(next));
       return next;
     });
+    // API Call
+    fetch("/api/uploaded-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(file),
+    });
   };
 
   const addMaintenanceHistory = (record: MaintenanceHistory) => {
@@ -211,6 +279,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       const next = [record, ...current];
       localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(next));
       return next;
+    });
+    // API Call
+    fetch("/api/maintenance-histories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record),
     });
   };
 
@@ -220,16 +294,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(next));
       return next;
     });
-  };
-
-  const saveReservations = (newReservations: Reservation[]) => {
-    setReservations(newReservations);
-    localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(newReservations));
-  };
-
-  const saveMaintenance = (newMaintenance: Maintenance[]) => {
-    setMaintenance(newMaintenance);
-    localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(newMaintenance));
+    // API Call
+    fetch("/api/accident-histories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record),
+    });
   };
 
   return (
@@ -267,39 +337,6 @@ export function useERPState() {
     throw new Error("useERPState must be used within an ERPProvider");
   }
   return context;
-}
-
-function filterSeedDispatches(items: Dispatch[]) {
-  return items.filter((item) => item.id !== "d-1");
-}
-
-function filterSeedReturns(items: ReturnRecord[]) {
-  return items.filter((item) => item.id !== "r-1");
-}
-
-function filterSeedReservations(items: Reservation[]) {
-  return items.filter((item) => !["res-1", "res-2", "res-3"].includes(item.id));
-}
-
-function filterSeedMaintenance(items: Maintenance[]) {
-  return items.filter((item) => !["m-1", "m-2", "m-3"].includes(item.id));
-}
-
-function filterSeedMaintenanceHistories(items: MaintenanceHistory[]) {
-  return items.filter((item) => !["mh-1", "mh-2"].includes(item.id));
-}
-
-function filterSeedAccidentHistories(items: AccidentHistory[]) {
-  return items.filter((item) => item.id !== "ah-1");
-}
-
-function cleanDispatches(items: Dispatch[]) {
-  return items.map((item) => {
-    if (item.rentalCarNumber !== "142호1146") return item;
-    if (!item.repairShop.includes("성수")) return item;
-
-    return { ...item, repairShop: "확인필요" };
-  });
 }
 
 function restoreVehicle1146(items: Vehicle[]) {
