@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { notifications } from "@/lib/erp-data";
+import { NotificationBell } from "./NotificationBell";
 
 export type ShellNavItem = {
   href: string;
@@ -62,14 +62,9 @@ export function AdminShell({
                 <h1 className="text-xl font-black text-primary">렌트플로우</h1>
               </Link>
             </div>
-            <div className="flex items-center gap-3">
-              <Link
-                href="/admin/notifications"
-                className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white text-primary shadow-sm transition-colors hover:bg-slate-50"
-              >
-                <Bell className="h-5 w-5" aria-hidden="true" />
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-              </Link>
+            <div className="relative flex items-center gap-3">
+              <NotificationBell />
+
               <Link
                 href="/app/inbox"
                 className="hidden min-h-10 items-center justify-center rounded-lg border border-line bg-white px-4 text-xs font-black text-ink shadow-sm transition-colors hover:bg-slate-50 sm:inline-flex"
@@ -136,10 +131,6 @@ function GroupedNav({ navItems, compact = false }: { navItems: ShellNavItem[]; c
       ))}
     </div>
   );
-}
-
-function NotificationMenu() {
-  return null;
 }
 
 export function MobileAppShell({
