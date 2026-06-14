@@ -1,7 +1,7 @@
 import { reservations as seedReservations } from "../../lib/erp-data";
 
 type Env = {
-  DB: D1Database;
+  DB: any;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
