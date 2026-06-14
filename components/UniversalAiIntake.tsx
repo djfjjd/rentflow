@@ -300,7 +300,7 @@ export function UniversalAiIntake() {
                   setSelectedVehicleNumber(event.target.value);
                   setAnalyzed(false);
                 }}
-                className="mt-1 min-h-12 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+                className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
               >
                 <option value="">차량번호 선택</option>
                 {vehicles.map((vehicle) => (
@@ -343,7 +343,7 @@ export function UniversalAiIntake() {
             }}
             rows={5}
             className="mt-4 w-full resize-none rounded-lg border border-line bg-white px-4 py-3 text-base leading-7 text-ink outline-none transition placeholder:text-gray-400 focus:border-primary focus:ring-4 focus:ring-primary/10"
-            placeholder="AI 텍스트 입력 (선택): 정비요망, 사고접수, 회차 후 계기판사진, 125하4208 독도"
+            placeholder="AI 텍스트 입력 (선택): 정비요망, 사고접수, 회차 후 계기판사진, 주차위치, 주유량"
           />
           <button
             type="button"
@@ -526,7 +526,7 @@ function classifyAiInbox(value: string): AiCategory {
   if (["계약", "계약서"].some((keyword) => source.includes(keyword))) return "계약";
   if (["청구", "청구서"].some((keyword) => source.includes(keyword))) return "청구";
   if (["입금", "입금확인"].some((keyword) => source.includes(keyword))) return "입금";
-  if (["예약", "예약변경", "대차", "얘기됨", "예정", "시간", "월", "일", "시"].some((keyword) => source.includes(keyword))) return "예약";
+  if (["예약", "예약변경", "대차", "얘기됨", "예정", "시간", "월", "일", "시", "소개", "셀프건", "보험건"].some((keyword) => source.includes(keyword))) return "예약";
 
   return "일반메모";
 }
@@ -535,12 +535,12 @@ export function parseScheduleFromText(text: string, vehicles: Vehicle[] = []): R
   const source = text.trim();
   if (!source) return null;
 
-  const hasScheduleKeyword = ["예약", "대차", "얘기됨", "예정", "시간", "월", "일", "시"].some((keyword) => source.includes(keyword));
+  const hasScheduleKeyword = ["예약", "대차", "얘기됨", "예정", "시간", "월", "일", "시", "소개", "셀프건", "보험건"].some((keyword) => source.includes(keyword));
   if (!hasScheduleKeyword) return null;
 
   const dateParts = parseScheduleDate(source);
-  const timeParts = parseScheduleTime(source);
-  if (!dateParts || !timeParts) return null;
+  const timeParts = parseScheduleTime(source) || { time: "09:00", endTime: "" };
+  if (!dateParts) return null;
 
   const lastFour = source.match(/(?:^|\D)(\d{4})(?!\d)/)?.[1] || "";
   const matchedVehicle = lastFour ? vehicles.find((vehicle) => vehicle.plateNumber.endsWith(lastFour)) : undefined;
@@ -568,19 +568,32 @@ export function parseScheduleFromText(text: string, vehicles: Vehicle[] = []): R
 }
 
 function parseScheduleDate(source: string) {
-  const year = new Date().getFullYear();
-  const matched =
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  
+  const fullDateMatch =
     source.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/) ||
     source.match(/(\d{1,2})\s*\/\s*(\d{1,2})/) ||
     source.match(/(\d{1,2})\s*\.\s*(\d{1,2})/);
 
-  if (!matched) return null;
+  if (fullDateMatch) {
+    const m = Number(fullDateMatch[1]);
+    const d = Number(fullDateMatch[2]);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
 
-  const month = Number(matched[1]);
-  const day = Number(matched[2]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const dayOnlyMatch = source.match(/(\d{1,2})\s*일/);
+  if (dayOnlyMatch) {
+    const d = Number(dayOnlyMatch[1]);
+    if (d >= 1 && d <= 31) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
 
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return null;
 }
 
 function parseScheduleTime(source: string) {

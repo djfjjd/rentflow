@@ -11,10 +11,24 @@ export type ShellNavItem = {
 
 const adminNavGroups: Array<{ title: string; labels: string[] }> = [
   { title: "현황", labels: ["전체 대시보드", "통합검색"] },
-  { title: "차량 운영", labels: ["차량관리", "배차관리", "배회차관리", "예약 캘린더", "사고, 정비기록", "분실물관리"] },
+  {
+    title: "차량 운영",
+    labels: ["차량관리", "예약 캘린더", "배회차관리", "분실물관리", "사고, 정비기록"],
+  },
+  {
+    title: "정산/매출",
+    labels: [
+      "계약서관리",
+      "청구서관리",
+      "법인카드 관리",
+      "미수금 관리",
+      "입금 관리",
+      "세금계산서관리",
+      "차량별 매출분석",
+    ],
+  },
   { title: "거래처/보험", labels: ["거래처관리", "보험사관리"] },
-  { title: "서류/정산", labels: ["계약서관리", "청구서관리", "세금계산서관리", "미수금 관리", "입금 관리", "법인카드 관리", "차량별 매출분석"] },
-  { title: "시스템", labels: ["설정"] },
+  { title: "시스템", labels: ["알림센터"] },
 ];
 
 export function AdminShell({
@@ -42,12 +56,29 @@ export function AdminShell({
           </div>
         </aside>
         <section className="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mb-4 flex items-center justify-between lg:hidden">
-            <Link href="/" className="inline-flex items-center">
-              <h1 className="text-xl font-black text-primary">렌트플로우</h1>
-            </Link>
-            <NotificationMenu />
-          </div>
+          <header className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="inline-flex items-center lg:hidden">
+                <h1 className="text-xl font-black text-primary">렌트플로우</h1>
+              </Link>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/admin/notifications"
+                className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-white text-primary shadow-sm transition-colors hover:bg-slate-50"
+              >
+                <Bell className="h-5 w-5" aria-hidden="true" />
+                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+              </Link>
+              <Link
+                href="/app/inbox"
+                className="hidden min-h-10 items-center justify-center rounded-lg border border-line bg-white px-4 text-xs font-black text-ink shadow-sm transition-colors hover:bg-slate-50 sm:inline-flex"
+              >
+                모바일 앱으로
+              </Link>
+            </div>
+          </header>
+
           <details className="mb-4 rounded-lg border border-line bg-white shadow-sm lg:hidden">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 text-sm font-black text-ink">
               <span className="inline-flex items-center gap-2">
@@ -82,7 +113,7 @@ function GroupedNav({ navItems, compact = false }: { navItems: ShellNavItem[]; c
   const groups = ungroupedItems.length > 0 ? [...groupedItems, { title: "기타", labels: [], items: ungroupedItems }] : groupedItems;
 
   return (
-    <>
+    <div className="grid grid-cols-1 gap-2">
       {groups.map((group, index) => (
         <div key={group.title} className={index > 0 ? "border-t border-line pt-2" : ""}>
           <p className={`px-3 font-black text-gray-400 ${compact ? "py-1 text-[10px]" : "pb-1 text-[11px]"}`}>{group.title}</p>
@@ -103,33 +134,12 @@ function GroupedNav({ navItems, compact = false }: { navItems: ShellNavItem[]; c
           </div>
         </div>
       ))}
-    </>
+    </div>
   );
 }
 
 function NotificationMenu() {
-  return (
-    <details className="relative">
-      <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-line bg-white text-primary shadow-sm">
-        <Bell className="h-5 w-5" aria-hidden="true" />
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-lg border border-line bg-white shadow-lg">
-        <div className="border-b border-line px-4 py-3">
-          <h2 className="text-sm font-black text-ink">알림 목록</h2>
-        </div>
-        <div className="max-h-96 overflow-y-auto p-2">
-          {notifications.map((item) => (
-            <article key={item.id} className="rounded-lg p-3 hover:bg-field">
-              <p className="text-xs font-black text-primary">{item.type}</p>
-              <p className="mt-1 text-sm font-black text-ink">{item.title}</p>
-              <p className="mt-1 text-xs leading-5 text-gray-500">{item.message}</p>
-            </article>
-          ))}
-          {notifications.length === 0 && <div className="p-4 text-center text-sm font-bold text-gray-500">알림이 없습니다.</div>}
-        </div>
-      </div>
-    </details>
-  );
+  return null;
 }
 
 export function MobileAppShell({

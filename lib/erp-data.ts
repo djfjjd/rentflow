@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   BarChart3,
+  Bell,
   CalendarDays,
   Car,
   ClipboardList,
@@ -264,7 +265,6 @@ export const adminNavItems = [
   { href: "/admin/dashboard", label: "전체 대시보드", icon: Home },
   { href: "/admin/search", label: "통합검색", icon: Search },
   { href: "/admin/vehicles", label: "차량관리", icon: Car },
-  { href: "/admin/dispatches", label: "배차관리", icon: ClipboardList },
   { href: "/admin/returns", label: "배회차관리", icon: ClipboardList },
   { href: "/admin/reservations", label: "예약 캘린더", icon: CalendarDays },
   { href: "/admin/maintenance-history", label: "사고, 정비기록", icon: Wrench },
@@ -278,7 +278,7 @@ export const adminNavItems = [
   { href: "/admin/payments", label: "입금 관리", icon: ReceiptText },
   { href: "/admin/corporate-cards", label: "법인카드 관리", icon: CreditCard },
   { href: "/admin/revenue", label: "차량별 매출분석", icon: BarChart3 },
-  { href: "/admin/settings", label: "설정", icon: Settings },
+  { href: "/admin/notifications", label: "알림센터", icon: Bell },
 ];
 
 export const vehicleStatuses: VehicleStatus[] = [

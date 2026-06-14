@@ -30,9 +30,9 @@ export function ReservationBoard() {
   return (
     <div className="space-y-5">
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
-        <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-line bg-white p-5 shadow-sm overflow-hidden">
           <h2 className="text-lg font-black text-ink">월간 예약 현황</h2>
-          <div className="mt-4 hidden gap-2 sm:grid sm:grid-cols-4 md:grid-cols-7">
+          <div className="mt-4 grid grid-cols-4 gap-2 md:grid-cols-7">
             {days.map((day) => {
               const dayItems = reservations.filter((item) => item.date === day);
               const isToday = day === formatDateKey(today);
