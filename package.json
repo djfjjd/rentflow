@@ -24,6 +24,7 @@
     "tailwind-merge": "latest"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260613.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
