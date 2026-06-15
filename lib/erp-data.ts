@@ -64,6 +64,7 @@ export type Vehicle = {
   mileage: number;
   location: string;
   status: VehicleStatus;
+  sortOrder?: number;
   memo: string;
 };
 

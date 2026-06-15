@@ -6,21 +6,21 @@ type Env = {
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
-    const { results } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY plate_number ASC").all();
+    const { results } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC, plate_number ASC").all();
     
     // Seed if empty
     if (results.length === 0) {
       const stmt = env.DB.prepare(
-        "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, mileage, location, status, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, mileage, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       
-      const batch = seedVehicles.map(v => 
-        stmt.bind(v.id, v.plateNumber, v.model, v.fuelType, v.fuelLevel, v.mileage, v.location, v.status, v.memo)
+      const batch = seedVehicles.map((v, index) => 
+        stmt.bind(v.id, v.plateNumber, v.model, v.fuelType, v.fuelLevel, v.mileage, v.location, v.status, index, v.memo)
       );
       
       await env.DB.batch(batch);
       
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY plate_number ASC").all();
+      const { results: seededResults } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC, plate_number ASC").all();
       return Response.json(seededResults.map(mapVehicle));
     }
 
@@ -33,8 +33,12 @@ export async function onRequestGet({ env }: { env: Env }) {
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
     const vehicle = await request.json() as any;
+    
+    // Get max sort_order
+    const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
+    
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, mileage, location, status, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, mileage, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       vehicle.id,
       vehicle.plateNumber,
@@ -44,6 +48,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       vehicle.mileage,
       vehicle.location,
       vehicle.status,
+      (vehicle.sortOrder !== undefined ? vehicle.sortOrder : (Number(maxSortOrder) + 1)),
       vehicle.memo
     ).run();
 
@@ -71,6 +76,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.mileage !== undefined) { fields.push("mileage = ?"); values.push(updates.mileage); }
     if (updates.location !== undefined) { fields.push("location = ?"); values.push(updates.location); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
+    if (updates.sortOrder !== undefined) { fields.push("sort_order = ?"); values.push(updates.sortOrder); }
     if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(updates.memo); }
     
     if (fields.length === 0) return Response.json({ success: true });
@@ -111,6 +117,7 @@ function mapVehicle(row: any) {
     mileage: row.mileage,
     location: row.location,
     status: row.status,
+    sortOrder: row.sort_order,
     memo: row.memo,
     createdAt: row.created_at,
     updatedAt: row.updated_at

@@ -1,10 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { GripVertical, Plus, Search, Trash2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
 import { type Vehicle } from "@/lib/erp-data";
 import { useERPState } from "@/lib/erp-state";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const emptyVehicle: Vehicle = {
   id: "",
@@ -19,9 +36,21 @@ const emptyVehicle: Vehicle = {
 };
 
 export function VehicleManager() {
-  const { vehicles: items, addVehicle, removeVehicle, isLoaded } = useERPState();
+  const { vehicles: items, addVehicle, removeVehicle, reorderVehicles, isLoaded } = useERPState();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Vehicle>({ ...emptyVehicle, id: crypto.randomUUID() });
+  const [saveMessage, setSaveMessage] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const filtered = useMemo(
     () =>
@@ -30,6 +59,26 @@ export function VehicleManager() {
       ),
     [items, query],
   );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+      
+      const newOrder = arrayMove(items, oldIndex, newIndex);
+      
+      try {
+        await reorderVehicles(newOrder);
+        setSaveMessage("차량 순서가 저장되었습니다");
+        setTimeout(() => setSaveMessage(""), 3000);
+      } catch (error) {
+        setSaveMessage("순서 저장에 실패했습니다");
+        setTimeout(() => setSaveMessage(""), 3000);
+      }
+    }
+  };
 
   const save = () => {
     if (!editing.plateNumber.trim() || !editing.model.trim()) {
@@ -44,7 +93,7 @@ export function VehicleManager() {
 
   return (
     <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
-      <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-line bg-white p-5 shadow-sm h-fit">
         <h2 className="text-lg font-black text-ink">{items.some((item) => item.id === editing.id) ? "차량 수정" : "차량 등록"}</h2>
         <div className="mt-4 grid gap-3">
           <TextField label="차량번호" value={editing.plateNumber} onChange={(value) => setEditing({ ...editing, plateNumber: value })} />
@@ -77,7 +126,12 @@ export function VehicleManager() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-line bg-white p-5 shadow-sm relative">
+        {saveMessage && (
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 z-10 rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-white shadow-lg animate-in fade-in slide-in-from-top-2">
+            {saveMessage}
+          </div>
+        )}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-black text-ink">차량 목록</h2>
           <label className="flex min-h-11 items-center gap-2 rounded-lg border border-line px-3 transition-focus-within ring-primary/10 focus-within:border-primary focus-within:ring-4">
@@ -91,55 +145,117 @@ export function VehicleManager() {
           </label>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-line text-xs text-gray-500">
-              <tr>
-                <th className="py-3 font-bold">차량번호</th>
-                <th className="font-bold">차종</th>
-                <th className="font-bold">유종</th>
-                <th className="font-bold">주행거리</th>
-                <th className="font-bold">관리</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {filtered.map((item) => (
-                <tr key={item.id} className="hover:bg-field/50 transition-colors">
-                  <td className="py-3 font-black text-primary">
-                    <Link href={`/admin/vehicles/${item.id}`} className="hover:underline text-primary">
-                      {item.plateNumber}
-                    </Link>
-                  </td>
-                  <td className="font-semibold text-ink">{item.model}</td>
-                  <td>{item.fuelType === "휘발유" ? "가솔린" : item.fuelType}</td>
-                  <td>
-                    <span className="font-semibold text-ink">{item.mileage.toLocaleString()}</span>
-                    <span className="ml-0.5 text-xs text-gray-400">km</span>
-                  </td>
-                  <td>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(item)}
-                        className="rounded-md border border-line bg-white px-3 py-2 text-xs font-bold text-gray-600 transition hover:bg-field"
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeVehicle(item.id)}
-                        className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </td>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full min-w-[700px] text-left text-sm border-collapse">
+              <thead className="border-b border-line text-xs text-gray-500">
+                <tr>
+                  <th className="w-10"></th>
+                  <th className="py-3 font-bold">차량번호</th>
+                  <th className="font-bold">차종</th>
+                  <th className="font-bold">유종</th>
+                  <th className="font-bold">주행거리</th>
+                  <th className="font-bold">관리</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-line">
+                <SortableContext
+                  items={filtered.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {filtered.map((item) => (
+                    <SortableRow
+                      key={item.id}
+                      item={item}
+                      onEdit={() => setEditing(item)}
+                      onRemove={() => removeVehicle(item.id)}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </DndContext>
         </div>
       </section>
     </div>
+  );
+}
+
+function SortableRow({
+  item,
+  onEdit,
+  onRemove,
+}: {
+  item: Vehicle;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1 : 0,
+    position: 'relative' as const,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-field/50 transition-colors ${isDragging ? "bg-field shadow-md opacity-80" : ""}`}
+    >
+      <td className="py-3 pl-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab p-1 text-gray-400 hover:text-ink active:cursor-grabbing"
+          title="드래그하여 순서 변경"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      </td>
+      <td className="py-3 font-black text-primary">
+        <Link href={`/admin/vehicles/${item.id}`} className="hover:underline text-primary">
+          {item.plateNumber}
+        </Link>
+      </td>
+      <td className="font-semibold text-ink">{item.model}</td>
+      <td>{item.fuelType === "휘발유" ? "가솔린" : item.fuelType}</td>
+      <td>
+        <span className="font-semibold text-ink">{item.mileage.toLocaleString()}</span>
+        <span className="ml-0.5 text-xs text-gray-400">km</span>
+      </td>
+      <td>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-md border border-line bg-white px-3 py-2 text-xs font-bold text-gray-600 transition hover:bg-field"
+          >
+            수정
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 

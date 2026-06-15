@@ -41,6 +41,7 @@ type ERPContextType = {
   addUploadedFile: (file: StoredFileMetadata) => void;
   addMaintenanceHistory: (record: MaintenanceHistory) => void;
   addAccidentHistory: (record: AccidentHistory) => void;
+  reorderVehicles: (newOrder: Vehicle[]) => Promise<void>;
 };
 
 const ERPContext = createContext<ERPContextType | undefined>(undefined);
@@ -53,8 +54,6 @@ const RETURNS_KEY = "rentflow_returns";
 const UPLOADED_FILES_KEY = "rentflow_uploaded_files";
 const MAINTENANCE_HISTORIES_KEY = "rentflow_maintenance_histories";
 const ACCIDENT_HISTORIES_KEY = "rentflow_accident_histories";
-const RESTORED_1146_KEY = "rentflow_restored_vehicle_1146";
-const RESTORED_1146_POSITION_KEY = "rentflow_restored_vehicle_1146_position";
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -99,14 +98,12 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       fetch("/api/accident-histories").then(r => r.json()),
     ]).then(([v, d, res, m, ret, f, mh, ah]) => {
       if (Array.isArray(v) && v.length > 0) {
-        const next = orderVehicle1146(v);
-        setVehicles(next);
-        localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
+        setVehicles(v);
+        localStorage.setItem(VEHICLES_KEY, JSON.stringify(v));
       } else if (Array.isArray(v) && !savedVehicles) {
         // If API is empty and we have no local data, use API (which might be seed data)
-        const next = orderVehicle1146(v);
-        setVehicles(next);
-        localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
+        setVehicles(v);
+        localStorage.setItem(VEHICLES_KEY, JSON.stringify(v));
       }
 
       if (Array.isArray(d) && (d.length > 0 || !savedDispatches)) {
@@ -308,6 +305,34 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const reorderVehicles = async (newOrder: Vehicle[]) => {
+    const previousOrder = [...vehicles];
+    
+    // Update sortOrder values based on new position
+    const updatedOrder = newOrder.map((v, i) => ({ ...v, sortOrder: i }));
+    
+    setVehicles(updatedOrder);
+    localStorage.setItem(VEHICLES_KEY, JSON.stringify(updatedOrder));
+
+    try {
+      const response = await fetch("/api/vehicles/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: updatedOrder.map(v => ({ id: v.id, sortOrder: v.sortOrder }))
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to reorder");
+      
+    } catch (error) {
+      console.error("Reorder failed, reverting:", error);
+      setVehicles(previousOrder);
+      localStorage.setItem(VEHICLES_KEY, JSON.stringify(previousOrder));
+      throw error;
+    }
+  };
+
   return (
     <ERPContext.Provider value={{
       vehicles,
@@ -330,7 +355,8 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       addReturn,
       addUploadedFile,
       addMaintenanceHistory,
-      addAccidentHistory
+      addAccidentHistory,
+      reorderVehicles
     }}>
       {children}
     </ERPContext.Provider>
@@ -343,28 +369,4 @@ export function useERPState() {
     throw new Error("useERPState must be used within an ERPProvider");
   }
   return context;
-}
-
-function restoreVehicle1146(items: Vehicle[]) {
-  if (items.some((item) => item.plateNumber === "142호1146")) return items;
-
-  const restored = initialVehicles.find((item) => item.plateNumber === "142호1146");
-
-  return restored ? [...items, restored] : items;
-}
-
-function orderVehicle1146(items: Vehicle[]) {
-  const vehicle1146 = items.find((item) => item.plateNumber === "142호1146");
-  if (!vehicle1146) return items;
-
-  const without1146 = items.filter((item) => item.plateNumber !== "142호1146");
-  const insertIndex = without1146.findIndex((item) => item.plateNumber === "125하4304");
-
-  if (insertIndex === -1) return [vehicle1146, ...without1146];
-
-  return [
-    ...without1146.slice(0, insertIndex + 1),
-    vehicle1146,
-    ...without1146.slice(insertIndex + 1),
-  ];
 }
