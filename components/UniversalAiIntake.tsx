@@ -44,7 +44,9 @@ const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
 ];
 
 const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입금", "예약", "일반메모"];
-const parkingZones = ["독도", "울릉도", "아파트", "현대맨션", "구로", "신정", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
+const parkingZones = ["독도", "울릉도", "아파트", "현대맨션", "구로", "신정", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가", "본사 주차장", "본사", "지하주차장", "주차구역"];
+const parkingKeywords = ["주차위치", "주차구역", "독도", "울릉도", "천섬", "천삼", "본사", "주차", "위치"];
+
 export function UniversalAiIntake() {
   const {
     vehicles,
@@ -178,7 +180,8 @@ export function UniversalAiIntake() {
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
 
-      const persistedAnalysis = (analysis.situation === "일반" && plateNumber !== "unknown" && !parkingUpdate) ? { ...analysis, situation: "배차" as const } : analysis;
+      const isParkingUpdate = parkingKeywords.some(kw => text.includes(kw));
+      const persistedAnalysis = (analysis.situation === "일반" && plateNumber !== "unknown" && !parkingUpdate && !isParkingUpdate) ? { ...analysis, situation: "배차" as const } : analysis;
 
       uploadedFiles.forEach(addUploadedFile);
       if (scheduleReservation) {
@@ -721,16 +724,20 @@ function parseParkingUpdate(text: string, selectedVehicleNumber: string, vehicle
   const source = text.trim();
   if (!source) return null;
 
-  const parkingZone = parkingZones.find((zone) => source.includes(zone));
-  if (!parkingZone) return null;
+  const foundZone = parkingZones.find((zone) => source.includes(zone));
+  const foundKeyword = parkingKeywords.find((kw) => source.includes(kw));
+  
+  if (!foundZone && !foundKeyword) return null;
 
   const plateNumber = resolveVehiclePlateNumber(source, selectedVehicleNumber, vehicles);
   if (!plateNumber) return null;
 
+  const parkingZone = foundZone || foundKeyword || source;
+
   return {
     plateNumber,
     parkingZone,
-    memo: `${plateNumber} 차량 주차위치를 ${parkingZone}으로 최신화합니다.`,
+    memo: `${plateNumber} 차량 주차위치를 ${parkingZone}으로 업데이트합니다.`,
   };
 }
 

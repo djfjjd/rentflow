@@ -8,17 +8,18 @@ export function VehicleStatusBoard() {
   const { vehicles, dispatches, uploadedFiles, isLoaded } = useERPState();
 
   const boardRows = vehicles.map((vehicle) => {
+    const isAvailable = vehicle.status === "대기중";
     const vehicleDispatches = dispatches.filter((item) => isVehicleNumberMatch(item.rentalCarNumber, vehicle.plateNumber));
-    const latestDispatch = vehicleDispatches[0];
+    
+    // If the vehicle is available, we ignore dispatches for most display fields to avoid showing stale or incorrect info
+    const latestDispatch = isAvailable ? null : vehicleDispatches[0];
     const latestUpload = uploadedFiles.find((item) =>
       [item.vehicleNumber, item.fileName, item.r2Key, item.driveFileId].some((value) => isVehicleNumberMatch(value, vehicle.plateNumber)),
     );
-    const latestUploadedAt = latestDispatch?.uploadedAt || latestUpload?.uploadedAt || "";
+    const latestUploadedAt = latestDispatch?.uploadedAt || (isAvailable ? "" : latestUpload?.uploadedAt) || "";
     
-    // If vehicle is in Accident or Maintenance, show that info even if there's no dispatch
     const repairShopOrParking = formatParkingLocation(latestDispatch?.repairShop || vehicle.location) || latestDispatch?.repairShop || vehicle.location;
     const formattedOrdererAndRepairShop = latestDispatch ? formatOrdererAndRepairShop(latestDispatch) : repairShopOrParking;
-    const isAvailable = vehicle.status === "대기중";
 
     return {
       id: vehicle.id,
@@ -27,8 +28,8 @@ export function VehicleStatusBoard() {
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
       damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
-      ordererAndRepairShop: formattedOrdererAndRepairShop === "?/?" ? repairShopOrParking : formattedOrdererAndRepairShop,
-      intakeType: isAvailable ? "" : (latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : "")),
+      ordererAndRepairShop: (isAvailable || formattedOrdererAndRepairShop === "?/?") ? repairShopOrParking : formattedOrdererAndRepairShop,
+      intakeType: isAvailable ? "대기중" : (latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : "")),
     };
   });
 
