@@ -177,7 +177,7 @@ export function UniversalAiIntake() {
         setUploadProgress((current) => ({ ...current, done: current.done + 1 }));
       }
 
-      const persistedAnalysis = analysis.situation === "일반" && plateNumber !== "unknown" ? { ...analysis, situation: "배차" as const } : analysis;
+      const persistedAnalysis = (analysis.situation === "일반" && plateNumber !== "unknown" && !parkingUpdate) ? { ...analysis, situation: "배차" as const } : analysis;
 
       uploadedFiles.forEach(addUploadedFile);
       if (scheduleReservation) {

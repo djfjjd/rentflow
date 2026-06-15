@@ -17,6 +17,8 @@ export function VehicleStatusBoard() {
     
     // If vehicle is in Accident or Maintenance, show that info even if there's no dispatch
     const repairShopOrParking = formatParkingLocation(latestDispatch?.repairShop || vehicle.location) || latestDispatch?.repairShop || vehicle.location;
+    const formattedOrdererAndRepairShop = latestDispatch ? formatOrdererAndRepairShop(latestDispatch) : repairShopOrParking;
+    const isAvailable = vehicle.status === "대기중";
 
     return {
       id: vehicle.id,
@@ -25,8 +27,8 @@ export function VehicleStatusBoard() {
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
       damagedVehicle: latestDispatch ? formatDamagedVehicle(latestDispatch.customerCarNumber, latestDispatch.customerCarModel) : "-",
-      ordererAndRepairShop: latestDispatch ? formatOrdererAndRepairShop(latestDispatch) : repairShopOrParking,
-      intakeType: latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : ""),
+      ordererAndRepairShop: formattedOrdererAndRepairShop === "?/?" ? repairShopOrParking : formattedOrdererAndRepairShop,
+      intakeType: isAvailable ? "" : (latestDispatch?.intakeType || latestUpload?.intakeType || (latestDispatch || latestUpload ? "insurance" : "")),
     };
   });
 
