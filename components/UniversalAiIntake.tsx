@@ -73,6 +73,7 @@ export function UniversalAiIntake() {
   const [customerCar, setCustomerCar] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [fuelLevel, setFuelLevel] = useState<number>(85);
   const [selectedVehicleNumber, setSelectedVehicleNumber] = useState("");
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "complete">("idle");
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
@@ -195,7 +196,7 @@ export function UniversalAiIntake() {
         addReturn,
         addMaintenanceHistory,
         addAccidentHistory,
-        form: { intakeType, orderer, repairShop, customerCar, customerName, customerPhone, text },
+        form: { intakeType, orderer, repairShop, customerCar, customerName, customerPhone, fuelLevel, text },
       });
 
       setAnalyzed(true);
@@ -222,6 +223,7 @@ export function UniversalAiIntake() {
     setCustomerCar("");
     setCustomerName("");
     setCustomerPhone("");
+    setFuelLevel(85);
     setSelectedVehicleNumber("");
     setAiCategory("일반메모");
     setAnalyzed(false);
@@ -322,27 +324,40 @@ export function UniversalAiIntake() {
                 ))}
               </select>
             </label>
-            <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-4">
+            <div className={`mt-3 grid min-w-0 gap-2 ${intakeType === "insurance" ? "md:grid-cols-5" : "md:grid-cols-3"}`}>
               {(intakeType === "insurance" || intakeType === "selfPay") && (
-                <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자 입력" />
+                <LabeledInput label="오더자" value={orderer} onChange={setOrderer} onDirty={() => setAnalyzed(false)} placeholder="오더자" />
               )}
               {intakeType === "insurance" && (
                 <>
-                  <LabeledInput label="수리처" value={repairShop} onChange={setRepairShop} onDirty={() => setAnalyzed(false)} placeholder="수리처 입력" />
-                  <LabeledInput label="고객차종(배기량)" value={customerCar} onChange={setCustomerCar} onDirty={() => setAnalyzed(false)} placeholder="예: K5 2.0" />
+                  <LabeledInput label="수리처" value={repairShop} onChange={setRepairShop} onDirty={() => setAnalyzed(false)} placeholder="수리처" />
+                  <LabeledInput label="고객차종" value={customerCar} onChange={setCustomerCar} onDirty={() => setAnalyzed(false)} placeholder="차종" />
                 </>
               )}
               {intakeType === "selfService" && (
-                <LabeledInput label="고객명" value={customerName} onChange={setCustomerName} onDirty={() => setAnalyzed(false)} placeholder="고객명 입력" />
+                <LabeledInput label="고객명" value={customerName} onChange={setCustomerName} onDirty={() => setAnalyzed(false)} placeholder="고객명" />
               )}
               <LabeledInput
-                label="고객 휴대폰번호"
+                label="휴대폰번호"
                 value={customerPhone}
                 onChange={setCustomerPhone}
                 onDirty={() => setAnalyzed(false)}
                 placeholder="010-0000-0000"
                 inputMode="tel"
               />
+              <label className="block w-full min-w-0">
+                <span className="text-xs font-bold text-gray-500">배차 주유량 (%)</span>
+                <input
+                  type="number"
+                  value={fuelLevel}
+                  onChange={(e) => {
+                    setFuelLevel(Number(e.target.value));
+                    setAnalyzed(false);
+                  }}
+                  className="mt-1 min-h-11 w-full rounded-lg border border-line bg-field px-3 text-sm font-bold text-ink outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+                  placeholder="85"
+                />
+              </label>
             </div>
           </div>
             <textarea
@@ -751,6 +766,7 @@ function persistAnalyzedIntake({
     customerCar: string;
     customerName: string;
     customerPhone: string;
+    fuelLevel: number;
     text: string;
   };
 }) {
@@ -766,6 +782,7 @@ function persistAnalyzedIntake({
     updateVehicle(plateNumber, {
       status: "배차중",
       location: parkingLocation || form.repairShop || "배차지 확인필요",
+      fuelLevel: form.fuelLevel,
     });
     addDispatch({
       id: buildRecordId("d"),
@@ -779,7 +796,7 @@ function persistAnalyzedIntake({
       repairShop: form.repairShop || getAnalysisField(analysis, "수리처") || "확인필요",
       pickupAddress: "-",
       deliveryAddress: "-",
-      fuelLevel: vehicle?.fuelLevel ?? 85,
+      fuelLevel: form.fuelLevel,
       notes: buildRecordMemo(form.text, uploadedFiles),
       status: "출발보고",
       intakeType: form.intakeType,
