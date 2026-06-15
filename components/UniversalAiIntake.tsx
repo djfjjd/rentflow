@@ -45,11 +45,11 @@ const intakeTypeOptions: Array<{ value: IntakeType; label: string }> = [
 
 const aiCategories: AiCategory[] = ["사고", "정비", "계약", "청구", "입금", "예약", "일반메모"];
 const parkingZones = ["독도", "울릉도", "아파트", "현대맨션", "구로", "신정", "명동", "천삼", "천삼읍", "제주도", "서해", "광화문", "청와대", "제주길가", "명동길가", "천삼읍길가"];
-
 export function UniversalAiIntake() {
   const {
     vehicles,
     dispatches,
+    isLoaded,
     updateVehicle,
     addDispatch,
     addReservation,
@@ -59,6 +59,8 @@ export function UniversalAiIntake() {
     addAccidentHistory,
   } = useERPState();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // ... rest of state ...
+
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [text, setText] = useState("");
@@ -224,6 +226,14 @@ export function UniversalAiIntake() {
     setAiCategory("일반메모");
     setAnalyzed(false);
   };
+
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-64 items-center justify-center rounded-lg border border-line bg-field text-sm font-bold text-gray-400">
+        데이터를 불러오는 중...
+      </div>
+    );
+  }
 
   return (
     <section className="rounded-lg border border-line bg-white p-5 shadow-sm">

@@ -98,36 +98,42 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
       fetch("/api/maintenance-histories").then(r => r.json()),
       fetch("/api/accident-histories").then(r => r.json()),
     ]).then(([v, d, res, m, ret, f, mh, ah]) => {
-      if (Array.isArray(v)) {
+      if (Array.isArray(v) && v.length > 0) {
+        const next = orderVehicle1146(v);
+        setVehicles(next);
+        localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
+      } else if (Array.isArray(v) && !savedVehicles) {
+        // If API is empty and we have no local data, use API (which might be seed data)
         const next = orderVehicle1146(v);
         setVehicles(next);
         localStorage.setItem(VEHICLES_KEY, JSON.stringify(next));
       }
-      if (Array.isArray(d)) {
+
+      if (Array.isArray(d) && (d.length > 0 || !savedDispatches)) {
         setDispatches(d);
         localStorage.setItem(DISPATCHES_KEY, JSON.stringify(d));
       }
-      if (Array.isArray(res)) {
+      if (Array.isArray(res) && (res.length > 0 || !savedReservations)) {
         setReservations(res);
         localStorage.setItem(RESERVATIONS_KEY, JSON.stringify(res));
       }
-      if (Array.isArray(m)) {
+      if (Array.isArray(m) && (m.length > 0 || !savedMaintenance)) {
         setMaintenance(m);
         localStorage.setItem(MAINTENANCE_KEY, JSON.stringify(m));
       }
-      if (Array.isArray(ret)) {
+      if (Array.isArray(ret) && (ret.length > 0 || !savedReturns)) {
         setReturns(ret);
         localStorage.setItem(RETURNS_KEY, JSON.stringify(ret));
       }
-      if (Array.isArray(f)) {
+      if (Array.isArray(f) && (f.length > 0 || !savedUploadedFiles)) {
         setUploadedFiles(f);
         localStorage.setItem(UPLOADED_FILES_KEY, JSON.stringify(f));
       }
-      if (Array.isArray(mh)) {
+      if (Array.isArray(mh) && (mh.length > 0 || !savedMaintenanceHistories)) {
         setMaintenanceHistories(mh);
         localStorage.setItem(MAINTENANCE_HISTORIES_KEY, JSON.stringify(mh));
       }
-      if (Array.isArray(ah)) {
+      if (Array.isArray(ah) && (ah.length > 0 || !savedAccidentHistories)) {
         setAccidentHistories(ah);
         localStorage.setItem(ACCIDENT_HISTORIES_KEY, JSON.stringify(ah));
       }
