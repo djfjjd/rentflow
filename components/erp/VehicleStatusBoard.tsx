@@ -21,7 +21,6 @@ export function VehicleStatusBoard() {
     return {
       id: vehicle.id,
       vehicleNumber: vehicle.plateNumber,
-      status: vehicle.status,
       customerPhone: latestDispatch?.customerPhone || "-",
       uploadedAt: latestUploadedAt ? new Date(latestUploadedAt).toLocaleDateString("ko-KR") : "",
       fuelLevel: latestDispatch?.fuelLevel ?? vehicle.fuelLevel,
@@ -46,12 +45,11 @@ export function VehicleStatusBoard() {
           <thead className="bg-field text-xs font-black text-gray-500">
             <tr>
               <th className="px-4 py-3">차량번호</th>
-              <th className="px-4 py-3">상태</th>
+              <th className="px-4 py-3">구분</th>
               <th className="px-4 py-3">연락처</th>
               <th className="px-4 py-3">날짜 / 주유량</th>
               <th className="px-4 py-3">피해차량</th>
               <th className="px-4 py-3">오더자/수리처</th>
-              <th className="px-4 py-3">구분</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -59,9 +57,13 @@ export function VehicleStatusBoard() {
               <tr key={row.id} className="hover:bg-primary/5">
                 <td className="px-4 py-3 font-black text-primary">{row.vehicleNumber}</td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-md px-2 py-1 text-[10px] font-black ${getStatusClass(row.status)}`}>
-                    {row.status}
-                  </span>
+                  {row.intakeType ? (
+                    <span className={`rounded-md px-2 py-1 text-xs font-black ${getIntakeTypeClass(row.intakeType)}`}>
+                      {formatIntakeType(row.intakeType)}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-400">-</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-medium text-gray-600">{row.customerPhone}</td>
                 <td className="px-4 py-3 font-bold text-ink">
@@ -73,15 +75,6 @@ export function VehicleStatusBoard() {
                 </td>
                 <td className="px-4 py-3 font-semibold text-gray-700">{row.damagedVehicle}</td>
                 <td className="px-4 py-3 font-semibold text-gray-700">{row.ordererAndRepairShop}</td>
-                <td className="px-4 py-3">
-                  {row.intakeType ? (
-                    <span className={`rounded-md px-2 py-1 text-xs font-black ${getIntakeTypeClass(row.intakeType)}`}>
-                      {formatIntakeType(row.intakeType)}
-                    </span>
-                  ) : (
-                    <span className="text-xs font-bold text-gray-400">-</span>
-                  )}
-                </td>
               </tr>
             ))}
           </tbody>
@@ -111,16 +104,6 @@ function getIntakeTypeClass(value: string) {
   if (value === "selfPay") return "bg-emerald-100 text-emerald-700";
   if (value === "selfService") return "bg-blue-100 text-blue-700";
   return "bg-red-100 text-red-700";
-}
-
-function getStatusClass(status: string) {
-  switch (status) {
-    case "배차중": return "bg-primary text-white";
-    case "대기중": return "bg-emerald-100 text-emerald-700";
-    case "사고": return "bg-red-100 text-red-700";
-    case "정비필요": return "bg-amber-100 text-amber-700";
-    default: return "bg-gray-100 text-gray-600";
-  }
 }
 
 function formatOrdererAndRepairShop(dispatch: { orderedBy: string; repairShop: string; customerName: string; intakeType?: string }) {
