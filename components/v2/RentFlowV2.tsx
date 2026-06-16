@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -33,8 +34,11 @@ import {
   sendJson,
   todayKorea,
   type DispatchV2,
+  type IncidentRecordV2,
+  type LostItemV2,
   type PartnerAddressV2,
   type ReservationV2,
+  type ReturnV2,
   type UploadedFileV2,
   type VehicleV2,
 } from "@/lib/rentflow-v2";
@@ -70,16 +74,11 @@ const appActions = [
 ];
 
 const adminItems = [
-  { href: "/admin/dashboard", label: "대시보드", icon: BarChart3 },
-  { href: "/admin/vehicles", label: "차량관리", icon: Car },
-  { href: "/admin/reservations", label: "예약관리", icon: CalendarDays },
   { href: "/admin/dispatches", label: "배회차관리", icon: ClipboardList },
-  { href: "/admin/partners", label: "거래처주소", icon: MapPin },
-  { href: "/admin/photos", label: "사진촬영본", icon: Camera },
   { href: "/admin/billing", label: "계약서/청구", icon: FileText },
+  { href: "/admin/dashboard", label: "차량현황판", icon: BarChart3 },
+  { href: "/admin/vehicles", label: "차량수정", icon: Car },
   { href: "/admin/receivables", label: "미수금", icon: CreditCard },
-  { href: "/admin/incidents", label: "정비/사고", icon: AlertTriangle },
-  { href: "/admin/settings", label: "설정", icon: Settings },
   { href: "/admin/stats", label: "통계", icon: BarChart3 },
 ];
 
@@ -109,6 +108,10 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [vehicles, setVehicles] = useState<VehicleV2[]>([]);
   const [reservations, setReservations] = useState<ReservationV2[]>([]);
   const [dispatches, setDispatches] = useState<DispatchV2[]>([]);
+  const [returns, setReturns] = useState<ReturnV2[]>([]);
+  const [accidents, setAccidents] = useState<IncidentRecordV2[]>([]);
+  const [maintenance, setMaintenance] = useState<IncidentRecordV2[]>([]);
+  const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
   const isAdmin = kind.startsWith("admin");
 
   useEffect(() => {
@@ -116,10 +119,18 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
       fetchJson<VehicleV2[]>("/api/vehicles", []),
       fetchJson<ReservationV2[]>("/api/reservations", []),
       fetchJson<DispatchV2[]>("/api/dispatches", []),
-    ]).then(([v, r, d]) => {
+      fetchJson<ReturnV2[]>("/api/returns", []),
+      fetchJson<IncidentRecordV2[]>("/api/accident-histories", []),
+      fetchJson<IncidentRecordV2[]>("/api/maintenance-histories", []),
+      fetchJson<LostItemV2[]>("/api/lost-items", []),
+    ]).then(([v, r, d, ret, acc, maint, lost]) => {
       setVehicles(v);
       setReservations(r);
       setDispatches(d);
+      setReturns(ret);
+      setAccidents(acc);
+      setMaintenance(maint);
+      setLostItems(lost);
     });
   }, []);
 
@@ -137,6 +148,13 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 <span className="block text-xs font-bold text-[#6b756f]">{isAdmin ? "office admin" : "field app"}</span>
               </span>
             </Link>
+            <UnreadMessagesButton
+              dispatches={dispatches}
+              returns={returns}
+              vehicles={vehicles}
+              onDispatches={setDispatches}
+              onReturns={setReturns}
+            />
             <QuickMenu reservations={reservations} />
           </div>
         </header>
@@ -149,19 +167,19 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {isAdmin ? <AdminNav /> : null}
 
         {kind === "home" ? <HomeScreen /> : null}
-        {kind === "dispatch" ? <DispatchForm vehicles={vehicles} /> : null}
-        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} /> : null}
+        {kind === "dispatch" ? <DispatchForm vehicles={vehicles} dispatches={dispatches} onDispatches={setDispatches} /> : null}
+        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={setReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={setReservations} /> : null}
-        {kind === "incident" ? <IncidentForm vehicles={vehicles} /> : null}
+        {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={setAccidents} onMaintenance={setMaintenance} /> : null}
         {kind === "billing" ? <BillingForm dispatches={dispatches} /> : null}
-        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} /> : null}
+        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={setLostItems} /> : null}
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
         {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
         {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={setReservations} /> : null}
-        {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} /> : null}
+        {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={setDispatches} onReturns={setReturns} /> : null}
         {kind === "admin-billing" ? <BillingAdmin /> : null}
         {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
         {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -185,6 +203,82 @@ function QuickMenu({ reservations }: { reservations: ReservationV2[] }) {
       </Link>
       <TodayCalendar reservations={reservations} />
     </nav>
+  );
+}
+
+function UnreadMessagesButton({
+  dispatches,
+  returns,
+  vehicles,
+  onDispatches,
+  onReturns,
+}: {
+  dispatches: DispatchV2[];
+  returns: ReturnV2[];
+  vehicles: VehicleV2[];
+  onDispatches: (items: DispatchV2[]) => void;
+  onReturns: (items: ReturnV2[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const unread = [
+    ...dispatches.filter((item) => !item.isCompleted).map((item) => ({ kind: "배차" as const, createdAt: item.createdAt, dispatch: item })),
+    ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
+  ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  async function complete(kind: "배차" | "회차", id: string) {
+    if (kind === "배차") {
+      await sendJson(`/api/dispatches?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
+      onDispatches(dispatches.map((item) => item.id === id ? { ...item, isCompleted: true } : item));
+      return;
+    }
+    await sendJson(`/api/returns?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
+    onReturns(returns.map((item) => item.id === id ? { ...item, isCompleted: true } : item));
+  }
+
+  return (
+    <div className="absolute left-1/2 top-4 z-40 -translate-x-1/2">
+      <button className="quick-btn whitespace-nowrap" type="button" onClick={() => setOpen((value) => !value)}>
+        안 읽은 메시지
+      </button>
+      {open ? (
+        <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/20 p-4 pt-16" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
+            <div className="max-h-[70vh] space-y-2 overflow-y-auto">
+              {unread.length ? unread.map((row) => {
+                const dispatch = row.kind === "배차" ? row.dispatch : undefined;
+                const ret = row.kind === "회차" ? row.returnItem : undefined;
+                const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
+                const vehicle = findVehicle(vehicles, plate);
+                return (
+                  <article className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2 rounded-lg border border-[#d8ded8] p-3" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
+                    <input className="mt-1 h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} />
+                    <div className="grid gap-1 text-sm">
+                      <strong className="text-base">{plate}</strong>
+                      <span>{row.kind}</span>
+                      <span>{vehicleModelColor(vehicle)}</span>
+                      <span>{clean(dispatch?.orderedBy)}</span>
+                      <span>{clean(dispatch?.customerCarModel)}</span>
+                      <span>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</span>
+                      <span>{clean(dispatch?.repairShop)}</span>
+                      <span>{clean(dispatch?.notes || ret?.notes)}</span>
+                    </div>
+                  </article>
+                );
+              }) : <p className="py-8 text-center text-sm font-bold text-[#68746d]">안 읽은 메시지가 없습니다.</p>}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -356,12 +450,14 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 }
 
 function AdminNav() {
+  const pathname = usePathname();
   return (
     <nav className="flex gap-2 overflow-x-auto pb-2">
       {adminItems.map((item) => {
         const Icon = item.icon;
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <Link className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-[#d8ded8] bg-white px-3 text-sm font-black" href={item.href} key={item.href}>
+          <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href} key={item.href}>
             <Icon size={16} />
             {item.label}
           </Link>
@@ -371,7 +467,7 @@ function AdminNav() {
   );
 }
 
-function DispatchForm({ vehicles }: { vehicles: VehicleV2[] }) {
+function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: (items: DispatchV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
   const summaryKeys =
@@ -381,72 +477,78 @@ function DispatchForm({ vehicles }: { vehicles: VehicleV2[] }) {
         ? ["orderedBy", "fuelDisplay", "customerPhone"]
         : ["customerName", "fuelDisplay", "customerPhone"];
   return (
-    <DataForm
-      endpoint="/api/dispatches"
-      buildPayload={(data) => ({
-        id: createId("dispatch"),
-        rentalCarNumber: vehicle?.plateNumber || "",
-        businessType,
-        corporateVehicle: data.get("corporateVehicle") === "on",
-        customerName: text(data, "customerName") || text(data, "orderedBy") || businessType,
-        customerPhone: text(data, "customerPhone"),
-        customerCarModel: text(data, "customerCarModel"),
-        orderedBy: text(data, "orderedBy"),
-        repairShop: text(data, "repairShop"),
-        fuelDisplay: text(data, "fuelDisplay"),
-        notes: text(data, "notes"),
-        status: businessType,
-      })}
-      afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
-        status: businessType,
-        fuelDisplay: String(payload.fuelDisplay || ""),
-        damageVehicle: String(payload.customerCarModel || ""),
-        activeSummary: summaryKeys.map((key) => String(payload[key] || "")).filter(Boolean).join(" / "),
-      }, "PATCH") : undefined}
-    >
-      <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
-      <FormBlock title="차량 선택">
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
-          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
-          {businessType === "보험" ? (
-            <label className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
-              <input name="corporateVehicle" type="checkbox" />
-              법인차량
-            </label>
-          ) : null}
-        </div>
-      </FormBlock>
-      {businessType === "보험" ? (
-        <CompactRow>
-          <Input name="orderedBy" label="오더자" />
-          <Input name="repairShop" label="수리처" />
-          <Input name="customerCarModel" label="고객차종" />
-          <Input name="fuelDisplay" label="배차주유량" placeholder="8/12" />
-          <Input name="customerPhone" label="고객연락처" />
-        </CompactRow>
-      ) : businessType === "자차" ? (
-        <CompactRow>
-          <Input name="orderedBy" label="오더자" />
-          <Input name="fuelDisplay" label="배차주유량" placeholder="만땅" />
-          <Input name="customerPhone" label="고객연락처" />
-        </CompactRow>
-      ) : (
-        <CompactRow>
-          <Input name="customerName" label="오더자/고객명" />
-          <Input name="fuelDisplay" label="배차주유량" placeholder="3/4" />
-          <Input name="customerPhone" label="고객연락처" />
-        </CompactRow>
-      )}
-      <Textarea name="notes" label="특이사항" />
-      <PhotoUploadButton />
-    </DataForm>
+    <section className="space-y-4">
+      <DataForm
+        endpoint="/api/dispatches"
+        buildPayload={(data) => ({
+          id: createId("dispatch"),
+          rentalCarNumber: vehicle?.plateNumber || "",
+          businessType,
+          corporateVehicle: data.get("corporateVehicle") === "on",
+          customerName: text(data, "customerName") || text(data, "orderedBy") || businessType,
+          customerPhone: text(data, "customerPhone"),
+          customerCarModel: text(data, "customerCarModel"),
+          orderedBy: text(data, "orderedBy"),
+          repairShop: text(data, "repairShop"),
+          fuelDisplay: text(data, "fuelDisplay"),
+          notes: text(data, "notes"),
+          status: businessType,
+          isCompleted: false,
+        })}
+        afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
+          status: businessType,
+          fuelDisplay: String(payload.fuelDisplay || ""),
+          damageVehicle: String(payload.customerCarModel || ""),
+          activeSummary: summaryKeys.map((key) => String(payload[key] || "")).filter(Boolean).join(" / "),
+        }, "PATCH") : undefined}
+        onSaved={(payload) => onDispatches([payload as DispatchV2, ...dispatches])}
+      >
+        <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
+        <FormBlock title="차량 선택">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+            <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+            {businessType === "보험" ? (
+              <label className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
+                <input name="corporateVehicle" type="checkbox" />
+                법인차량
+              </label>
+            ) : null}
+          </div>
+        </FormBlock>
+        {businessType === "보험" ? (
+          <CompactRow>
+            <Input name="orderedBy" label="오더자" />
+            <Input name="repairShop" label="수리처" />
+            <Input name="customerCarModel" label="고객차종" />
+            <Input name="fuelDisplay" label="배차주유량" placeholder="8/12" />
+            <Input name="customerPhone" label="고객연락처" />
+          </CompactRow>
+        ) : businessType === "자차" ? (
+          <CompactRow>
+            <Input name="orderedBy" label="오더자" />
+            <Input name="fuelDisplay" label="배차주유량" placeholder="만땅" />
+            <Input name="customerPhone" label="고객연락처" />
+          </CompactRow>
+        ) : (
+          <CompactRow>
+            <Input name="customerName" label="오더자/고객명" />
+            <Input name="fuelDisplay" label="배차주유량" placeholder="3/4" />
+            <Input name="customerPhone" label="고객연락처" />
+          </CompactRow>
+        )}
+        <Textarea name="notes" label="특이사항" />
+        <PhotoUploadButton />
+      </DataForm>
+      <DispatchBoard dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
+    </section>
   );
 }
 
-function ReturnForm({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[] }) {
+function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: (items: ReturnV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
   return (
+    <section className="space-y-4">
     <DataForm
       endpoint="/api/returns"
       buildPayload={(data) => ({
@@ -457,6 +559,7 @@ function ReturnForm({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatche
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
         status: "회차등록",
+        isCompleted: false,
       })}
       afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
         status: "주차구역",
@@ -465,6 +568,7 @@ function ReturnForm({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatche
         activeSummary: String(payload.arrivalAddress || ""),
         mileage: Number(payload.mileage || 0),
       }, "PATCH") : undefined}
+      onSaved={(payload) => onReturns([payload as ReturnV2, ...returns])}
     >
       <FormBlock title="차량 선택">
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
@@ -479,6 +583,8 @@ function ReturnForm({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatche
       <PhotoUploadButton />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
+    <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} />
+    </section>
   );
 }
 
@@ -519,39 +625,57 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
   );
 }
 
-function IncidentForm({ vehicles }: { vehicles: VehicleV2[] }) {
+function IncidentForm({
+  vehicles,
+  accidents,
+  maintenance,
+  onAccidents,
+  onMaintenance,
+}: {
+  vehicles: VehicleV2[];
+  accidents: IncidentRecordV2[];
+  maintenance: IncidentRecordV2[];
+  onAccidents: (items: IncidentRecordV2[]) => void;
+  onMaintenance: (items: IncidentRecordV2[]) => void;
+}) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [type, setType] = useState("사고");
   return (
-    <DataForm
-      endpoint={type === "사고" ? "/api/accident-histories" : "/api/maintenance-histories"}
-      buildPayload={(data) => ({
-        id: createId(type === "사고" ? "accident" : "maintenance"),
-        plateNumber: vehicle?.plateNumber || "",
-        accidentPart: text(data, "content"),
-        title: text(data, "content"),
-        description: text(data, "notes"),
-        insuranceNumber: "",
-        repairShopName: "",
-        foundDate: todayKorea(),
-        accidentDate: todayKorea(),
-        status: "접수",
-        maintenanceType: "기타",
-        photos: [],
-        videos: [],
-        documents: [],
-        memo: text(data, "notes"),
-        createdBy: "field",
-      })}
-    >
-      <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
-      <FormBlock title="차량 선택">
-        <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
-      </FormBlock>
-      <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
-      <Textarea name="notes" label="특이사항" />
-      <PhotoUploadButton />
-    </DataForm>
+    <section className="space-y-4">
+      <DataForm
+        endpoint={type === "사고" ? "/api/accident-histories" : "/api/maintenance-histories"}
+        buildPayload={(data) => ({
+          id: createId(type === "사고" ? "accident" : "maintenance"),
+          plateNumber: vehicle?.plateNumber || "",
+          accidentPart: text(data, "content"),
+          title: text(data, "content"),
+          description: text(data, "notes"),
+          insuranceNumber: "",
+          repairShopName: "",
+          foundDate: text(data, "recordDate") || todayKorea(),
+          accidentDate: text(data, "recordDate") || todayKorea(),
+          status: "접수",
+          maintenanceType: type === "정비" ? text(data, "content") : "기타",
+          photos: [],
+          videos: [],
+          documents: [],
+          memo: text(data, "notes"),
+          createdBy: "field",
+          isCompleted: false,
+        })}
+        onSaved={(payload) => type === "사고" ? onAccidents([payload as IncidentRecordV2, ...accidents]) : onMaintenance([payload as IncidentRecordV2, ...maintenance])}
+      >
+        <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
+        <FormBlock title="차량 선택">
+          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+        </FormBlock>
+        <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
+        <Textarea name="notes" label="특이사항" />
+        <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
+        <PhotoUploadButton />
+      </DataForm>
+      <IncidentBoard accidents={accidents} maintenance={maintenance} />
+    </section>
   );
 }
 
@@ -575,28 +699,34 @@ function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
   );
 }
 
-function LostItemForm({ vehicles }: { vehicles: VehicleV2[] }) {
+function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: (items: LostItemV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   return (
-    <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
-      id: createId("lost"),
-      vehicleNumber: vehicle?.plateNumber || "",
-      itemName: text(data, "customerName") || "분실물",
-      customerName: text(data, "customerName"),
-      memo: text(data, "notes"),
-      foundDate: text(data, "foundDate"),
-      status: "보관중",
-    })}>
-      <FormBlock title="차량 선택">
-        <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
-      </FormBlock>
-      <CompactRow>
-        <Input name="customerName" label="고객명" />
-        <Input name="notes" label="특이사항" />
-        <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
-      </CompactRow>
-      <PhotoUploadButton />
-    </DataForm>
+    <section className="space-y-4">
+      <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
+        id: createId("lost"),
+        vehicleNumber: vehicle?.plateNumber || "",
+        itemName: text(data, "customerName") || "분실물",
+        customerName: text(data, "customerName"),
+        memo: text(data, "notes"),
+        foundDate: text(data, "foundDate"),
+        status: "보관중",
+        isCompleted: false,
+      })}
+      onSaved={(payload) => onLostItems([payload as LostItemV2, ...lostItems])}
+      >
+        <FormBlock title="차량 선택">
+          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+        </FormBlock>
+        <CompactRow>
+          <Input name="customerName" label="고객명" />
+          <Input name="notes" label="특이사항" />
+          <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
+        </CompactRow>
+        <PhotoUploadButton />
+      </DataForm>
+      <LostItemBoard items={lostItems} />
+    </section>
   );
 }
 
@@ -814,6 +944,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           id: createId("vehicle"),
           plateNumber: text(data, "plateNumber"),
           model: text(data, "model"),
+          color: text(data, "color"),
           fuelType: text(data, "fuelType"),
           mileage: Number(text(data, "mileage") || 0),
           purchaseDate: text(data, "purchaseDate"),
@@ -826,6 +957,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         <div className="grid gap-3 md:grid-cols-2">
           <Input name="plateNumber" label="차량번호" required />
           <Input name="model" label="차종" required />
+          <Input name="color" label="색상" />
           <FuelTypeSelect />
           <Input name="mileage" label="총 키로수" type="number" />
           <Input name="purchaseDate" label="매입일" type="date" />
@@ -837,7 +969,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b">
-              <th>드래그</th><th>차량번호</th><th>차종</th><th>유종</th><th>총 키로수</th><th>매입일</th><th>수정</th><th>삭제</th>
+              <th>드래그</th><th>차량번호</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>매입일</th><th>수정</th><th>삭제</th>
             </tr>
           </thead>
           <tbody>
@@ -862,6 +994,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
                 <td><GripVertical className="cursor-grab text-[#6b756f]" size={20} /></td>
                 <td className="font-black">{vehicle.plateNumber}</td>
                 <td>{vehicle.model}</td>
+                <td>{vehicle.color}</td>
                 <td>{vehicle.fuelType}</td>
                 <td>{vehicle.mileage?.toLocaleString()}</td>
                 <td>{vehicle.purchaseDate || "-"}</td>
@@ -885,14 +1018,281 @@ function ReservationAdmin({ reservations, onReservations }: { reservations: Rese
   return <section className="space-y-4"><ReservationForm reservations={reservations} onReservations={onReservations} /><CalendarPage reservations={reservations} /></section>;
 }
 
-function DispatchAdmin({ dispatches }: { dispatches: DispatchV2[] }) {
+function DispatchAdmin({
+  dispatches,
+  returns,
+  vehicles,
+  onDispatches,
+  onReturns,
+}: {
+  dispatches: DispatchV2[];
+  returns: ReturnV2[];
+  vehicles: VehicleV2[];
+  onDispatches: (items: DispatchV2[]) => void;
+  onReturns: (items: ReturnV2[]) => void;
+}) {
+  const [filter, setFilter] = useState("전체");
+  const rows = [
+    ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
+    ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
+  ].filter((row) => filter === "전체" || (filter === "미정리" ? !row.completed : row.completed))
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  async function toggle(row: typeof rows[number], checked: boolean) {
+    if (row.kind === "배차") {
+      await sendJson(`/api/dispatches?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
+      onDispatches(dispatches.map((item) => item.id === row.id ? { ...item, isCompleted: checked } : item));
+      return;
+    }
+    await sendJson(`/api/returns?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
+    onReturns(returns.map((item) => item.id === row.id ? { ...item, isCompleted: checked } : item));
+  }
+
   return (
-    <section className="panel overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>고객명</th><th>고객차량</th><th>수리처</th><th>접수번호</th><th>상태</th></tr></thead>
-        <tbody>{dispatches.map((d) => <tr className="border-b" key={d.id}><td>{d.rentalCarNumber}</td><td>{d.customerName}</td><td>{d.customerCarNumber}</td><td>{d.repairShop}</td><td>{d.claimNumber}</td><td>{d.status}</td></tr>)}</tbody>
+    <section className="panel space-y-3 overflow-x-auto">
+      <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
+      <table className="w-full min-w-[1080px] text-left text-sm">
+        <thead><tr className="border-b"><th>정리완료</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+        <tbody>{rows.map((row) => {
+          const dispatch = row.kind === "배차" ? row.dispatch : undefined;
+          const ret = row.kind === "회차" ? row.returnItem : undefined;
+          const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
+          const vehicle = findVehicle(vehicles, plate);
+          return (
+            <tr className="border-b" key={`${row.kind}-${row.id}`}>
+              <td><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
+              <td className="font-black">{plate}</td>
+              <td>{row.kind}</td>
+              <td>{vehicleModelColor(vehicle)}</td>
+              <td>{clean(dispatch?.orderedBy)}</td>
+              <td>{clean(dispatch?.customerCarModel)}</td>
+              <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
+              <td>{clean(dispatch?.repairShop)}</td>
+              <td>{clean(dispatch?.notes || ret?.notes)}</td>
+              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(plate)}`}>사진보기</Link></td>
+            </tr>
+          );
+        })}</tbody>
       </table>
     </section>
+  );
+}
+
+function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: (items: DispatchV2[]) => void }) {
+  const [editing, setEditing] = useState<DispatchV2 | null>(null);
+  const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
+  return (
+    <section className="panel overflow-x-auto">
+      <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
+      <table className="w-full min-w-[1120px] text-left text-sm">
+        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>수정</th><th>삭제</th></tr></thead>
+        <tbody>{dispatches.map((item) => {
+          const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+          return (
+            <tr className="border-b" key={item.id}>
+              <td className="font-black">{clean(item.rentalCarNumber)}</td>
+              <td>{clean(item.businessType || item.status)}</td>
+              <td>{vehicleModelColor(vehicle)}</td>
+              <td>{clean(item.orderedBy || item.customerName)}</td>
+              <td>{clean(item.customerCarModel)}</td>
+              <td>{clean(item.fuelDisplay)}</td>
+              <td>{clean(item.repairShop)}</td>
+              <td>{clean(item.notes)}</td>
+              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
+              <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onDispatches(dispatches.map((item) => item.id === next.id ? next : item))} /> : null}
+      {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 배차`} onCancel={() => setDeleting(null)} onDelete={async () => {
+        await fetch(`/api/dispatches?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
+        onDispatches(dispatches.filter((item) => item.id !== deleting.id));
+        setDeleting(null);
+      }} /> : null}
+    </section>
+  );
+}
+
+function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: (items: ReturnV2[]) => void }) {
+  const [editing, setEditing] = useState<ReturnV2 | null>(null);
+  const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
+  return (
+    <section className="panel overflow-x-auto">
+      <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>수정</th><th>삭제</th></tr></thead>
+        <tbody>{returns.map((item) => {
+          const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+          return (
+            <tr className="border-b" key={item.id}>
+              <td className="font-black">{clean(item.rentalCarNumber)}</td>
+              <td>회차</td>
+              <td>{vehicleModelColor(vehicle)}</td>
+              <td>{clean(String(item.mileage || ""))}</td>
+              <td>{clean(item.fuelDisplay)}</td>
+              <td>{clean(item.arrivalAddress)}</td>
+              <td>{clean(item.notes)}</td>
+              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
+              <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
+      {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onReturns(returns.map((item) => item.id === next.id ? next : item))} /> : null}
+      {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 회차`} onCancel={() => setDeleting(null)} onDelete={async () => {
+        await fetch(`/api/returns?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
+        onReturns(returns.filter((item) => item.id !== deleting.id));
+        setDeleting(null);
+      }} /> : null}
+    </section>
+  );
+}
+
+function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch: DispatchV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: DispatchV2) => void }) {
+  const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, dispatch.rentalCarNumber || ""));
+  return (
+    <ModalShell title="배차 수정" onClose={onClose}>
+      <form onSubmit={async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const next = {
+          ...dispatch,
+          rentalCarNumber: selected?.plateNumber || dispatch.rentalCarNumber,
+          businessType: text(data, "businessType"),
+          status: text(data, "businessType"),
+          orderedBy: text(data, "orderedBy"),
+          repairShop: text(data, "repairShop"),
+          customerCarModel: text(data, "customerCarModel"),
+          fuelDisplay: text(data, "fuelDisplay"),
+          customerPhone: text(data, "customerPhone"),
+          notes: text(data, "notes"),
+          corporateVehicle: data.get("corporateVehicle") === "on",
+        };
+        await sendJson(`/api/dispatches?id=${encodeURIComponent(dispatch.id)}`, next, "PATCH");
+        onSaved(next);
+        onClose();
+      }} className="space-y-3">
+        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <label className="label">구분<select className="field min-h-12" name="businessType" defaultValue={dispatch.businessType || dispatch.status || "보험"}><option>보험</option><option>자차</option><option>셀프</option></select></label>
+        <Input name="orderedBy" label="오더자" defaultValue={dispatch.orderedBy} />
+        <Input name="repairShop" label="수리처" defaultValue={dispatch.repairShop} />
+        <Input name="customerCarModel" label="고객차종" defaultValue={dispatch.customerCarModel} />
+        <Input name="fuelDisplay" label="주유량" defaultValue={dispatch.fuelDisplay} />
+        <Input name="customerPhone" label="고객연락처" defaultValue={dispatch.customerPhone} />
+        <label className="flex min-h-12 items-center gap-2 font-black"><input name="corporateVehicle" type="checkbox" defaultChecked={dispatch.corporateVehicle} /> 법인차량</label>
+        <Textarea name="notes" label="특이사항" defaultValue={dispatch.notes} />
+        <button className="primary-btn w-full" type="submit">저장</button>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: ReturnV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: ReturnV2) => void }) {
+  const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, record.rentalCarNumber || ""));
+  return (
+    <ModalShell title="회차 수정" onClose={onClose}>
+      <form onSubmit={async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const next = {
+          ...record,
+          rentalCarNumber: selected?.plateNumber || record.rentalCarNumber,
+          mileage: Number(text(data, "mileage") || 0),
+          fuelDisplay: text(data, "fuelDisplay"),
+          arrivalAddress: text(data, "arrivalAddress"),
+          notes: text(data, "notes"),
+        };
+        await sendJson(`/api/returns?id=${encodeURIComponent(record.id)}`, next, "PATCH");
+        onSaved(next);
+        onClose();
+      }} className="space-y-3">
+        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <Input name="mileage" label="회차키로수" type="number" defaultValue={record.mileage} />
+        <Input name="fuelDisplay" label="회차주유량" defaultValue={record.fuelDisplay} />
+        <Input name="arrivalAddress" label="주차구역" defaultValue={record.arrivalAddress} />
+        <Textarea name="notes" label="특이사항" defaultValue={record.notes} />
+        <button className="primary-btn w-full" type="submit">저장</button>
+      </form>
+    </ModalShell>
+  );
+}
+
+function IncidentBoard({ accidents, maintenance }: { accidents: IncidentRecordV2[]; maintenance: IncidentRecordV2[] }) {
+  const [accidentRows, setAccidentRows] = useState(accidents);
+  const [maintenanceRows, setMaintenanceRows] = useState(maintenance);
+  useEffect(() => setAccidentRows(accidents), [accidents]);
+  useEffect(() => setMaintenanceRows(maintenance), [maintenance]);
+  const rows = [
+    ...accidentRows.map((item) => ({ type: "사고" as const, endpoint: "/api/accident-histories", item })),
+    ...maintenanceRows.map((item) => ({ type: "정비" as const, endpoint: "/api/maintenance-histories", item })),
+  ];
+  async function toggle(row: typeof rows[number], checked: boolean) {
+    await sendJson(`${row.endpoint}?id=${encodeURIComponent(row.item.id)}`, { isCompleted: checked }, "PATCH");
+    if (row.type === "사고") setAccidentRows(accidentRows.map((item) => item.id === row.item.id ? { ...item, isCompleted: checked } : item));
+    else setMaintenanceRows(maintenanceRows.map((item) => item.id === row.item.id ? { ...item, isCompleted: checked } : item));
+  }
+  return (
+    <section className="panel overflow-x-auto">
+      <h2 className="mb-3 text-xl font-black">사고/정비 현황판</h2>
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead><tr className="border-b"><th>작업완료</th><th>차량번호</th><th>사고부위 또는 정비내용</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
+        <tbody>{rows.map((row) => {
+          const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
+          const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td className="font-black">{clean(row.item.plateNumber)}</td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(row.item.plateNumber || "")}`}>사진보기</Link></td></tr>;
+        })}</tbody>
+      </table>
+    </section>
+  );
+}
+
+function LostItemBoard({ items }: { items: LostItemV2[] }) {
+  const [rows, setRows] = useState(items);
+  useEffect(() => setRows(items), [items]);
+  async function toggle(id: string, checked: boolean) {
+    await sendJson(`/api/lost-items?id=${encodeURIComponent(id)}`, { isCompleted: checked }, "PATCH");
+    setRows(rows.map((item) => item.id === id ? { ...item, isCompleted: checked } : item));
+  }
+  return (
+    <section className="panel overflow-x-auto">
+      <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
+        <tbody>{rows.map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
+      </table>
+    </section>
+  );
+}
+
+function GenericDeleteModal({ label, onCancel, onDelete }: { label: string; onCancel: () => void; onDelete: () => void | Promise<void> }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+      <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-2xl">
+        <h2 className="text-xl font-black">정말 삭제하시겠습니까?</h2>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">{label}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button className="small-btn" type="button" onClick={onCancel}>취소</button>
+          <button className="danger-btn" type="button" onClick={onDelete}>삭제</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalShell({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
+      <div className="max-h-[92vh] w-full overflow-auto rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-lg">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">{title}</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -944,6 +1344,7 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
             ...vehicle,
             plateNumber: text(data, "plateNumber"),
             model: text(data, "model"),
+            color: text(data, "color"),
             fuelType: text(data, "fuelType"),
             mileage: Number(text(data, "mileage") || 0),
             purchaseDate: text(data, "purchaseDate"),
@@ -961,6 +1362,7 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
         <div className="grid gap-3 md:grid-cols-2">
           <Input name="plateNumber" label="차량번호" defaultValue={vehicle.plateNumber} required />
           <Input name="model" label="차종" defaultValue={vehicle.model} required />
+          <Input name="color" label="색상" defaultValue={vehicle.color} />
           <FuelTypeSelect defaultValue={vehicle.fuelType} />
           <Input name="mileage" label="총 키로수" type="number" defaultValue={vehicle.mileage} />
           <Input name="purchaseDate" label="매입일" type="date" defaultValue={vehicle.purchaseDate} />
@@ -1171,6 +1573,20 @@ function scheduleText(item: ReservationV2) {
 
 function newest(files: UploadedFileV2[]) {
   return Math.max(...files.map((file) => new Date(file.uploadedAt || 0).getTime()));
+}
+
+function clean(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function findVehicle(vehicles: VehicleV2[], plate: string) {
+  return vehicles.find((vehicle) => vehicle.plateNumber === plate);
+}
+
+function vehicleModelColor(vehicle?: VehicleV2) {
+  if (!vehicle) return "";
+  return [vehicle.model, vehicle.color].filter(Boolean).join("/");
 }
 
 function text(data: FormData, key: string) {

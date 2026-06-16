@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
   id TEXT PRIMARY KEY,
   plate_number TEXT NOT NULL UNIQUE,
   model TEXT NOT NULL,
+  color TEXT,
   fuel_type TEXT NOT NULL,
   fuel_level REAL NOT NULL DEFAULT 0,
   fuel_display TEXT,
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS dispatches (
   status TEXT NOT NULL DEFAULT '배차등록',
   intake_type TEXT,
   uploaded_at DATETIME,
+  is_completed INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -58,6 +60,7 @@ CREATE TABLE IF NOT EXISTS returns (
   mileage INTEGER,
   notes TEXT,
   status TEXT NOT NULL DEFAULT '회차등록',
+  is_completed INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -134,6 +137,7 @@ CREATE TABLE IF NOT EXISTS maintenance_histories (
   cost REAL DEFAULT 0,
   priority TEXT DEFAULT '보통',
   status TEXT DEFAULT '정비필요',
+  is_completed INTEGER DEFAULT 0,
   photos TEXT, -- JSON string array
   videos TEXT, -- JSON string array
   documents TEXT, -- JSON string array
@@ -169,6 +173,7 @@ CREATE TABLE IF NOT EXISTS accident_histories (
   videos TEXT, -- JSON string array
   documents TEXT, -- JSON string array
   status TEXT DEFAULT '접수',
+  is_completed INTEGER DEFAULT 0,
   linked_dispatch_id TEXT,
   linked_return_id TEXT,
   linked_smart_inbox_item_id TEXT,
@@ -247,6 +252,7 @@ CREATE TABLE IF NOT EXISTS lost_items (
   photo_url TEXT,
   memo TEXT,
   status TEXT DEFAULT '보관중',
+  is_completed INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

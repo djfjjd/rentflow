@@ -38,11 +38,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
     
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, fuel_display, mileage, purchase_date, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       vehicle.id,
       vehicle.plateNumber,
       vehicle.model,
+      vehicle.color || null,
       vehicle.fuelType,
       vehicle.fuelLevel || 0,
       vehicle.fuelDisplay || null,
@@ -74,6 +75,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     
     if (updates.plateNumber !== undefined) { fields.push("plate_number = ?"); values.push(updates.plateNumber); }
     if (updates.model !== undefined) { fields.push("model = ?"); values.push(updates.model); }
+    if (updates.color !== undefined) { fields.push("color = ?"); values.push(updates.color); }
     if (updates.fuelType !== undefined) { fields.push("fuel_type = ?"); values.push(updates.fuelType); }
     if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(updates.fuelLevel); }
     if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(updates.fuelDisplay); }
@@ -119,6 +121,7 @@ function mapVehicle(row: any) {
     id: row.id,
     plateNumber: row.plate_number,
     model: row.model,
+    color: row.color,
     fuelType: row.fuel_type,
     fuelLevel: row.fuel_level,
     fuelDisplay: row.fuel_display,

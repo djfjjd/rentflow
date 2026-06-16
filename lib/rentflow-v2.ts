@@ -2,6 +2,7 @@ export type VehicleV2 = {
   id: string;
   plateNumber: string;
   model: string;
+  color?: string;
   fuelType?: string;
   mileage?: number;
   purchaseDate?: string;
@@ -73,12 +74,50 @@ export type DispatchV2 = {
   repairShop?: string;
   businessType?: string;
   corporateVehicle?: boolean;
+  isCompleted?: boolean;
   pickupAddress?: string;
   deliveryAddress?: string;
   fuelDisplay?: string;
   notes?: string;
   status?: string;
   createdAt?: string;
+};
+
+export type ReturnV2 = {
+  id: string;
+  rentalCarNumber: string;
+  returnAddress?: string;
+  arrivalAddress?: string;
+  fuelDisplay?: string;
+  mileage?: number;
+  notes?: string;
+  status?: string;
+  isCompleted?: boolean;
+  createdAt?: string;
+};
+
+export type IncidentRecordV2 = {
+  id: string;
+  plateNumber: string;
+  accidentPart?: string;
+  maintenanceType?: string;
+  title?: string;
+  description?: string;
+  memo?: string;
+  accidentDate?: string;
+  foundDate?: string;
+  status?: string;
+  isCompleted?: boolean;
+};
+
+export type LostItemV2 = {
+  id: string;
+  vehicleNumber?: string;
+  customerName?: string;
+  foundDate?: string;
+  memo?: string;
+  status?: string;
+  isCompleted?: boolean;
 };
 
 export const fuelTypes = ["가솔린", "디젤", "LPG"];
