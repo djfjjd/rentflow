@@ -30,6 +30,7 @@ export type ReservationV2 = {
   orderPerson?: string;
   memo?: string;
   status?: string;
+  createdAt?: string;
 };
 
 export type UploadedFileV2 = {
@@ -43,6 +44,8 @@ export type UploadedFileV2 = {
   customerName?: string;
   intakeType?: string;
   fileType?: string;
+  recordType?: string;
+  recordId?: string;
   uploadedAt?: string;
 };
 
@@ -108,6 +111,7 @@ export type IncidentRecordV2 = {
   foundDate?: string;
   status?: string;
   isCompleted?: boolean;
+  createdAt?: string;
 };
 
 export type LostItemV2 = {
@@ -118,6 +122,7 @@ export type LostItemV2 = {
   memo?: string;
   status?: string;
   isCompleted?: boolean;
+  createdAt?: string;
 };
 
 export const fuelTypes = ["가솔린", "디젤", "LPG"];

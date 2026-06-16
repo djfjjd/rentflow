@@ -23,6 +23,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
+import { Pagination } from "@/components/Pagination";
 import {
   createId,
   fetchJson,
@@ -112,6 +113,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [accidents, setAccidents] = useState<IncidentRecordV2[]>([]);
   const [maintenance, setMaintenance] = useState<IncidentRecordV2[]>([]);
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
+  const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const isAdmin = kind.startsWith("admin");
 
   useEffect(() => {
@@ -139,14 +141,11 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="flex items-start justify-between gap-3">
-            <Link href="/" className="flex min-h-12 items-center gap-2 font-black">
+            <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
                 <Home size={20} />
               </span>
-              <span>
-                <span className="block text-lg leading-tight">RentFlow v2</span>
-                <span className="block text-xs font-bold text-[#6b756f]">{isAdmin ? "office admin" : "field app"}</span>
-              </span>
+              <span className="block text-lg leading-tight">{isAdmin ? "사무실용 관리자" : "배회차톡 (현장용)"}</span>
             </Link>
             <UnreadMessagesButton
               dispatches={dispatches}
@@ -154,15 +153,12 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
               vehicles={vehicles}
               onDispatches={setDispatches}
               onReturns={setReturns}
+              open={activeOverlay === "unread"}
+              onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
             />
-            <QuickMenu reservations={reservations} />
+            <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
           </div>
         </header>
-
-        <section className="flex flex-col gap-2 py-2">
-          <p className="text-sm font-bold text-[#647067]">{isAdmin ? "사무실용 관리자" : "배회차톡 (현장용)"}</p>
-          <h1 className="text-2xl font-black tracking-normal sm:text-3xl">{pageTitles[kind]}</h1>
-        </section>
 
         {isAdmin ? <AdminNav /> : null}
 
@@ -190,7 +186,15 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   );
 }
 
-function QuickMenu({ reservations }: { reservations: ReservationV2[] }) {
+function QuickMenu({
+  reservations,
+  calendarOpen,
+  onCalendarOpenChange,
+}: {
+  reservations: ReservationV2[];
+  calendarOpen: boolean;
+  onCalendarOpenChange: (open: boolean) => void;
+}) {
   return (
     <nav className="flex max-w-[62vw] items-center gap-2 overflow-x-auto pb-1 sm:max-w-none">
       <Link className="quick-btn" href="/photos">
@@ -201,7 +205,7 @@ function QuickMenu({ reservations }: { reservations: ReservationV2[] }) {
         <MapPin size={17} />
         <span>거래처주소</span>
       </Link>
-      <TodayCalendar reservations={reservations} />
+      <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
     </nav>
   );
 }
@@ -212,14 +216,17 @@ function UnreadMessagesButton({
   vehicles,
   onDispatches,
   onReturns,
+  open,
+  onOpenChange,
 }: {
   dispatches: DispatchV2[];
   returns: ReturnV2[];
   vehicles: VehicleV2[];
   onDispatches: (items: DispatchV2[]) => void;
   onReturns: (items: ReturnV2[]) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const unread = [
     ...dispatches.filter((item) => !item.isCompleted).map((item) => ({ kind: "배차" as const, createdAt: item.createdAt, dispatch: item })),
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
@@ -227,11 +234,11 @@ function UnreadMessagesButton({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") onOpenChange(false);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [onOpenChange]);
 
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
@@ -245,35 +252,38 @@ function UnreadMessagesButton({
 
   return (
     <div className="absolute left-1/2 top-4 z-40 -translate-x-1/2">
-      <button className="quick-btn whitespace-nowrap" type="button" onClick={() => setOpen((value) => !value)}>
+      <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         안 읽은 메시지
       </button>
       {open ? (
-        <div className="fixed inset-0 z-[90] flex items-start justify-center bg-black/20 p-4 pt-16" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-3xl rounded-2xl bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 p-3 pt-16 sm:p-6 sm:pt-20" onClick={() => onOpenChange(false)}>
+          <div className="w-full max-w-full rounded-2xl bg-white p-4 shadow-2xl sm:max-w-5xl" onClick={(event) => event.stopPropagation()}>
             <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
-            <div className="max-h-[70vh] space-y-2 overflow-y-auto">
-              {unread.length ? unread.map((row) => {
-                const dispatch = row.kind === "배차" ? row.dispatch : undefined;
-                const ret = row.kind === "회차" ? row.returnItem : undefined;
-                const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
-                const vehicle = findVehicle(vehicles, plate);
-                return (
-                  <article className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2 rounded-lg border border-[#d8ded8] p-3" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
-                    <input className="mt-1 h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} />
-                    <div className="grid gap-1 text-sm">
-                      <strong className="text-base">{plate}</strong>
-                      <span>{row.kind}</span>
-                      <span>{vehicleModelColor(vehicle)}</span>
-                      <span>{clean(dispatch?.orderedBy)}</span>
-                      <span>{clean(dispatch?.customerCarModel)}</span>
-                      <span>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</span>
-                      <span>{clean(dispatch?.repairShop)}</span>
-                      <span>{clean(dispatch?.notes || ret?.notes)}</span>
-                    </div>
-                  </article>
-                );
-              }) : <p className="py-8 text-center text-sm font-bold text-[#68746d]">안 읽은 메시지가 없습니다.</p>}
+            <div className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
+              {unread.length ? (
+                <table className="w-full min-w-[980px] text-left text-sm">
+                  <thead><tr className="border-b"><th>완료</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th></tr></thead>
+                  <tbody>{unread.map((row) => {
+                    const dispatch = row.kind === "배차" ? row.dispatch : undefined;
+                    const ret = row.kind === "회차" ? row.returnItem : undefined;
+                    const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
+                    const vehicle = findVehicle(vehicles, plate);
+                    return (
+                      <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
+                        <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
+                        <td className="font-black">{plate}</td>
+                        <td>{row.kind}</td>
+                        <td>{vehicleModelColor(vehicle)}</td>
+                        <td>{clean(dispatch?.orderedBy)}</td>
+                        <td>{clean(dispatch?.customerCarModel)}</td>
+                        <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
+                        <td>{clean(dispatch?.repairShop)}</td>
+                        <td>{clean(dispatch?.notes || ret?.notes)}</td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              ) : <p className="py-8 text-center text-sm font-bold text-[#68746d]">안 읽은 메시지가 없습니다.</p>}
             </div>
           </div>
         </div>
@@ -282,8 +292,7 @@ function UnreadMessagesButton({
   );
 }
 
-function TodayCalendar({ reservations }: { reservations: ReservationV2[] }) {
-  const [open, setOpen] = useState(false);
+function TodayCalendar({ reservations, open, onOpenChange }: { reservations: ReservationV2[]; open: boolean; onOpenChange: (open: boolean) => void }) {
   const [selected, setSelected] = useState(todayKorea());
   const today = todayKorea();
   const monthStart = `${selected.slice(0, 7)}-01`;
@@ -295,24 +304,23 @@ function TodayCalendar({ reservations }: { reservations: ReservationV2[] }) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") onOpenChange(false);
     };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [onOpenChange]);
 
   return (
     <div className="relative">
-      <button className="quick-btn whitespace-nowrap" type="button" onClick={() => setOpen((value) => !value)}>
+      <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         <CalendarDays size={17} />
         <span>Today {formatDateDot(today)}</span>
       </button>
       {open ? (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/20 p-4 pt-16 sm:justify-end sm:pr-6">
-          <button className="absolute inset-0 cursor-default" type="button" aria-label="캘린더 닫기" onClick={() => setOpen(false)} />
-          <div className="relative z-[81] w-full max-w-md rounded-2xl border border-[#d5ddd6] bg-white p-4 shadow-2xl sm:max-w-lg">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 p-4 pt-16 sm:justify-end sm:pr-6" onClick={() => onOpenChange(false)}>
+          <div className="relative w-full max-w-md rounded-2xl border border-[#d5ddd6] bg-white p-4 shadow-2xl sm:max-w-lg" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) - 1).padStart(2, "0")}-01`)} type="button">
                 이전
@@ -1032,6 +1040,7 @@ function DispatchAdmin({
   onReturns: (items: ReturnV2[]) => void;
 }) {
   const [filter, setFilter] = useState("전체");
+  const [page, setPage] = useState(1);
   const rows = [
     ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
     ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
@@ -1053,7 +1062,7 @@ function DispatchAdmin({
       <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
       <table className="w-full min-w-[1080px] text-left text-sm">
         <thead><tr className="border-b"><th>정리완료</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
-        <tbody>{rows.map((row) => {
+        <tbody>{paginate(rows, page).map((row) => {
           const dispatch = row.kind === "배차" ? row.dispatch : undefined;
           const ret = row.kind === "회차" ? row.returnItem : undefined;
           const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
@@ -1074,6 +1083,7 @@ function DispatchAdmin({
           );
         })}</tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
   );
 }
@@ -1081,12 +1091,14 @@ function DispatchAdmin({
 function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: (items: DispatchV2[]) => void }) {
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
+  const [page, setPage] = useState(1);
+  const rows = [...dispatches].sort(sortCreatedDesc);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
-      <table className="w-full min-w-[1120px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>수정</th><th>삭제</th></tr></thead>
-        <tbody>{dispatches.map((item) => {
+      <table className="w-full min-w-[1220px] text-left text-sm">
+        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
@@ -1099,12 +1111,14 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
               <td>{clean(item.repairShop)}</td>
               <td>{clean(item.notes)}</td>
               <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
               <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
             </tr>
           );
         })}</tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onDispatches(dispatches.map((item) => item.id === next.id ? next : item))} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 배차`} onCancel={() => setDeleting(null)} onDelete={async () => {
         await fetch(`/api/dispatches?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
@@ -1118,12 +1132,14 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
 function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: (items: ReturnV2[]) => void }) {
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
+  const [page, setPage] = useState(1);
+  const rows = [...returns].sort(sortCreatedDesc);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
-      <table className="w-full min-w-[980px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>수정</th><th>삭제</th></tr></thead>
-        <tbody>{returns.map((item) => {
+      <table className="w-full min-w-[1080px] text-left text-sm">
+        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
@@ -1135,12 +1151,14 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
               <td>{clean(item.arrivalAddress)}</td>
               <td>{clean(item.notes)}</td>
               <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
               <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
             </tr>
           );
         })}</tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onReturns(returns.map((item) => item.id === next.id ? next : item))} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 회차`} onCancel={() => setDeleting(null)} onDelete={async () => {
         await fetch(`/api/returns?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
@@ -1223,12 +1241,13 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
 function IncidentBoard({ accidents, maintenance }: { accidents: IncidentRecordV2[]; maintenance: IncidentRecordV2[] }) {
   const [accidentRows, setAccidentRows] = useState(accidents);
   const [maintenanceRows, setMaintenanceRows] = useState(maintenance);
+  const [page, setPage] = useState(1);
   useEffect(() => setAccidentRows(accidents), [accidents]);
   useEffect(() => setMaintenanceRows(maintenance), [maintenance]);
   const rows = [
     ...accidentRows.map((item) => ({ type: "사고" as const, endpoint: "/api/accident-histories", item })),
     ...maintenanceRows.map((item) => ({ type: "정비" as const, endpoint: "/api/maintenance-histories", item })),
-  ];
+  ].sort((a, b) => new Date((b.item.accidentDate || b.item.foundDate || b.item.createdAt || 0) as string).getTime() - new Date((a.item.accidentDate || a.item.foundDate || a.item.createdAt || 0) as string).getTime());
   async function toggle(row: typeof rows[number], checked: boolean) {
     await sendJson(`${row.endpoint}?id=${encodeURIComponent(row.item.id)}`, { isCompleted: checked }, "PATCH");
     if (row.type === "사고") setAccidentRows(accidentRows.map((item) => item.id === row.item.id ? { ...item, isCompleted: checked } : item));
@@ -1239,18 +1258,20 @@ function IncidentBoard({ accidents, maintenance }: { accidents: IncidentRecordV2
       <h2 className="mb-3 text-xl font-black">사고/정비 현황판</h2>
       <table className="w-full min-w-[760px] text-left text-sm">
         <thead><tr className="border-b"><th>작업완료</th><th>차량번호</th><th>사고부위 또는 정비내용</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
-        <tbody>{rows.map((row) => {
+        <tbody>{paginate(rows, page).map((row) => {
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
           return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td className="font-black">{clean(row.item.plateNumber)}</td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(row.item.plateNumber || "")}`}>사진보기</Link></td></tr>;
         })}</tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
   );
 }
 
 function LostItemBoard({ items }: { items: LostItemV2[] }) {
   const [rows, setRows] = useState(items);
+  const [page, setPage] = useState(1);
   useEffect(() => setRows(items), [items]);
   async function toggle(id: string, checked: boolean) {
     await sendJson(`/api/lost-items?id=${encodeURIComponent(id)}`, { isCompleted: checked }, "PATCH");
@@ -1261,8 +1282,9 @@ function LostItemBoard({ items }: { items: LostItemV2[] }) {
       <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
-        <tbody>{rows.map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
+        <tbody>{paginate([...rows].sort((a, b) => new Date(b.foundDate || b.createdAt || 0).getTime() - new Date(a.foundDate || a.createdAt || 0).getTime()), page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
   );
 }
@@ -1411,6 +1433,8 @@ function FuelTypeSelect({ defaultValue }: { defaultValue?: string }) {
 
 function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
   const [editing, setEditing] = useState<ReservationV2 | null>(null);
+  const [page, setPage] = useState(1);
+  const rows = [...reservations].sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
 
   async function remove(id: string) {
     if (!confirm("정말 삭제하시겠습니까?")) return;
@@ -1424,7 +1448,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>
-          {reservations.map((reservation) => (
+          {paginate(rows, page).map((reservation) => (
             <tr className="border-b" key={reservation.id}>
               <td>{reservation.date}</td>
               <td className="font-black">{reservation.customerName}</td>
@@ -1435,6 +1459,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
           ))}
         </tbody>
       </table>
+      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={(next) => onReservations(reservations.map((item) => item.id === next.id ? next : item))} /> : null}
     </section>
   );
@@ -1542,6 +1567,50 @@ function PhotoUploadButton() {
   );
 }
 
+function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recordType: "dispatch" | "return"; recordId: string; vehicleNumber: string }) {
+  const [status, setStatus] = useState("");
+  return (
+    <label className="small-btn cursor-pointer">
+      {status || "추가"}
+      <input
+        className="sr-only"
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4"
+        multiple
+        onChange={async (event) => {
+          const files = Array.from(event.target.files || []);
+          if (!files.length) return;
+          setStatus("업로드중");
+          try {
+            for (const file of files) {
+              const metadata = {
+                fileName: file.name,
+                vehicleNumber,
+                recordType,
+                recordId,
+                intakeType: recordType,
+                fileType: file.type.startsWith("video/") ? "영상" : "사진",
+              };
+              const formData = new FormData();
+              formData.append("file", file);
+              formData.append("metadata", JSON.stringify(metadata));
+              const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData });
+              const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
+              await sendJson("/api/uploaded-files", { ...metadata, ...uploaded });
+            }
+            setStatus("완료");
+          } catch {
+            setStatus("실패");
+          } finally {
+            event.target.value = "";
+            setTimeout(() => setStatus(""), 1400);
+          }
+        }}
+      />
+    </label>
+  );
+}
+
 function Segmented({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {
   return <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>{values.map((item) => <button className={`min-h-11 whitespace-nowrap rounded-md text-center font-black ${value === item ? "bg-white shadow" : ""}`} key={item} type="button" onClick={() => onChange(item)}>{item}</button>)}</div>;
 }
@@ -1573,6 +1642,15 @@ function scheduleText(item: ReservationV2) {
 
 function newest(files: UploadedFileV2[]) {
   return Math.max(...files.map((file) => new Date(file.uploadedAt || 0).getTime()));
+}
+
+function paginate<T>(items: T[], page: number, pageSize = 10) {
+  const start = (Math.max(page, 1) - 1) * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
+function sortCreatedDesc<T extends { createdAt?: string }>(a: T, b: T) {
+  return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
 }
 
 function clean(value: unknown) {

@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   customer_name TEXT,
   intake_type TEXT,
   file_type TEXT,
+  record_type TEXT,
+  record_id TEXT,
   vehicle_folder_url TEXT,
   insurance_folder_url TEXT,
   customer_folder_url TEXT,
@@ -268,4 +270,5 @@ CREATE INDEX IF NOT EXISTS idx_accident_histories_plate_number ON accident_histo
 CREATE INDEX IF NOT EXISTS idx_partner_addresses_name ON partner_addresses(name);
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_vehicle_number ON uploaded_files(vehicle_number);
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_insurance_number ON uploaded_files(insurance_number);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_record ON uploaded_files(record_type, record_id);
 CREATE INDEX IF NOT EXISTS idx_lost_items_vehicle_number ON lost_items(vehicle_number);

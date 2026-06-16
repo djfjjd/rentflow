@@ -15,7 +15,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const f = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       f.fileName,
       f.r2Url || "",
@@ -30,6 +30,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       f.customerName || null,
       f.intakeType || null,
       f.fileType || null,
+      f.recordType || null,
+      f.recordId || null,
       f.vehicleFolderUrl || null,
       f.insuranceFolderUrl || null,
       f.customerFolderUrl || null,
@@ -58,6 +60,8 @@ function mapFile(row: any) {
     customerName: row.customer_name,
     intakeType: row.intake_type,
     fileType: row.file_type,
+    recordType: row.record_type,
+    recordId: row.record_id,
     vehicleFolderUrl: row.vehicle_folder_url,
     insuranceFolderUrl: row.insurance_folder_url,
     customerFolderUrl: row.customer_folder_url,
