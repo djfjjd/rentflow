@@ -36,7 +36,29 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO maintenance_histories (id, vehicle_id, plate_number, maintenance_type, title, description, repair_shop_id, repair_shop_name, found_date, scheduled_date, completed_date, mileage, cost, priority, status, photos, videos, documents, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      mh.id, mh.vehicleId, mh.plateNumber, mh.maintenanceType, mh.title, mh.description, mh.repairShopId || null, mh.repairShopName, mh.foundDate, mh.scheduledDate || null, mh.completedDate || null, mh.mileage, mh.cost, mh.priority, mh.status, JSON.stringify(mh.photos), JSON.stringify(mh.videos), JSON.stringify(mh.documents), mh.linkedDispatchId || null, mh.linkedReturnId || null, mh.linkedSmartInboxItemId || null, mh.memo, mh.createdBy
+      mh.id,
+      mh.vehicleId || null,
+      mh.plateNumber || "",
+      mh.maintenanceType || "기타",
+      mh.title || "정비",
+      mh.description || "",
+      mh.repairShopId || null,
+      mh.repairShopName || "",
+      mh.foundDate || null,
+      mh.scheduledDate || null,
+      mh.completedDate || null,
+      mh.mileage || 0,
+      mh.cost || 0,
+      mh.priority || "보통",
+      mh.status || "정비필요",
+      JSON.stringify(mh.photos || []),
+      JSON.stringify(mh.videos || []),
+      JSON.stringify(mh.documents || []),
+      mh.linkedDispatchId || null,
+      mh.linkedReturnId || null,
+      mh.linkedSmartInboxItemId || null,
+      mh.memo || "",
+      mh.createdBy || "field"
     ).run();
 
     return Response.json({ success: true });

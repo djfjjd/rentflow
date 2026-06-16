@@ -6,7 +6,7 @@ type Env = {
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
-    const { results } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC, plate_number ASC").all();
+    const { results } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC").all();
     
     // Seed if empty
     if (results.length === 0) {
@@ -20,7 +20,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       
       await env.DB.batch(batch);
       
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC, plate_number ASC").all();
+      const { results: seededResults } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC").all();
       return Response.json(seededResults.map(mapVehicle));
     }
 
@@ -38,14 +38,16 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
     
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, mileage, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, fuel_type, fuel_level, fuel_display, mileage, purchase_date, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       vehicle.id,
       vehicle.plateNumber,
       vehicle.model,
       vehicle.fuelType,
       vehicle.fuelLevel || 0,
+      vehicle.fuelDisplay || null,
       vehicle.mileage || 0,
+      vehicle.purchaseDate || null,
       vehicle.location || "본사 주차장",
       vehicle.status || "대기중",
       (vehicle.sortOrder !== undefined ? vehicle.sortOrder : (Number(maxSortOrder) + 1)),
@@ -70,12 +72,17 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const fields = [];
     const values = [];
     
+    if (updates.plateNumber !== undefined) { fields.push("plate_number = ?"); values.push(updates.plateNumber); }
     if (updates.model !== undefined) { fields.push("model = ?"); values.push(updates.model); }
     if (updates.fuelType !== undefined) { fields.push("fuel_type = ?"); values.push(updates.fuelType); }
     if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(updates.fuelLevel); }
+    if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(updates.fuelDisplay); }
     if (updates.mileage !== undefined) { fields.push("mileage = ?"); values.push(updates.mileage); }
+    if (updates.purchaseDate !== undefined) { fields.push("purchase_date = ?"); values.push(updates.purchaseDate); }
     if (updates.location !== undefined) { fields.push("location = ?"); values.push(updates.location); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
+    if (updates.damageVehicle !== undefined) { fields.push("damage_vehicle = ?"); values.push(updates.damageVehicle); }
+    if (updates.activeSummary !== undefined) { fields.push("active_summary = ?"); values.push(updates.activeSummary); }
     if (updates.sortOrder !== undefined) { fields.push("sort_order = ?"); values.push(updates.sortOrder); }
     if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(updates.memo); }
     
@@ -114,9 +121,13 @@ function mapVehicle(row: any) {
     model: row.model,
     fuelType: row.fuel_type,
     fuelLevel: row.fuel_level,
+    fuelDisplay: row.fuel_display,
     mileage: row.mileage,
+    purchaseDate: row.purchase_date,
     location: row.location,
     status: row.status,
+    damageVehicle: row.damage_vehicle,
+    activeSummary: row.active_summary,
     sortOrder: row.sort_order,
     memo: row.memo,
     createdAt: row.created_at,

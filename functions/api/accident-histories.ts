@@ -36,7 +36,32 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO accident_histories (id, vehicle_id, plate_number, insurance_number, accident_date, accident_location, accident_type, accident_part, description, customer_name, customer_car_number, customer_car_model, insurance_company, repair_shop_id, repair_shop_name, repair_cost, claim_amount, photos, videos, documents, status, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      ah.id, ah.vehicleId, ah.plateNumber, ah.insuranceNumber, ah.accidentDate, ah.accidentLocation, ah.accidentType, ah.accidentPart, ah.description, ah.customerName, ah.customerCarNumber, ah.customerCarModel, ah.insuranceCompany, ah.repairShopId || null, ah.repairShopName, ah.repairCost, ah.claimAmount, JSON.stringify(ah.photos), JSON.stringify(ah.videos), JSON.stringify(ah.documents), ah.status, ah.linkedDispatchId || null, ah.linkedReturnId || null, ah.linkedSmartInboxItemId || null, ah.memo, ah.createdBy
+      ah.id,
+      ah.vehicleId || null,
+      ah.plateNumber || "",
+      ah.insuranceNumber || "",
+      ah.accidentDate || null,
+      ah.accidentLocation || null,
+      ah.accidentType || "기타",
+      ah.accidentPart || "기타",
+      ah.description || "",
+      ah.customerName || "",
+      ah.customerCarNumber || "",
+      ah.customerCarModel || "",
+      ah.insuranceCompany || "",
+      ah.repairShopId || null,
+      ah.repairShopName || "",
+      ah.repairCost || 0,
+      ah.claimAmount || 0,
+      JSON.stringify(ah.photos || []),
+      JSON.stringify(ah.videos || []),
+      JSON.stringify(ah.documents || []),
+      ah.status || "접수",
+      ah.linkedDispatchId || null,
+      ah.linkedReturnId || null,
+      ah.linkedSmartInboxItemId || null,
+      ah.memo || "",
+      ah.createdBy || "field"
     ).run();
 
     return Response.json({ success: true });

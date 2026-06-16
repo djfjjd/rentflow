@@ -12,9 +12,9 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
+  GripVertical,
   Home,
   MapPin,
-  Menu,
   PackageSearch,
   Plus,
   Search,
@@ -28,9 +28,10 @@ import {
   fileTypes,
   formatDateDot,
   formatDateTime,
+  fuelTypes,
+  parkingLocations,
   sendJson,
   todayKorea,
-  vehicleStatuses,
   type DispatchV2,
   type PartnerAddressV2,
   type ReservationV2,
@@ -150,7 +151,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "home" ? <HomeScreen /> : null}
         {kind === "dispatch" ? <DispatchForm vehicles={vehicles} /> : null}
         {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} /> : null}
-        {kind === "reservation" ? <ReservationForm vehicles={vehicles} onSaved={(r) => setReservations((current) => [r, ...current])} /> : null}
+        {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={setReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} /> : null}
         {kind === "billing" ? <BillingForm dispatches={dispatches} /> : null}
         {kind === "lost-items" ? <LostItemForm vehicles={vehicles} /> : null}
@@ -159,7 +160,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
         {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
-        {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} vehicles={vehicles} /> : null}
+        {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={setReservations} /> : null}
         {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} /> : null}
         {kind === "admin-billing" ? <BillingAdmin /> : null}
         {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
@@ -376,42 +377,72 @@ function AdminNav() {
 
 function DispatchForm({ vehicles }: { vehicles: VehicleV2[] }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
+  const [businessType, setBusinessType] = useState("보험");
+  const summaryKeys =
+    businessType === "보험"
+      ? ["orderedBy", "repairShop", "customerCarModel", "fuelDisplay", "customerPhone"]
+      : businessType === "자차"
+        ? ["orderedBy", "fuelDisplay", "customerPhone"]
+        : ["customerName", "fuelDisplay", "customerPhone"];
   return (
     <DataForm
       endpoint="/api/dispatches"
       buildPayload={(data) => ({
         id: createId("dispatch"),
         rentalCarNumber: vehicle?.plateNumber || "",
-        customerName: text(data, "customerName"),
+        businessType,
+        corporateVehicle: data.get("corporateVehicle") === "on",
+        customerName: text(data, "customerName") || text(data, "orderedBy") || businessType,
         customerPhone: text(data, "customerPhone"),
-        customerCarNumber: text(data, "customerCarNumber"),
         customerCarModel: text(data, "customerCarModel"),
-        claimNumber: text(data, "claimNumber"),
         orderedBy: text(data, "orderedBy"),
         repairShop: text(data, "repairShop"),
-        pickupAddress: text(data, "pickupAddress"),
-        deliveryAddress: text(data, "deliveryAddress"),
         fuelDisplay: text(data, "fuelDisplay"),
         notes: text(data, "notes"),
-        status: "배차등록",
+        status: businessType,
       })}
-      afterSave={() => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, { status: "배차중" }, "PATCH") : undefined}
+      afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
+        status: businessType,
+        fuelDisplay: String(payload.fuelDisplay || ""),
+        damageVehicle: String(payload.customerCarModel || ""),
+        activeSummary: summaryKeys.map((key) => String(payload[key] || "")).filter(Boolean).join(" / "),
+      }, "PATCH") : undefined}
     >
+      <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
       <FormBlock title="차량 선택">
-        <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+          {businessType === "보험" ? (
+            <label className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
+              <input name="corporateVehicle" type="checkbox" />
+              법인차량
+            </label>
+          ) : null}
+        </div>
       </FormBlock>
-      <Input name="customerName" label="고객명" required />
-      <Input name="customerPhone" label="고객연락처" />
-      <Input name="customerCarNumber" label="고객차량번호" />
-      <Input name="customerCarModel" label="고객차종" />
-      <Input name="claimNumber" label="대물접수번호" />
-      <Input name="orderedBy" label="오더자" />
-      <Input name="repairShop" label="수리처" />
-      <Input name="pickupAddress" label="배차지" />
-      <Input name="deliveryAddress" label="탁송지" />
-      <Input name="fuelDisplay" label="배차 주유량" placeholder="예: 8/12, 3/4, 만땅" />
-      <PhotoInputs />
-      <Textarea name="notes" label="메모" />
+      {businessType === "보험" ? (
+        <CompactRow>
+          <Input name="orderedBy" label="오더자" />
+          <Input name="repairShop" label="수리처" />
+          <Input name="customerCarModel" label="고객차종" />
+          <Input name="fuelDisplay" label="배차주유량" placeholder="8/12" />
+          <Input name="customerPhone" label="고객연락처" />
+        </CompactRow>
+      ) : businessType === "자차" ? (
+        <CompactRow>
+          <Input name="orderedBy" label="오더자" />
+          <Input name="fuelDisplay" label="배차주유량" placeholder="만땅" />
+          <Input name="customerPhone" label="고객연락처" />
+        </CompactRow>
+      ) : (
+        <CompactRow>
+          <Input name="customerName" label="오더자/고객명" />
+          <Input name="fuelDisplay" label="배차주유량" placeholder="3/4" />
+          <Input name="customerPhone" label="고객연락처" />
+        </CompactRow>
+      )}
+      <Textarea name="notes" label="특이사항" />
+      <PhotoUploadButton />
     </DataForm>
   );
 }
@@ -428,64 +459,67 @@ function ReturnForm({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatche
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
         arrivalAddress: text(data, "location"),
-        returnAddress: text(data, "returnAddress"),
         notes: text(data, "notes"),
         status: "회차등록",
       })}
-      afterSave={() => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, { status: "회차완료", location: "입고 대기" }, "PATCH") : undefined}
+      afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
+        status: "주차구역",
+        location: String(payload.arrivalAddress || ""),
+        fuelDisplay: String(payload.fuelDisplay || ""),
+        activeSummary: String(payload.arrivalAddress || ""),
+        mileage: Number(payload.mileage || 0),
+      }, "PATCH") : undefined}
     >
       <FormBlock title="차량 선택">
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
         {latest ? <p className="mt-2 text-sm font-bold text-[#68746d]">최근 배차건: {latest.customerName} · {latest.repairShop}</p> : null}
       </FormBlock>
-      <Input name="mileage" label="회차 키로수" type="number" />
-      <Input name="fuelDisplay" label="회차 주유량" placeholder="예: 7/12, 절반, 가득" />
-      <Input name="location" label="주차구역" />
-      <Input name="returnAddress" label="회차지" />
-      <PhotoInputs labels={["회차 계기판 사진", "회차 외관사진"]} />
-      <Textarea name="notes" label="메모" />
+      <CompactRow>
+        <Input name="mileage" label="회차키로수" type="number" />
+        <Input name="fuelDisplay" label="회차주유량" placeholder="7/12" />
+        <Input name="location" label="주차구역" list="parking-locations" />
+      </CompactRow>
+      <Textarea name="notes" label="특이사항" />
+      <PhotoUploadButton />
+      <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
   );
 }
 
-function ReservationForm({ vehicles, onSaved }: { vehicles: VehicleV2[]; onSaved?: (reservation: ReservationV2) => void }) {
-  const [vehicle, setVehicle] = useState<VehicleV2>();
+function ReservationForm({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const parsed = useMemo(() => parseReservationText(draft), [draft]);
   return (
-    <DataForm
-      endpoint="/api/reservations"
-      buildPayload={(data) => {
-        const reservation = {
+    <section className="space-y-4">
+      <DataForm
+        endpoint="/api/reservations"
+        buttonLabel="예약일정 추가"
+        buildPayload={(data) => ({
           id: createId("reservation"),
-          date: text(data, "date"),
-          time: text(data, "time"),
-          endTime: text(data, "endTime"),
-          vehicleNumber: vehicle?.plateNumber || "",
-          rentCarNumber: vehicle?.plateNumber || "",
-          customerName: text(data, "customerName") || "예약",
-          customerCarModel: text(data, "customerCarModel"),
-          customerCarNumber: text(data, "customerCarNumber"),
-          factoryName: text(data, "factoryName"),
-          orderPerson: text(data, "orderPerson"),
-          memo: text(data, "memo"),
+          date: text(data, "date") || parsed.date,
+          time: parsed.time || "09:00",
+          endTime: "",
+          customerName: text(data, "customerName") || parsed.customerName || "예약",
+          reservationText: text(data, "reservationText"),
+          memo: text(data, "reservationText"),
           route: "예약",
           status: "예약",
-        };
-        onSaved?.(reservation);
-        return reservation;
-      }}
-    >
-      <Input name="date" label="날짜" type="date" defaultValue={todayKorea()} required />
-      <Input name="time" label="시간" type="time" required />
-      <Input name="endTime" label="종료시간" type="time" />
-      <FormBlock title="차량 선택">
-        <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
-      </FormBlock>
-      <Input name="orderPerson" label="오더자" />
-      <Input name="factoryName" label="수리처" />
-      <Input name="customerCarModel" label="고객차종" />
-      <Input name="customerCarNumber" label="고객차량번호" />
-      <Textarea name="memo" label="메모" />
-    </DataForm>
+        })}
+        onSaved={(payload) => onReservations([payload as ReservationV2, ...reservations])}
+      >
+        <Input
+          name="reservationText"
+          label="예약내용"
+          placeholder="6월20일 홍길동 쏘나타 대차"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          required
+        />
+        <Input key={parsed.date} name="date" label="날짜 선택" type="date" defaultValue={parsed.date} required />
+        <Input key={parsed.customerName} name="customerName" label="예약자명" defaultValue={parsed.customerName} />
+      </DataForm>
+      <ReservationList reservations={reservations} onReservations={onReservations} />
+    </section>
   );
 }
 
@@ -500,23 +534,27 @@ function IncidentForm({ vehicles }: { vehicles: VehicleV2[] }) {
         plateNumber: vehicle?.plateNumber || "",
         accidentPart: text(data, "content"),
         title: text(data, "content"),
-        description: text(data, "content"),
-        insuranceNumber: text(data, "claimNumber"),
-        repairShopName: text(data, "repairShop"),
+        description: text(data, "notes"),
+        insuranceNumber: "",
+        repairShopName: "",
         foundDate: todayKorea(),
         accidentDate: todayKorea(),
         status: "접수",
         maintenanceType: "기타",
+        photos: [],
+        videos: [],
+        documents: [],
+        memo: text(data, "notes"),
+        createdBy: "field",
       })}
     >
       <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
       <FormBlock title="차량 선택">
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
       </FormBlock>
-      <Textarea name="content" label="사고부위 또는 정비내용" required />
-      <Input name="claimNumber" label="대물접수번호" />
-      <Input name="repairShop" label="수리처" />
-      <PhotoInputs />
+      <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
+      <Textarea name="notes" label="특이사항" />
+      <PhotoUploadButton />
     </DataForm>
   );
 }
@@ -544,16 +582,24 @@ function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
 function LostItemForm({ vehicles }: { vehicles: VehicleV2[] }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   return (
-    <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({ id: createId("lost"), vehicleNumber: vehicle?.plateNumber || "", ...Object.fromEntries(data.entries()) })}>
+    <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
+      id: createId("lost"),
+      vehicleNumber: vehicle?.plateNumber || "",
+      itemName: text(data, "customerName") || "분실물",
+      customerName: text(data, "customerName"),
+      memo: text(data, "notes"),
+      foundDate: text(data, "foundDate"),
+      status: "보관중",
+    })}>
       <FormBlock title="차량 선택">
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
       </FormBlock>
-      <Input name="itemName" label="분실물명" required />
-      <Input name="foundDate" label="발견일" type="date" defaultValue={todayKorea()} />
-      <Input name="foundLocation" label="발견위치" />
-      <Input name="storageLocation" label="보관위치" />
-      <Input name="status" label="처리상태" />
-      <PhotoInputs labels={["분실물 사진"]} />
+      <CompactRow>
+        <Input name="customerName" label="고객명" />
+        <Input name="notes" label="특이사항" />
+        <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
+      </CompactRow>
+      <PhotoUploadButton />
     </DataForm>
   );
 }
@@ -755,6 +801,15 @@ function Dashboard({ vehicles, reservations, dispatches }: { vehicles: VehicleV2
 }
 
 function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehicles: (vehicles: VehicleV2[]) => void }) {
+  const [editing, setEditing] = useState<VehicleV2 | null>(null);
+  const [deleting, setDeleting] = useState<VehicleV2 | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  async function persistOrder(next: VehicleV2[]) {
+    onVehicles(next);
+    await sendJson("/api/vehicles/reorder", { items: next.map((vehicle, index) => ({ id: vehicle.id, sortOrder: index })) }, "PATCH");
+  }
+
   return (
     <section className="space-y-4">
       <DataForm
@@ -765,8 +820,9 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           model: text(data, "model"),
           fuelType: text(data, "fuelType"),
           mileage: Number(text(data, "mileage") || 0),
-          location: text(data, "location") || "본사 주차장",
-          status: text(data, "status") || "대기중",
+          purchaseDate: text(data, "purchaseDate"),
+          location: "",
+          status: "주차구역",
           memo: text(data, "memo"),
         })}
         onSaved={(payload) => onVehicles([payload as VehicleV2, ...vehicles])}
@@ -774,21 +830,63 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         <div className="grid gap-3 md:grid-cols-2">
           <Input name="plateNumber" label="차량번호" required />
           <Input name="model" label="차종" required />
-          <Input name="fuelType" label="유종" />
-          <Input name="mileage" label="주행거리" type="number" />
-          <Input name="location" label="현재위치" />
-          <label className="label">상태<select className="field min-h-12" name="status">{vehicleStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+          <FuelTypeSelect />
+          <Input name="mileage" label="총 키로수" type="number" />
+          <Input name="purchaseDate" label="매입일" type="date" />
         </div>
         <Textarea name="memo" label="메모" />
       </DataForm>
-      <p className="text-sm font-bold text-[#68746d]">드래그앤드롭 순서 변경은 sort_order 저장 API와 연결되는 관리 기능입니다.</p>
-      <VehicleTable vehicles={vehicles} />
+      <section className="panel overflow-x-auto">
+        <h2 className="mb-3 text-xl font-black">차량현황</h2>
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead>
+            <tr className="border-b">
+              <th>드래그</th><th>차량번호</th><th>차종</th><th>유종</th><th>총 키로수</th><th>매입일</th><th>수정</th><th>삭제</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vehicles.map((vehicle) => (
+              <tr
+                className="border-b"
+                draggable
+                key={vehicle.id}
+                onDragStart={() => setDraggingId(vehicle.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (!draggingId || draggingId === vehicle.id) return;
+                  const from = vehicles.findIndex((item) => item.id === draggingId);
+                  const to = vehicles.findIndex((item) => item.id === vehicle.id);
+                  const next = [...vehicles];
+                  const [moved] = next.splice(from, 1);
+                  next.splice(to, 0, moved);
+                  setDraggingId(null);
+                  persistOrder(next);
+                }}
+              >
+                <td><GripVertical className="cursor-grab text-[#6b756f]" size={20} /></td>
+                <td className="font-black">{vehicle.plateNumber}</td>
+                <td>{vehicle.model}</td>
+                <td>{vehicle.fuelType}</td>
+                <td>{vehicle.mileage?.toLocaleString()}</td>
+                <td>{vehicle.purchaseDate || "-"}</td>
+                <td><button className="small-btn" type="button" onClick={() => setEditing(vehicle)}>수정</button></td>
+                <td><button className="danger-btn" type="button" onClick={() => setDeleting(vehicle)}><Trash2 size={16} /> 삭제</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      {editing ? <VehicleEditModal vehicle={editing} onClose={() => setEditing(null)} onSaved={(next) => onVehicles(vehicles.map((vehicle) => vehicle.id === next.id ? next : vehicle))} /> : null}
+      {deleting ? <ConfirmDelete vehicle={deleting} onCancel={() => setDeleting(null)} onDeleted={() => {
+        onVehicles(vehicles.filter((vehicle) => vehicle.id !== deleting.id));
+        setDeleting(null);
+      }} /> : null}
     </section>
   );
 }
 
-function ReservationAdmin({ reservations, vehicles }: { reservations: ReservationV2[]; vehicles: VehicleV2[] }) {
-  return <section className="space-y-4"><ReservationForm vehicles={vehicles} /><CalendarPage reservations={reservations} /></section>;
+function ReservationAdmin({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+  return <section className="space-y-4"><ReservationForm reservations={reservations} onReservations={onReservations} /><CalendarPage reservations={reservations} /></section>;
 }
 
 function DispatchAdmin({ dispatches }: { dispatches: DispatchV2[] }) {
@@ -830,11 +928,150 @@ function VehicleTable({ vehicles }: { vehicles: VehicleV2[] }) {
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">차량현황</h2>
-      <table className="w-full min-w-[820px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>주차위치</th><th>현재 배차건</th><th>최근 업데이트</th></tr></thead>
-        <tbody>{vehicles.map((v) => <tr className="border-b" key={v.id}><td className="font-black">{v.plateNumber}</td><td>{v.model}</td><td>{v.status}</td><td>{v.location}</td><td>-</td><td>{formatDateTime(v.updatedAt)}</td></tr>)}</tbody>
+      <table className="w-full min-w-[960px] text-left text-sm">
+        <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>주유량</th><th>피해차량</th><th>오더자/수리처 또는 주차구역</th><th>최근 업데이트</th></tr></thead>
+        <tbody>{vehicles.map((v) => <tr className="border-b" key={v.id}><td className="font-black">{v.plateNumber}</td><td>{v.model}</td><td>{v.status || "주차구역"}</td><td>{v.fuelDisplay || "-"}</td><td>{v.damageVehicle || "-"}</td><td>{v.activeSummary || v.location || "-"}</td><td>{formatDateTime(v.updatedAt)}</td></tr>)}</tbody>
       </table>
     </section>
+  );
+}
+
+function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; onClose: () => void; onSaved: (vehicle: VehicleV2) => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
+      <form
+        className="max-h-[92vh] w-full overflow-auto rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-lg"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const next = {
+            ...vehicle,
+            plateNumber: text(data, "plateNumber"),
+            model: text(data, "model"),
+            fuelType: text(data, "fuelType"),
+            mileage: Number(text(data, "mileage") || 0),
+            purchaseDate: text(data, "purchaseDate"),
+            memo: text(data, "memo"),
+          };
+          await sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, next, "PATCH");
+          onSaved(next);
+          onClose();
+        }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">차량 수정</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input name="plateNumber" label="차량번호" defaultValue={vehicle.plateNumber} required />
+          <Input name="model" label="차종" defaultValue={vehicle.model} required />
+          <FuelTypeSelect defaultValue={vehicle.fuelType} />
+          <Input name="mileage" label="총 키로수" type="number" defaultValue={vehicle.mileage} />
+          <Input name="purchaseDate" label="매입일" type="date" defaultValue={vehicle.purchaseDate} />
+        </div>
+        <Textarea name="memo" label="메모" defaultValue={vehicle.memo} />
+        <button className="primary-btn w-full" type="submit">저장</button>
+      </form>
+    </div>
+  );
+}
+
+function ConfirmDelete({ vehicle, onCancel, onDeleted }: { vehicle: VehicleV2; onCancel: () => void; onDeleted: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
+      <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-2xl">
+        <h2 className="text-xl font-black">정말 삭제하시겠습니까?</h2>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">{vehicle.plateNumber} · {vehicle.model}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button className="small-btn" type="button" onClick={onCancel}>취소</button>
+          <button
+            className="danger-btn"
+            type="button"
+            onClick={async () => {
+              await fetch(`/api/vehicles?id=${encodeURIComponent(vehicle.id)}`, { method: "DELETE" });
+              onDeleted();
+            }}
+          >
+            삭제
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FuelTypeSelect({ defaultValue }: { defaultValue?: string }) {
+  return (
+    <label className="label">
+      유종
+      <select className="field min-h-12" name="fuelType" defaultValue={defaultValue || fuelTypes[0]}>
+        {fuelTypes.map((type) => <option key={type}>{type}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+  const [editing, setEditing] = useState<ReservationV2 | null>(null);
+
+  async function remove(id: string) {
+    if (!confirm("정말 삭제하시겠습니까?")) return;
+    await fetch(`/api/reservations?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    onReservations(reservations.filter((reservation) => reservation.id !== id));
+  }
+
+  return (
+    <section className="panel overflow-x-auto">
+      <h2 className="mb-3 text-xl font-black">예약 목록</h2>
+      <table className="w-full min-w-[720px] text-left text-sm">
+        <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>수정</th><th>삭제</th></tr></thead>
+        <tbody>
+          {reservations.map((reservation) => (
+            <tr className="border-b" key={reservation.id}>
+              <td>{reservation.date}</td>
+              <td className="font-black">{reservation.customerName}</td>
+              <td>{reservation.reservationText || reservation.memo}</td>
+              <td><button className="small-btn" type="button" onClick={() => setEditing(reservation)}>수정</button></td>
+              <td><button className="danger-btn" type="button" onClick={() => remove(reservation.id)}><Trash2 size={16} /> 삭제</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={(next) => onReservations(reservations.map((item) => item.id === next.id ? next : item))} /> : null}
+    </section>
+  );
+}
+
+function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: ReservationV2; onClose: () => void; onSaved: (reservation: ReservationV2) => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
+      <form
+        className="w-full rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-lg"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const next = {
+            ...reservation,
+            date: text(data, "date"),
+            customerName: text(data, "customerName"),
+            reservationText: text(data, "reservationText"),
+            memo: text(data, "reservationText"),
+          };
+          await sendJson(`/api/reservations?id=${encodeURIComponent(reservation.id)}`, next, "PATCH");
+          onSaved(next);
+          onClose();
+        }}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">예약 수정</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        <Input name="date" label="날짜" type="date" defaultValue={reservation.date} required />
+        <Input name="customerName" label="예약자명" defaultValue={reservation.customerName} />
+        <Input name="reservationText" label="예약내용" defaultValue={reservation.reservationText || reservation.memo} />
+        <button className="primary-btn mt-3 w-full" type="submit">저장</button>
+      </form>
+    </div>
   );
 }
 
@@ -844,12 +1081,14 @@ function DataForm({
   buildPayload,
   afterSave,
   onSaved,
+  buttonLabel = "저장",
 }: {
   children: React.ReactNode;
   endpoint: string;
   buildPayload: (data: FormData) => Record<string, unknown>;
-  afterSave?: () => void | Promise<unknown>;
+  afterSave?: (payload: Record<string, unknown>) => void | Promise<unknown>;
   onSaved?: (payload: Record<string, unknown>) => void;
+  buttonLabel?: string;
 }) {
   const [status, setStatus] = useState("");
   return (
@@ -861,7 +1100,7 @@ function DataForm({
         const payload = buildPayload(new FormData(event.currentTarget));
         try {
           await sendJson(endpoint, payload);
-          await afterSave?.();
+          await afterSave?.(payload);
           onSaved?.(payload);
           setStatus("저장 완료");
           event.currentTarget.reset();
@@ -871,7 +1110,7 @@ function DataForm({
       }}
     >
       {children}
-      <button className="primary-btn w-full" type="submit">저장</button>
+      <button className="primary-btn w-full" type="submit">{buttonLabel}</button>
       {status ? <p className="text-sm font-black text-[#116149]">{status}</p> : null}
     </form>
   );
@@ -891,8 +1130,18 @@ function FormBlock({ title, children }: { title: string; children: React.ReactNo
   return <div><p className="mb-1 text-sm font-black">{title}</p>{children}</div>;
 }
 
-function PhotoInputs({ labels = fileTypes }: { labels?: string[] }) {
-  return <div className="grid gap-2 sm:grid-cols-2">{labels.map((label) => <label className="label" key={label}>{label}<input className="field min-h-12" type="file" accept="image/*" capture="environment" /></label>)}</div>;
+function CompactRow({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-2 sm:grid-flow-col sm:auto-cols-fr">{children}</div>;
+}
+
+function PhotoUploadButton() {
+  return (
+    <label className="primary-btn w-full cursor-pointer">
+      <Camera size={20} />
+      사진업로드
+      <input className="sr-only" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4" multiple />
+    </label>
+  );
 }
 
 function Segmented({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {
@@ -930,4 +1179,25 @@ function newest(files: UploadedFileV2[]) {
 
 function text(data: FormData, key: string) {
   return String(data.get(key) || "").trim();
+}
+
+function parseReservationText(value: string) {
+  const today = todayKorea();
+  let date = today;
+  const monthDay = value.match(/(\d{1,2})월\s*(\d{1,2})일/);
+  if (monthDay) {
+    date = `${today.slice(0, 4)}-${monthDay[1].padStart(2, "0")}-${monthDay[2].padStart(2, "0")}`;
+  } else if (value.includes("내일")) {
+    const next = new Date(`${today}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    date = next.toISOString().slice(0, 10);
+  }
+
+  const timeMatch = value.match(/오전\s*(\d{1,2})시|오후\s*(\d{1,2})시|(\d{1,2}):(\d{2})/);
+  const hour = timeMatch?.[1] || (timeMatch?.[2] ? String(Number(timeMatch[2]) + 12) : timeMatch?.[3]);
+  const time = hour ? `${hour.padStart(2, "0")}:${timeMatch?.[4] || "00"}` : "";
+  const cleaned = value.replace(/오늘|내일|\d{1,2}월\s*\d{1,2}일|오전\s*\d{1,2}시|오후\s*\d{1,2}시|\d{1,2}:\d{2}|대차/g, " ").trim();
+  const customerName = cleaned.split(/\s+/).filter(Boolean)[0] || "";
+
+  return { date, time, customerName };
 }

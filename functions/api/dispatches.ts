@@ -34,7 +34,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const d = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, notes, status, intake_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, business_type, corporate_vehicle, notes, status, intake_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       d.id,
       d.claimNumber,
@@ -49,6 +49,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       d.deliveryAddress,
       d.fuelLevel || null,
       d.fuelDisplay || null,
+      d.businessType || null,
+      d.corporateVehicle ? 1 : 0,
       d.notes,
       d.status || "배차등록",
       d.intakeType || null,
@@ -105,6 +107,8 @@ function mapDispatch(row: any) {
     deliveryAddress: row.delivery_address,
     fuelLevel: row.fuel_level,
     fuelDisplay: row.fuel_display,
+    businessType: row.business_type,
+    corporateVehicle: Boolean(row.corporate_vehicle),
     notes: row.notes,
     status: row.status,
     intakeType: row.intake_type,
