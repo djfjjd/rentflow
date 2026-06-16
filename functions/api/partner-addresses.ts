@@ -1,3 +1,5 @@
+import { safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+
 type Env = {
   DB: any;
 };
@@ -17,17 +19,17 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     await env.DB.prepare(
       "INSERT INTO partner_addresses (id, name, category, manager_name, phone, address, detail_address, naver_map_url, latitude, longitude, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(
-      partner.id,
-      partner.name,
-      partner.category || null,
-      partner.managerName || null,
-      partner.phone || null,
-      partner.address,
-      partner.detailAddress || null,
-      partner.naverMapUrl || null,
-      partner.latitude || null,
-      partner.longitude || null,
-      partner.memo || null,
+      safeText(partner.id),
+      safeText(partner.name),
+      safeNullableText(partner.category),
+      safeNullableText(partner.managerName),
+      safeNullableText(partner.phone),
+      safeText(partner.address),
+      safeNullableText(partner.detailAddress),
+      safeNullableText(partner.naverMapUrl),
+      safeNumber(partner.latitude),
+      safeNumber(partner.longitude),
+      safeNullableText(partner.memo),
     ).run();
     return Response.json({ success: true });
   } catch (error) {
@@ -41,17 +43,17 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
     await env.DB.prepare(
       "UPDATE partner_addresses SET name = ?, category = ?, manager_name = ?, phone = ?, address = ?, detail_address = ?, naver_map_url = ?, latitude = ?, longitude = ?, memo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
     ).bind(
-      partner.name,
-      partner.category || null,
-      partner.managerName || null,
-      partner.phone || null,
-      partner.address,
-      partner.detailAddress || null,
-      partner.naverMapUrl || null,
-      partner.latitude || null,
-      partner.longitude || null,
-      partner.memo || null,
-      partner.id,
+      safeText(partner.name),
+      safeNullableText(partner.category),
+      safeNullableText(partner.managerName),
+      safeNullableText(partner.phone),
+      safeText(partner.address),
+      safeNullableText(partner.detailAddress),
+      safeNullableText(partner.naverMapUrl),
+      safeNumber(partner.latitude),
+      safeNumber(partner.longitude),
+      safeNullableText(partner.memo),
+      safeText(partner.id),
     ).run();
     return Response.json({ success: true });
   } catch (error) {
@@ -63,7 +65,7 @@ export async function onRequestDelete({ request, env }: { request: Request; env:
   try {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-    await env.DB.prepare("DELETE FROM partner_addresses WHERE id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM partner_addresses WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });

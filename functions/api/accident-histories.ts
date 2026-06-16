@@ -1,4 +1,5 @@
 import { accidentHistories as seedAccidentHistories } from "../../lib/erp-data";
+import { safeBindValues, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedAccidentHistories.map(ah => 
-        stmt.bind(ah.id, ah.vehicleId, ah.plateNumber, ah.insuranceNumber, ah.accidentDate, ah.accidentLocation, ah.accidentType, ah.accidentPart, ah.description, ah.customerName, ah.customerCarNumber, ah.customerCarModel, ah.insuranceCompany, ah.repairShopId || null, ah.repairShopName, ah.repairCost, ah.claimAmount, JSON.stringify(ah.photos), JSON.stringify(ah.videos), JSON.stringify(ah.documents), ah.status, ah.linkedDispatchId || null, ah.linkedReturnId || null, ah.linkedSmartInboxItemId || null, ah.memo, ah.createdBy)
+        stmt.bind(...safeBindValues([ah.id, ah.vehicleId, ah.plateNumber, ah.insuranceNumber, ah.accidentDate, ah.accidentLocation, ah.accidentType, ah.accidentPart, ah.description, ah.customerName, ah.customerCarNumber, ah.customerCarModel, ah.insuranceCompany, ah.repairShopId || null, ah.repairShopName, ah.repairCost, ah.claimAmount, JSON.stringify(ah.photos), JSON.stringify(ah.videos), JSON.stringify(ah.documents), ah.status, ah.linkedDispatchId || null, ah.linkedReturnId || null, ah.linkedSmartInboxItemId || null, ah.memo, ah.createdBy]))
       );
       
       await env.DB.batch(batch);
@@ -41,7 +42,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
     if (fields.length === 0) return Response.json({ success: true });
     values.push(id);
-    await env.DB.prepare(`UPDATE accident_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...values).run();
+    await env.DB.prepare(`UPDATE accident_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });
@@ -54,32 +55,32 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO accident_histories (id, vehicle_id, plate_number, insurance_number, accident_date, accident_location, accident_type, accident_part, description, customer_name, customer_car_number, customer_car_model, insurance_company, repair_shop_id, repair_shop_name, repair_cost, claim_amount, photos, videos, documents, status, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      ah.id,
-      ah.vehicleId || null,
-      ah.plateNumber || "",
-      ah.insuranceNumber || "",
-      ah.accidentDate || null,
-      ah.accidentLocation || null,
-      ah.accidentType || "기타",
-      ah.accidentPart || "기타",
-      ah.description || "",
-      ah.customerName || "",
-      ah.customerCarNumber || "",
-      ah.customerCarModel || "",
-      ah.insuranceCompany || "",
-      ah.repairShopId || null,
-      ah.repairShopName || "",
-      ah.repairCost || 0,
-      ah.claimAmount || 0,
-      JSON.stringify(ah.photos || []),
-      JSON.stringify(ah.videos || []),
-      JSON.stringify(ah.documents || []),
-      ah.status || "접수",
-      ah.linkedDispatchId || null,
-      ah.linkedReturnId || null,
-      ah.linkedSmartInboxItemId || null,
-      ah.memo || "",
-      ah.createdBy || "field"
+      safeText(ah.id),
+      safeNullableText(ah.vehicleId),
+      safeText(ah.plateNumber),
+      safeText(ah.insuranceNumber),
+      safeNullableText(ah.accidentDate),
+      safeNullableText(ah.accidentLocation),
+      safeText(ah.accidentType || "기타"),
+      safeText(ah.accidentPart || "기타"),
+      safeText(ah.description),
+      safeText(ah.customerName),
+      safeText(ah.customerCarNumber),
+      safeText(ah.customerCarModel),
+      safeText(ah.insuranceCompany),
+      safeNullableText(ah.repairShopId),
+      safeText(ah.repairShopName),
+      safeNumber(ah.repairCost) || 0,
+      safeNumber(ah.claimAmount) || 0,
+      safeJson(ah.photos),
+      safeJson(ah.videos),
+      safeJson(ah.documents),
+      safeText(ah.status || "접수"),
+      safeNullableText(ah.linkedDispatchId),
+      safeNullableText(ah.linkedReturnId),
+      safeNullableText(ah.linkedSmartInboxItemId),
+      safeText(ah.memo),
+      safeText(ah.createdBy || "field")
     ).run();
 
     return Response.json({ success: true });

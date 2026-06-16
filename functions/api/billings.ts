@@ -1,3 +1,5 @@
+import { safeNullableText, safeNumber, safeText } from "./_d1-utils";
+
 type Env = {
   DB: any;
 };
@@ -18,13 +20,13 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     await env.DB.prepare(
       "INSERT INTO billings (id, dispatch_id, contract_title, amount, fault_rate, tax_invoice_status, receivable_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).bind(
-      id,
-      billing.dispatchId || null,
-      billing.contractTitle || null,
-      Number(billing.amount || 0),
-      billing.faultRate || null,
-      billing.taxInvoiceStatus || null,
-      billing.receivableStatus || "입금대기",
+      safeText(id),
+      safeNullableText(billing.dispatchId),
+      safeNullableText(billing.contractTitle),
+      safeNumber(billing.amount) || 0,
+      safeNullableText(billing.faultRate),
+      safeNullableText(billing.taxInvoiceStatus),
+      safeText(billing.receivableStatus || "입금대기"),
     ).run();
     return Response.json({ success: true, id });
   } catch (error) {

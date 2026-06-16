@@ -1,4 +1,5 @@
 import { maintenanceHistories as seedMaintenanceHistories } from "../../lib/erp-data";
+import { safeBindValues, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedMaintenanceHistories.map(mh => 
-        stmt.bind(mh.id, mh.vehicleId, mh.plateNumber, mh.maintenanceType, mh.title, mh.description, mh.repairShopId || null, mh.repairShopName, mh.foundDate, mh.scheduledDate || null, mh.completedDate || null, mh.mileage, mh.cost, mh.priority, mh.status, JSON.stringify(mh.photos), JSON.stringify(mh.videos), JSON.stringify(mh.documents), mh.linkedDispatchId || null, mh.linkedReturnId || null, mh.linkedSmartInboxItemId || null, mh.memo, mh.createdBy)
+        stmt.bind(...safeBindValues([mh.id, mh.vehicleId, mh.plateNumber, mh.maintenanceType, mh.title, mh.description, mh.repairShopId || null, mh.repairShopName, mh.foundDate, mh.scheduledDate || null, mh.completedDate || null, mh.mileage, mh.cost, mh.priority, mh.status, JSON.stringify(mh.photos), JSON.stringify(mh.videos), JSON.stringify(mh.documents), mh.linkedDispatchId || null, mh.linkedReturnId || null, mh.linkedSmartInboxItemId || null, mh.memo, mh.createdBy]))
       );
       
       await env.DB.batch(batch);
@@ -41,7 +42,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
     if (fields.length === 0) return Response.json({ success: true });
     values.push(id);
-    await env.DB.prepare(`UPDATE maintenance_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...values).run();
+    await env.DB.prepare(`UPDATE maintenance_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });
@@ -54,29 +55,29 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO maintenance_histories (id, vehicle_id, plate_number, maintenance_type, title, description, repair_shop_id, repair_shop_name, found_date, scheduled_date, completed_date, mileage, cost, priority, status, photos, videos, documents, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      mh.id,
-      mh.vehicleId || null,
-      mh.plateNumber || "",
-      mh.maintenanceType || "기타",
-      mh.title || "정비",
-      mh.description || "",
-      mh.repairShopId || null,
-      mh.repairShopName || "",
-      mh.foundDate || null,
-      mh.scheduledDate || null,
-      mh.completedDate || null,
-      mh.mileage || 0,
-      mh.cost || 0,
-      mh.priority || "보통",
-      mh.status || "정비필요",
-      JSON.stringify(mh.photos || []),
-      JSON.stringify(mh.videos || []),
-      JSON.stringify(mh.documents || []),
-      mh.linkedDispatchId || null,
-      mh.linkedReturnId || null,
-      mh.linkedSmartInboxItemId || null,
-      mh.memo || "",
-      mh.createdBy || "field"
+      safeText(mh.id),
+      safeNullableText(mh.vehicleId),
+      safeText(mh.plateNumber),
+      safeText(mh.maintenanceType || "기타"),
+      safeText(mh.title || "정비"),
+      safeText(mh.description),
+      safeNullableText(mh.repairShopId),
+      safeText(mh.repairShopName),
+      safeNullableText(mh.foundDate),
+      safeNullableText(mh.scheduledDate),
+      safeNullableText(mh.completedDate),
+      safeNumber(mh.mileage) || 0,
+      safeNumber(mh.cost) || 0,
+      safeText(mh.priority || "보통"),
+      safeText(mh.status || "정비필요"),
+      safeJson(mh.photos),
+      safeJson(mh.videos),
+      safeJson(mh.documents),
+      safeNullableText(mh.linkedDispatchId),
+      safeNullableText(mh.linkedReturnId),
+      safeNullableText(mh.linkedSmartInboxItemId),
+      safeText(mh.memo),
+      safeText(mh.createdBy || "field")
     ).run();
 
     return Response.json({ success: true });

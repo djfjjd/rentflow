@@ -1,4 +1,5 @@
 import { maintenanceItems as seedMaintenance } from "../../lib/erp-data";
+import { safeBindValues, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedMaintenance.map(m => 
-        stmt.bind(m.id, m.vehicleNumber, m.title, m.requestedAt, m.status)
+        stmt.bind(...safeBindValues([m.id, m.vehicleNumber, m.title, m.requestedAt, m.status]))
       );
       
       await env.DB.batch(batch);
@@ -36,7 +37,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO maintenance (id, vehicle_number, title, requested_at, status) VALUES (?, ?, ?, ?, ?)"
     ).bind(
-      m.id, m.vehicleNumber, m.title, m.requestedAt, m.status
+      safeText(m.id), safeText(m.vehicleNumber), safeText(m.title), safeText(m.requestedAt), safeText(m.status)
     ).run();
 
     return Response.json({ success: true });
@@ -55,7 +56,7 @@ export async function onRequestPut({ request, env }: { request: Request, env: En
         "INSERT INTO maintenance (id, vehicle_number, title, requested_at, status) VALUES (?, ?, ?, ?, ?)"
       );
       const batch = maintenance.map(m => 
-        stmt.bind(m.id, m.vehicleNumber, m.title, m.requestedAt, m.status)
+        stmt.bind(...safeBindValues([m.id, m.vehicleNumber, m.title, m.requestedAt, m.status]))
       );
       await env.DB.batch(batch);
     }

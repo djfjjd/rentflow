@@ -1,3 +1,5 @@
+import { safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+
 type Env = {
   DB: any;
 };
@@ -22,7 +24,7 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
     if (fields.length === 0) return Response.json({ success: true });
     values.push(id);
-    await env.DB.prepare(`UPDATE lost_items SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...values).run();
+    await env.DB.prepare(`UPDATE lost_items SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });
@@ -35,15 +37,15 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     await env.DB.prepare(
       "INSERT INTO lost_items (id, vehicle_number, item_name, customer_name, found_date, found_location, storage_location, memo, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).bind(
-      item.id,
-      item.vehicleNumber || null,
-      item.itemName || "분실물",
-      item.customerName || null,
-      item.foundDate || null,
-      item.foundLocation || null,
-      item.storageLocation || null,
-      item.memo || null,
-      item.status || "보관중",
+      safeText(item.id),
+      safeNullableText(item.vehicleNumber),
+      safeText(item.itemName || "분실물"),
+      safeNullableText(item.customerName),
+      safeNullableText(item.foundDate),
+      safeNullableText(item.foundLocation),
+      safeNullableText(item.storageLocation),
+      safeNullableText(item.memo),
+      safeText(item.status || "보관중"),
     ).run();
     return Response.json({ success: true });
   } catch (error) {

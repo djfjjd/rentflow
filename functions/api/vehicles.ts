@@ -1,4 +1,5 @@
 import { vehicles as seedVehicles } from "../../lib/erp-data";
+import { safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedVehicles.map((v, index) => 
-        stmt.bind(v.id, v.plateNumber, v.model, v.fuelType, v.fuelLevel, v.mileage, v.location, v.status, index, v.memo)
+        stmt.bind(...safeBindValues([v.id, v.plateNumber, v.model, v.fuelType, v.fuelLevel, v.mileage, v.location, v.status, index, v.memo]))
       );
       
       await env.DB.batch(batch);
@@ -40,19 +41,19 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      vehicle.id,
-      vehicle.plateNumber,
-      vehicle.model,
-      vehicle.color || null,
-      vehicle.fuelType,
-      vehicle.fuelLevel || 0,
-      vehicle.fuelDisplay || null,
-      vehicle.mileage || 0,
-      vehicle.purchaseDate || null,
-      vehicle.location || "본사 주차장",
-      vehicle.status || "대기중",
+      safeText(vehicle.id),
+      safeText(vehicle.plateNumber),
+      safeText(vehicle.model),
+      safeNullableText(vehicle.color),
+      safeText(vehicle.fuelType),
+      safeNumber(vehicle.fuelLevel) || 0,
+      safeNullableText(vehicle.fuelDisplay),
+      safeNumber(vehicle.mileage) || 0,
+      safeNullableText(vehicle.purchaseDate),
+      safeText(vehicle.location || "본사 주차장"),
+      safeText(vehicle.status || "대기중"),
       (vehicle.sortOrder !== undefined ? vehicle.sortOrder : (Number(maxSortOrder) + 1)),
-      vehicle.memo
+      safeText(vehicle.memo)
     ).run();
 
     return Response.json({ success: true });
@@ -95,7 +96,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     
     await env.DB.prepare(
       `UPDATE vehicles SET ${fields.join(", ")} WHERE plate_number = ?`
-    ).bind(...values).run();
+    ).bind(...safeBindValues(values)).run();
 
     return Response.json({ success: true });
   } catch (error) {
@@ -109,7 +110,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
     const id = url.searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
-    await env.DB.prepare("DELETE FROM vehicles WHERE id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM vehicles WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });

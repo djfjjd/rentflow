@@ -1,4 +1,5 @@
 import { dispatches as seedDispatches } from "../../lib/erp-data";
+import { safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedDispatches.map(d => 
-        stmt.bind(d.id, d.claimNumber, d.customerName, d.customerPhone, d.customerCarNumber, d.customerCarModel, d.rentalCarNumber, d.orderedBy, d.repairShop, d.pickupAddress, d.deliveryAddress, d.fuelLevel, d.notes, d.status, d.intakeType || null, d.uploadedAt || null)
+        stmt.bind(...safeBindValues([d.id, d.claimNumber, d.customerName, d.customerPhone, d.customerCarNumber, d.customerCarModel, d.rentalCarNumber, d.orderedBy, d.repairShop, d.pickupAddress, d.deliveryAddress, d.fuelLevel, d.notes, d.status, d.intakeType || null, d.uploadedAt || null]))
       );
       
       await env.DB.batch(batch);
@@ -36,27 +37,27 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO dispatches (id, date, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, business_type, corporate_vehicle, notes, status, intake_type, uploaded_at, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      d.id,
-      d.date || null,
-      d.claimNumber,
-      d.customerName,
-      d.customerPhone,
-      d.customerCarNumber,
-      d.customerCarModel,
-      d.rentalCarNumber,
-      d.orderedBy,
-      d.repairShop,
-      d.pickupAddress,
-      d.deliveryAddress,
-      d.fuelLevel || null,
-      d.fuelDisplay || null,
-      d.businessType || null,
-      d.corporateVehicle ? 1 : 0,
-      d.notes,
-      d.status || "배차등록",
-      d.intakeType || null,
-      d.uploadedAt || null,
-      d.isCompleted ? 1 : 0
+      safeText(d.id),
+      safeNullableText(d.date),
+      safeNullableText(d.claimNumber),
+      safeText(d.customerName),
+      safeText(d.customerPhone),
+      safeText(d.customerCarNumber),
+      safeText(d.customerCarModel),
+      safeText(d.rentalCarNumber),
+      safeText(d.orderedBy),
+      safeText(d.repairShop),
+      safeText(d.pickupAddress),
+      safeText(d.deliveryAddress),
+      safeNumber(d.fuelLevel),
+      safeText(d.fuelDisplay),
+      safeNullableText(d.businessType),
+      safeBoolInt(d.corporateVehicle),
+      safeText(d.notes),
+      safeText(d.status || "배차등록"),
+      safeNullableText(d.intakeType),
+      safeNullableText(d.uploadedAt),
+      safeBoolInt(d.isCompleted)
     ).run();
 
     return Response.json({ success: true });
@@ -97,7 +98,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     
     await env.DB.prepare(
       `UPDATE dispatches SET ${fields.join(", ")} WHERE id = ?`
-    ).bind(...values).run();
+    ).bind(...safeBindValues(values)).run();
 
     return Response.json({ success: true });
   } catch (error) {
@@ -109,7 +110,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
   try {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-    await env.DB.prepare("DELETE FROM dispatches WHERE id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM dispatches WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });

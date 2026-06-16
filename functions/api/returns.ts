@@ -1,4 +1,5 @@
 import { returns as seedReturns } from "../../lib/erp-data";
+import { safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -15,7 +16,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       );
       
       const batch = seedReturns.map(r => 
-        stmt.bind(r.id, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel, r.mileage, r.notes, r.status)
+        stmt.bind(...safeBindValues([r.id, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel, r.mileage, r.notes, r.status]))
       );
       
       await env.DB.batch(batch);
@@ -36,7 +37,17 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO returns (id, date, rental_car_number, return_address, arrival_address, fuel_level, fuel_display, mileage, notes, status, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      r.id, r.date || null, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel || null, r.fuelDisplay || null, r.mileage || 0, r.notes, r.status || "회차등록", r.isCompleted ? 1 : 0
+      safeText(r.id),
+      safeNullableText(r.date),
+      safeText(r.rentalCarNumber),
+      safeText(r.returnAddress),
+      safeText(r.arrivalAddress),
+      safeNumber(r.fuelLevel),
+      safeText(r.fuelDisplay),
+      safeNumber(r.mileage) || 0,
+      safeText(r.notes),
+      safeText(r.status || "회차등록"),
+      safeBoolInt(r.isCompleted)
     ).run();
 
     return Response.json({ success: true });
@@ -63,7 +74,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.isCompleted !== undefined) { fields.push("is_completed = ?"); values.push(updates.isCompleted ? 1 : 0); }
     if (fields.length === 0) return Response.json({ success: true });
     values.push(id);
-    await env.DB.prepare(`UPDATE returns SET ${fields.join(", ")} WHERE id = ?`).bind(...values).run();
+    await env.DB.prepare(`UPDATE returns SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });
@@ -74,7 +85,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
   try {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-    await env.DB.prepare("DELETE FROM returns WHERE id = ?").bind(id).run();
+    await env.DB.prepare("DELETE FROM returns WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ error: String(error) }, { status: 500 });

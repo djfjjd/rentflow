@@ -1,3 +1,5 @@
+import { safeBindValues, safeNullableText, safeText } from "./_d1-utils";
+
 type Env = {
   DB: any;
 };
@@ -17,25 +19,25 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await env.DB.prepare(
       "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      f.fileName,
-      f.r2Url || "",
-      f.r2Key || "",
-      f.driveBackupStatus || "none",
-      f.driveFileId || null,
-      f.driveUrl || null,
-      f.driveFolderId || null,
-      f.driveFolderUrl || null,
-      f.vehicleNumber || null,
-      f.insuranceNumber || null,
-      f.customerName || null,
-      f.intakeType || null,
-      f.fileType || null,
-      f.recordType || null,
-      f.recordId || null,
-      f.vehicleFolderUrl || null,
-      f.insuranceFolderUrl || null,
-      f.customerFolderUrl || null,
-      f.uploadedAt || new Date().toISOString()
+      safeText(f.fileName),
+      safeText(f.r2Url),
+      safeText(f.r2Key),
+      safeText(f.driveBackupStatus || "none"),
+      safeNullableText(f.driveFileId),
+      safeNullableText(f.driveUrl),
+      safeNullableText(f.driveFolderId),
+      safeNullableText(f.driveFolderUrl),
+      safeNullableText(f.vehicleNumber),
+      safeNullableText(f.insuranceNumber),
+      safeNullableText(f.customerName),
+      safeNullableText(f.intakeType),
+      safeNullableText(f.fileType),
+      safeNullableText(f.recordType),
+      safeNullableText(f.recordId),
+      safeNullableText(f.vehicleFolderUrl),
+      safeNullableText(f.insuranceFolderUrl),
+      safeNullableText(f.customerFolderUrl),
+      safeText(f.uploadedAt || new Date().toISOString())
     ).run();
 
     return Response.json({ success: true });
