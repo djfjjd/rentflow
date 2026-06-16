@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -142,7 +142,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         </header>
 
         <section className="flex flex-col gap-2 py-2">
-          <p className="text-sm font-bold text-[#647067]">{isAdmin ? "사무실용 관리자" : "아이폰 현장 입력"}</p>
+          <p className="text-sm font-bold text-[#647067]">{isAdmin ? "사무실용 관리자" : "배회차톡 (현장용)"}</p>
           <h1 className="text-2xl font-black tracking-normal sm:text-3xl">{pageTitles[kind]}</h1>
         </section>
 
@@ -191,7 +191,6 @@ function QuickMenu({ reservations }: { reservations: ReservationV2[] }) {
 function TodayCalendar({ reservations }: { reservations: ReservationV2[] }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(todayKorea());
-  const box = useRef<HTMLDivElement>(null);
   const today = todayKorea();
   const monthStart = `${selected.slice(0, 7)}-01`;
   const first = new Date(`${monthStart}T00:00:00`);
@@ -204,64 +203,62 @@ function TodayCalendar({ reservations }: { reservations: ReservationV2[] }) {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    const onPointer = (event: PointerEvent) => {
-      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
-    };
     document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer);
     };
   }, []);
 
   return (
-    <div className="relative" ref={box}>
+    <div className="relative">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => setOpen((value) => !value)}>
         <CalendarDays size={17} />
         <span>Today {formatDateDot(today)}</span>
       </button>
       {open ? (
-        <div className="fixed inset-x-3 top-20 z-50 rounded-lg border border-[#d5ddd6] bg-white p-4 shadow-2xl sm:absolute sm:right-0 sm:inset-x-auto sm:top-12 sm:w-[24rem]">
-          <div className="mb-3 flex items-center justify-between">
-            <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) - 1).padStart(2, "0")}-01`)} type="button">
-              이전
-            </button>
-            <strong>{selected.slice(0, 7)}</strong>
-            <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) + 1).padStart(2, "0")}-01`)} type="button">
-              다음
-            </button>
-          </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#657268]">
-            {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-              <span key={day}>{day}</span>
-            ))}
-          </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
-            {Array.from({ length: offset }).map((_, index) => (
-              <span key={`blank-${index}`} />
-            ))}
-            {Array.from({ length: daysInMonth }).map((_, index) => {
-              const day = String(index + 1).padStart(2, "0");
-              const date = `${selected.slice(0, 7)}-${day}`;
-              const hasItems = (byDate[date] || []).length > 0;
-              return (
-                <button
-                  className={`relative min-h-11 rounded-lg border text-sm font-black ${date === selected ? "border-[#116149] bg-[#e3f3eb]" : "border-[#edf0ec] bg-[#fafbf9]"}`}
-                  key={date}
-                  title={(byDate[date] || []).map(scheduleText).join("\n")}
-                  type="button"
-                  onClick={() => setSelected(date)}
-                >
-                  {index + 1}
-                  {hasItems ? <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#c4492d]" /> : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
-            <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
-            {selectedItems.length ? selectedItems.map((item) => <p className="text-sm" key={item.id}>{scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/20 p-4 pt-16 sm:justify-end sm:pr-6">
+          <button className="absolute inset-0 cursor-default" type="button" aria-label="캘린더 닫기" onClick={() => setOpen(false)} />
+          <div className="relative z-[81] w-full max-w-md rounded-2xl border border-[#d5ddd6] bg-white p-4 shadow-2xl sm:max-w-lg">
+            <div className="mb-3 flex items-center justify-between">
+              <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) - 1).padStart(2, "0")}-01`)} type="button">
+                이전
+              </button>
+              <strong>{selected.slice(0, 7)}</strong>
+              <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) + 1).padStart(2, "0")}-01`)} type="button">
+                다음
+              </button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#657268]">
+              {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                <span key={day}>{day}</span>
+              ))}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {Array.from({ length: offset }).map((_, index) => (
+                <span key={`blank-${index}`} />
+              ))}
+              {Array.from({ length: daysInMonth }).map((_, index) => {
+                const day = String(index + 1).padStart(2, "0");
+                const date = `${selected.slice(0, 7)}-${day}`;
+                const hasItems = (byDate[date] || []).length > 0;
+                return (
+                  <button
+                    className={`relative min-h-12 rounded-lg border text-center text-sm font-black ${date === selected ? "border-[#116149] bg-[#e3f3eb]" : "border-[#edf0ec] bg-[#fafbf9]"}`}
+                    key={date}
+                    title={(byDate[date] || []).map(scheduleText).join("\n")}
+                    type="button"
+                    onClick={() => setSelected(date)}
+                  >
+                    {index + 1}
+                    {hasItems ? <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#c4492d]" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
+              <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
+              {selectedItems.length ? selectedItems.map((item) => <p className="text-sm" key={item.id}>{scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+            </div>
           </div>
         </div>
       ) : null}
@@ -282,14 +279,13 @@ export function VehicleSearchCombobox({
   const [open, setOpen] = useState(false);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return vehicles.slice(0, 8);
+    if (!q) return vehicles;
     return vehicles
       .filter((vehicle) => {
         const plate = vehicle.plateNumber || "";
         const model = (vehicle.model || "").toLowerCase();
         return plate.includes(q) || plate.slice(-4).includes(q) || model.includes(q);
-      })
-      .slice(0, 12);
+      });
   }, [query, vehicles]);
 
   return (
@@ -306,11 +302,11 @@ export function VehicleSearchCombobox({
         onFocus={() => setOpen(true)}
       />
       {open ? (
-        <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-[#d8ded8] bg-white shadow-xl">
+        <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-[#d8ded8] bg-white shadow-xl">
           {results.length ? (
             results.map((vehicle) => (
               <button
-                className="flex min-h-12 w-full items-center justify-between px-3 text-left hover:bg-[#eef5ef]"
+                className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left hover:bg-[#eef5ef]"
                 key={vehicle.id}
                 type="button"
                 onClick={() => {
@@ -320,7 +316,7 @@ export function VehicleSearchCombobox({
                 }}
               >
                 <span className="font-black">{vehicle.plateNumber}</span>
-                <span className="text-sm text-[#68746d]">{vehicle.model}</span>
+                <span className="truncate text-sm text-[#68746d]">{vehicle.model}</span>
               </button>
             ))
           ) : (
@@ -334,7 +330,7 @@ export function VehicleSearchCombobox({
 
 function HomeScreen() {
   return (
-    <section className="space-y-3">
+    <section className="mx-auto w-full max-w-2xl space-y-3">
       <div className="grid grid-cols-2 gap-3">
         {appActions.slice(0, 2).map((item) => (
           <ActionButton item={item} key={item.href} />
@@ -352,8 +348,8 @@ function HomeScreen() {
 function ActionButton({ item }: { item: (typeof appActions)[number] }) {
   const Icon = item.icon;
   return (
-    <Link className={`flex min-h-24 items-center justify-between rounded-lg border p-5 shadow-sm ${item.primary ? "border-[#116149] bg-[#116149] text-white" : "border-[#dbe1db] bg-white text-[#16211d]"}`} href={item.href}>
-      <span className="text-xl font-black">{item.label}</span>
+    <Link className={`flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-lg border p-5 text-center shadow-sm ${item.primary ? "border-[#116149] bg-[#116149] text-white" : "border-[#dbe1db] bg-white text-[#16211d]"}`} href={item.href}>
+      <span className="text-center text-xl font-black">{item.label}</span>
       <Icon size={28} />
     </Link>
   );
@@ -1145,7 +1141,7 @@ function PhotoUploadButton() {
 }
 
 function Segmented({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {
-  return <div className="grid grid-cols-2 rounded-lg bg-[#e6ebe5] p-1">{values.map((item) => <button className={`min-h-12 rounded-md font-black ${value === item ? "bg-white shadow" : ""}`} key={item} type="button" onClick={() => onChange(item)}>{item}</button>)}</div>;
+  return <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>{values.map((item) => <button className={`min-h-11 whitespace-nowrap rounded-md text-center font-black ${value === item ? "bg-white shadow" : ""}`} key={item} type="button" onClick={() => onChange(item)}>{item}</button>)}</div>;
 }
 
 function FilterBar({ query, onQuery, placeholder }: { query: string; onQuery: (query: string) => void; placeholder: string }) {
