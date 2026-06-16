@@ -67,6 +67,7 @@ export type PartnerAddressV2 = {
 
 export type DispatchV2 = {
   id: string;
+  date?: string;
   claimNumber?: string;
   customerName: string;
   customerPhone?: string;
@@ -88,6 +89,7 @@ export type DispatchV2 = {
 
 export type ReturnV2 = {
   id: string;
+  date?: string;
   rentalCarNumber: string;
   returnAddress?: string;
   arrivalAddress?: string;

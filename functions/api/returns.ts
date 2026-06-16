@@ -34,9 +34,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const r = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO returns (id, rental_car_number, return_address, arrival_address, fuel_level, fuel_display, mileage, notes, status, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO returns (id, date, rental_car_number, return_address, arrival_address, fuel_level, fuel_display, mileage, notes, status, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      r.id, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel || null, r.fuelDisplay || null, r.mileage || 0, r.notes, r.status || "회차등록", r.isCompleted ? 1 : 0
+      r.id, r.date || null, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel || null, r.fuelDisplay || null, r.mileage || 0, r.notes, r.status || "회차등록", r.isCompleted ? 1 : 0
     ).run();
 
     return Response.json({ success: true });
@@ -53,6 +53,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const fields = [];
     const values = [];
     if (updates.rentalCarNumber !== undefined) { fields.push("rental_car_number = ?"); values.push(updates.rentalCarNumber); }
+    if (updates.date !== undefined) { fields.push("date = ?"); values.push(updates.date); }
     if (updates.returnAddress !== undefined) { fields.push("return_address = ?"); values.push(updates.returnAddress); }
     if (updates.arrivalAddress !== undefined) { fields.push("arrival_address = ?"); values.push(updates.arrivalAddress); }
     if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(updates.fuelDisplay); }
@@ -83,6 +84,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
 function mapReturn(row: any) {
   return {
     id: row.id,
+    date: row.date,
     rentalCarNumber: row.rental_car_number,
     returnAddress: row.return_address,
     arrivalAddress: row.arrival_address,

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 -- Dispatches table
 CREATE TABLE IF NOT EXISTS dispatches (
   id TEXT PRIMARY KEY,
+  date TEXT,
   claim_number TEXT,
   customer_name TEXT NOT NULL,
   customer_phone TEXT,
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS dispatches (
 -- Returns table
 CREATE TABLE IF NOT EXISTS returns (
   id TEXT PRIMARY KEY,
+  date TEXT,
   rental_car_number TEXT NOT NULL,
   return_address TEXT,
   arrival_address TEXT,

@@ -230,7 +230,7 @@ function UnreadMessagesButton({
   const unread = [
     ...dispatches.filter((item) => !item.isCompleted).map((item) => ({ kind: "배차" as const, createdAt: item.createdAt, dispatch: item })),
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
-  ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  ].sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -261,8 +261,8 @@ function UnreadMessagesButton({
             <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
             <div className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
               {unread.length ? (
-                <table className="w-full min-w-[980px] text-left text-sm">
-                  <thead><tr className="border-b"><th>완료</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th></tr></thead>
+                <table className="w-full min-w-[1040px] text-left text-sm">
+                  <thead><tr className="border-b"><th>완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th></tr></thead>
                   <tbody>{unread.map((row) => {
                     const dispatch = row.kind === "배차" ? row.dispatch : undefined;
                     const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -271,6 +271,7 @@ function UnreadMessagesButton({
                     return (
                       <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
                         <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
+                        <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
                         <td className="font-black">{plate}</td>
                         <td>{row.kind}</td>
                         <td>{vehicleModelColor(vehicle)}</td>
@@ -478,6 +479,7 @@ function AdminNav() {
 function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: (items: DispatchV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
+  const [date, setDate] = useState(todayKorea());
   const summaryKeys =
     businessType === "보험"
       ? ["orderedBy", "repairShop", "customerCarModel", "fuelDisplay", "customerPhone"]
@@ -490,6 +492,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
         endpoint="/api/dispatches"
         buildPayload={(data) => ({
           id: createId("dispatch"),
+          date,
           rentalCarNumber: vehicle?.plateNumber || "",
           businessType,
           corporateVehicle: data.get("corporateVehicle") === "on",
@@ -523,6 +526,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
             ) : null}
           </div>
         </FormBlock>
+        <DateTodayField value={date} onChange={setDate} />
         {businessType === "보험" ? (
           <CompactRow>
             <Input name="orderedBy" label="오더자" />
@@ -554,6 +558,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
 
 function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: (items: ReturnV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
+  const [date, setDate] = useState(todayKorea());
   const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
   return (
     <section className="space-y-4">
@@ -561,6 +566,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
       endpoint="/api/returns"
       buildPayload={(data) => ({
         id: createId("return"),
+        date,
         rentalCarNumber: vehicle?.plateNumber || "",
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
@@ -582,6 +588,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
         {latest ? <p className="mt-2 text-sm font-bold text-[#68746d]">최근 배차건: {latest.customerName} · {latest.repairShop}</p> : null}
       </FormBlock>
+      <DateTodayField value={date} onChange={setDate} />
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
         <Input name="fuelDisplay" label="회차주유량" placeholder="7/12" />
@@ -1045,7 +1052,7 @@ function DispatchAdmin({
     ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
     ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
   ].filter((row) => filter === "전체" || (filter === "미정리" ? !row.completed : row.completed))
-    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    .sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
 
   async function toggle(row: typeof rows[number], checked: boolean) {
     if (row.kind === "배차") {
@@ -1061,7 +1068,7 @@ function DispatchAdmin({
     <section className="panel space-y-3 overflow-x-auto">
       <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
       <table className="w-full min-w-[1080px] text-left text-sm">
-        <thead><tr className="border-b"><th>정리완료</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+        <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
         <tbody>{paginate(rows, page).map((row) => {
           const dispatch = row.kind === "배차" ? row.dispatch : undefined;
           const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -1070,6 +1077,7 @@ function DispatchAdmin({
           return (
             <tr className="border-b" key={`${row.kind}-${row.id}`}>
               <td><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
+              <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
               <td className="font-black">{plate}</td>
               <td>{row.kind}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1092,16 +1100,17 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [page, setPage] = useState(1);
-  const rows = [...dispatches].sort(sortCreatedDesc);
+  const rows = [...dispatches].sort(sortDateCreatedDesc);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
       <table className="w-full min-w-[1220px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
+              <td>{formatBoardDate(item.date)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>{clean(item.businessType || item.status)}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1133,16 +1142,17 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
-  const rows = [...returns].sort(sortCreatedDesc);
+  const rows = [...returns].sort(sortDateCreatedDesc);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
       <table className="w-full min-w-[1080px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
+              <td>{formatBoardDate(item.date)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>회차</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1171,6 +1181,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
 
 function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch: DispatchV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: DispatchV2) => void }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, dispatch.rentalCarNumber || ""));
+  const [date, setDate] = useState(dispatch.date || todayKorea());
   return (
     <ModalShell title="배차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
@@ -1178,6 +1189,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
         const data = new FormData(event.currentTarget);
         const next = {
           ...dispatch,
+          date,
           rentalCarNumber: selected?.plateNumber || dispatch.rentalCarNumber,
           businessType: text(data, "businessType"),
           status: text(data, "businessType"),
@@ -1194,6 +1206,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <DateTodayField value={date} onChange={setDate} />
         <label className="label">구분<select className="field min-h-12" name="businessType" defaultValue={dispatch.businessType || dispatch.status || "보험"}><option>보험</option><option>자차</option><option>셀프</option></select></label>
         <Input name="orderedBy" label="오더자" defaultValue={dispatch.orderedBy} />
         <Input name="repairShop" label="수리처" defaultValue={dispatch.repairShop} />
@@ -1210,6 +1223,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
 
 function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: ReturnV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: ReturnV2) => void }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, record.rentalCarNumber || ""));
+  const [date, setDate] = useState(record.date || todayKorea());
   return (
     <ModalShell title="회차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
@@ -1217,6 +1231,7 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
         const data = new FormData(event.currentTarget);
         const next = {
           ...record,
+          date,
           rentalCarNumber: selected?.plateNumber || record.rentalCarNumber,
           mileage: Number(text(data, "mileage") || 0),
           fuelDisplay: text(data, "fuelDisplay"),
@@ -1228,6 +1243,7 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <DateTodayField value={date} onChange={setDate} />
         <Input name="mileage" label="회차키로수" type="number" defaultValue={record.mileage} />
         <Input name="fuelDisplay" label="회차주유량" defaultValue={record.fuelDisplay} />
         <Input name="arrivalAddress" label="주차구역" defaultValue={record.arrivalAddress} />
@@ -1557,6 +1573,36 @@ function CompactRow({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-2 sm:grid-flow-col sm:auto-cols-fr">{children}</div>;
 }
 
+function DateTodayField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const today = todayKorea();
+  const [isToday, setIsToday] = useState(value === today);
+  return (
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+      <Input
+        name="date"
+        label="날짜선택"
+        type="date"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsToday(event.target.value === today);
+        }}
+      />
+      <label className="mt-0 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black sm:mt-6">
+        <input
+          type="checkbox"
+          checked={isToday}
+          onChange={(event) => {
+            setIsToday(event.target.checked);
+            if (event.target.checked) onChange(today);
+          }}
+        />
+        오늘
+      </label>
+    </div>
+  );
+}
+
 function PhotoUploadButton() {
   return (
     <label className="primary-btn w-full cursor-pointer">
@@ -1649,8 +1695,23 @@ function paginate<T>(items: T[], page: number, pageSize = 10) {
   return items.slice(start, start + pageSize);
 }
 
-function sortCreatedDesc<T extends { createdAt?: string }>(a: T, b: T) {
-  return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+function sortDateCreatedDesc<T extends { date?: string; createdAt?: string }>(a: T, b: T) {
+  return sortDateCreatedValues(b.date, b.createdAt, a.date, a.createdAt);
+}
+
+function sortDateCreatedValues(leftDate?: string, leftCreated?: string, rightDate?: string, rightCreated?: string) {
+  const left = new Date(leftDate || leftCreated || 0).getTime();
+  const right = new Date(rightDate || rightCreated || 0).getTime();
+  if (left !== right) return left - right;
+  return new Date(leftCreated || 0).getTime() - new Date(rightCreated || 0).getTime();
+}
+
+function rowDate(row: { dispatch?: DispatchV2; returnItem?: ReturnV2 }) {
+  return row.dispatch?.date || row.returnItem?.date;
+}
+
+function formatBoardDate(value?: string) {
+  return value ? value.replaceAll("-", ".") : "";
 }
 
 function clean(value: unknown) {

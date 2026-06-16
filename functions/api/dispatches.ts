@@ -34,9 +34,10 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const d = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, business_type, corporate_vehicle, notes, status, intake_type, uploaded_at, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO dispatches (id, date, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, business_type, corporate_vehicle, notes, status, intake_type, uploaded_at, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       d.id,
+      d.date || null,
       d.claimNumber,
       d.customerName,
       d.customerPhone,
@@ -75,6 +76,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const values = [];
     
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
+    if (updates.date !== undefined) { fields.push("date = ?"); values.push(updates.date); }
     if (updates.businessType !== undefined) { fields.push("business_type = ?"); values.push(updates.businessType); }
     if (updates.corporateVehicle !== undefined) { fields.push("corporate_vehicle = ?"); values.push(updates.corporateVehicle ? 1 : 0); }
     if (updates.rentalCarNumber !== undefined) { fields.push("rental_car_number = ?"); values.push(updates.rentalCarNumber); }
@@ -117,6 +119,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
 function mapDispatch(row: any) {
   return {
     id: row.id,
+    date: row.date,
     claimNumber: row.claim_number,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
