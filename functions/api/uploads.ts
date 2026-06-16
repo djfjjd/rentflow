@@ -21,6 +21,8 @@ type FileRecord = {
   vehicleNumber: string;
   insuranceNumber?: string;
   customerName?: string;
+  intakeType?: string;
+  fileType?: string;
   vehicleFolderUrl?: string;
   insuranceFolderUrl?: string;
   customerFolderUrl?: string;
@@ -188,6 +190,8 @@ function toFileRecord(
     vehicleNumber: String(driveResult.vehicleNumber || fallback.vehicleNumber || ""),
     insuranceNumber: String(driveResult.insuranceNumber || driveResult.claimNumber || fallback.insuranceNumber || ""),
     customerName: String(driveResult.customerName || fallback.customerName || ""),
+    intakeType: String(driveResult.intakeType || fallback.intakeType || ""),
+    fileType: String(driveResult.fileType || fallback.fileType || fallback.intakeType || ""),
     vehicleFolderUrl: String(driveResult.vehicleFolderUrl || ""),
     insuranceFolderUrl: String(driveResult.insuranceFolderUrl || ""),
     customerFolderUrl: String(driveResult.customerFolderUrl || ""),

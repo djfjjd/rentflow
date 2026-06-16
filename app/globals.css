@@ -14,14 +14,43 @@
 body {
   margin: 0;
   color: #111827;
-  background:
-    radial-gradient(circle at top left, rgba(23, 107, 91, 0.10), transparent 30rem),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f4 100%);
+  background: #f6f7f4;
   font-family: Arial, Helvetica, sans-serif;
 }
 
 button,
 input,
+select,
 textarea {
   font: inherit;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-[#d8ded8] bg-white p-4 shadow-sm;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-[#cfd8d1] bg-white px-3 py-2 text-base font-bold outline-none transition focus:border-[#116149] focus:ring-2 focus:ring-[#116149]/20;
+  }
+
+  .label {
+    @apply grid gap-1 text-sm font-black text-[#25342e];
+  }
+
+  .primary-btn {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#116149] px-4 py-2 text-base font-black text-white shadow-sm transition hover:bg-[#0d4e3b] disabled:opacity-60;
+  }
+
+  .quick-btn {
+    @apply inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#d8ded8] bg-white px-3 text-sm font-black text-[#18241f] shadow-sm;
+  }
+
+  .small-btn {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#d8ded8] bg-white px-3 text-sm font-black text-[#18241f];
+  }
+
+  .danger-btn {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#ead0c8] bg-[#fff7f4] px-3 text-sm font-black text-[#a13f24];
+  }
 }

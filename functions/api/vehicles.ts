@@ -44,10 +44,10 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       vehicle.plateNumber,
       vehicle.model,
       vehicle.fuelType,
-      vehicle.fuelLevel,
-      vehicle.mileage,
-      vehicle.location,
-      vehicle.status,
+      vehicle.fuelLevel || 0,
+      vehicle.mileage || 0,
+      vehicle.location || "본사 주차장",
+      vehicle.status || "대기중",
       (vehicle.sortOrder !== undefined ? vehicle.sortOrder : (Number(maxSortOrder) + 1)),
       vehicle.memo
     ).run();

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS dispatches (
   pickup_address TEXT,
   delivery_address TEXT,
   fuel_level REAL,
+  fuel_display TEXT,
   notes TEXT,
   status TEXT NOT NULL DEFAULT '배차등록',
   intake_type TEXT,
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS returns (
   return_address TEXT,
   arrival_address TEXT,
   fuel_level REAL,
+  fuel_display TEXT,
   mileage INTEGER,
   notes TEXT,
   status TEXT NOT NULL DEFAULT '회차등록',
@@ -63,6 +65,7 @@ CREATE TABLE IF NOT EXISTS reservations (
   rent_car_number TEXT,
   customer_name TEXT NOT NULL,
   customer_car_number TEXT,
+  customer_car_model TEXT,
   factory_name TEXT,
   pickup_location TEXT,
   delivery_location TEXT,
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   insurance_number TEXT,
   customer_name TEXT,
   intake_type TEXT,
+  file_type TEXT,
   vehicle_folder_url TEXT,
   insurance_folder_url TEXT,
   customer_folder_url TEXT,
@@ -167,6 +171,77 @@ CREATE TABLE IF NOT EXISTS accident_histories (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Partner Addresses table
+CREATE TABLE IF NOT EXISTS partner_addresses (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT,
+  manager_name TEXT,
+  phone TEXT,
+  address TEXT NOT NULL,
+  detail_address TEXT,
+  naver_map_url TEXT,
+  latitude REAL,
+  longitude REAL,
+  memo TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Contracts table
+CREATE TABLE IF NOT EXISTS contracts (
+  id TEXT PRIMARY KEY,
+  dispatch_id TEXT,
+  title TEXT,
+  customer_name TEXT,
+  vehicle_number TEXT,
+  document_url TEXT,
+  status TEXT DEFAULT '작성중',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Billings table
+CREATE TABLE IF NOT EXISTS billings (
+  id TEXT PRIMARY KEY,
+  dispatch_id TEXT,
+  contract_title TEXT,
+  amount REAL DEFAULT 0,
+  fault_rate TEXT,
+  tax_invoice_status TEXT,
+  receivable_status TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Receivables table
+CREATE TABLE IF NOT EXISTS receivables (
+  id TEXT PRIMARY KEY,
+  billing_id TEXT,
+  customer_name TEXT,
+  amount REAL DEFAULT 0,
+  paid_amount REAL DEFAULT 0,
+  status TEXT DEFAULT '입금대기',
+  due_date TEXT,
+  memo TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Lost Items table
+CREATE TABLE IF NOT EXISTS lost_items (
+  id TEXT PRIMARY KEY,
+  vehicle_number TEXT,
+  item_name TEXT NOT NULL,
+  found_date TEXT,
+  found_location TEXT,
+  storage_location TEXT,
+  photo_url TEXT,
+  status TEXT DEFAULT '보관중',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create some indexes
 CREATE INDEX IF NOT EXISTS idx_vehicles_plate_number ON vehicles(plate_number);
 CREATE INDEX IF NOT EXISTS idx_dispatches_rental_car_number ON dispatches(rental_car_number);
@@ -175,3 +250,7 @@ CREATE INDEX IF NOT EXISTS idx_reservations_date ON reservations(date);
 CREATE INDEX IF NOT EXISTS idx_maintenance_vehicle_number ON maintenance(vehicle_number);
 CREATE INDEX IF NOT EXISTS idx_maintenance_histories_plate_number ON maintenance_histories(plate_number);
 CREATE INDEX IF NOT EXISTS idx_accident_histories_plate_number ON accident_histories(plate_number);
+CREATE INDEX IF NOT EXISTS idx_partner_addresses_name ON partner_addresses(name);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_vehicle_number ON uploaded_files(vehicle_number);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_insurance_number ON uploaded_files(insurance_number);
+CREATE INDEX IF NOT EXISTS idx_lost_items_vehicle_number ON lost_items(vehicle_number);

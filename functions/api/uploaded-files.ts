@@ -15,9 +15,25 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const f = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      f.fileName, f.r2Url, f.r2Key, f.driveBackupStatus, f.driveFileId, f.driveUrl, f.driveFolderId, f.driveFolderUrl || null, f.vehicleNumber, f.insuranceNumber || null, f.customerName || null, f.intakeType || null, f.vehicleFolderUrl || null, f.insuranceFolderUrl || null, f.customerFolderUrl || null, f.uploadedAt
+      f.fileName,
+      f.r2Url || "",
+      f.r2Key || "",
+      f.driveBackupStatus || "none",
+      f.driveFileId || null,
+      f.driveUrl || null,
+      f.driveFolderId || null,
+      f.driveFolderUrl || null,
+      f.vehicleNumber || null,
+      f.insuranceNumber || null,
+      f.customerName || null,
+      f.intakeType || null,
+      f.fileType || null,
+      f.vehicleFolderUrl || null,
+      f.insuranceFolderUrl || null,
+      f.customerFolderUrl || null,
+      f.uploadedAt || new Date().toISOString()
     ).run();
 
     return Response.json({ success: true });
@@ -28,6 +44,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
 
 function mapFile(row: any) {
   return {
+    id: row.id,
     fileName: row.file_name,
     r2Url: row.r2_url,
     r2Key: row.r2_key,
@@ -40,6 +57,7 @@ function mapFile(row: any) {
     insuranceNumber: row.insurance_number,
     customerName: row.customer_name,
     intakeType: row.intake_type,
+    fileType: row.file_type,
     vehicleFolderUrl: row.vehicle_folder_url,
     insuranceFolderUrl: row.insurance_folder_url,
     customerFolderUrl: row.customer_folder_url,

@@ -34,7 +34,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const d = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, notes, status, intake_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, notes, status, intake_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       d.id,
       d.claimNumber,
@@ -47,9 +47,10 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       d.repairShop,
       d.pickupAddress,
       d.deliveryAddress,
-      d.fuelLevel,
+      d.fuelLevel || null,
+      d.fuelDisplay || null,
       d.notes,
-      d.status,
+      d.status || "배차등록",
       d.intakeType || null,
       d.uploadedAt || null
     ).run();
@@ -73,6 +74,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
     if (updates.notes !== undefined) { fields.push("notes = ?"); values.push(updates.notes); }
     if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(updates.fuelLevel); }
+    if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(updates.fuelDisplay); }
     
     if (fields.length === 0) return Response.json({ success: true });
     
@@ -102,6 +104,7 @@ function mapDispatch(row: any) {
     pickupAddress: row.pickup_address,
     deliveryAddress: row.delivery_address,
     fuelLevel: row.fuel_level,
+    fuelDisplay: row.fuel_display,
     notes: row.notes,
     status: row.status,
     intakeType: row.intake_type,

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { RentFlowV2Page } from "@/components/v2/RentFlowV2";
 
-export default function AppIndex() {
-  redirect("/app/inbox");
+export default function AppHome() {
+  return <RentFlowV2Page kind="home" />;
 }

@@ -34,9 +34,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     const r = await request.json() as any;
     await env.DB.prepare(
-      "INSERT INTO reservations (id, date, time, end_time, vehicle_number, rent_car_number, customer_name, customer_car_number, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO reservations (id, date, time, end_time, vehicle_number, rent_car_number, customer_name, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
-      r.id, r.date, r.time, r.endTime || null, r.vehicleNumber, r.rentCarNumber || null, r.customerName, r.customerCarNumber || null, r.factoryName || null, r.pickupLocation || null, r.deliveryLocation || null, r.orderPerson || null, r.memo || null, r.route, r.repairShopPartnerId || null, r.status
+      r.id, r.date, r.time, r.endTime || null, r.vehicleNumber, r.rentCarNumber || null, r.customerName, r.customerCarNumber || null, r.customerCarModel || null, r.factoryName || null, r.pickupLocation || null, r.deliveryLocation || null, r.orderPerson || null, r.memo || null, r.route, r.repairShopPartnerId || null, r.status
     ).run();
 
     return Response.json({ success: true });
@@ -80,6 +80,7 @@ function mapReservation(row: any) {
     rentCarNumber: row.rent_car_number,
     customerName: row.customer_name,
     customerCarNumber: row.customer_car_number,
+    customerCarModel: row.customer_car_model,
     factoryName: row.factory_name,
     pickupLocation: row.pickup_location,
     deliveryLocation: row.delivery_location,
