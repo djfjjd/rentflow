@@ -23,6 +23,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
+import { OverlayModal } from "@/components/OverlayModal";
 import { Pagination } from "@/components/Pagination";
 import {
   createId,
@@ -232,14 +233,6 @@ function UnreadMessagesButton({
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
   ].sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onOpenChange]);
-
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
@@ -256,38 +249,40 @@ function UnreadMessagesButton({
         안 읽은 메시지
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 p-3 pt-16 sm:p-6 sm:pt-20" onClick={() => onOpenChange(false)}>
-          <div className="w-full max-w-full rounded-2xl bg-white p-4 shadow-2xl sm:max-w-5xl" onClick={(event) => event.stopPropagation()}>
-            <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
-            <div className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
-              {unread.length ? (
-                <table className="w-full min-w-[1040px] text-left text-sm">
-                  <thead><tr className="border-b"><th>완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th></tr></thead>
-                  <tbody>{unread.map((row) => {
-                    const dispatch = row.kind === "배차" ? row.dispatch : undefined;
-                    const ret = row.kind === "회차" ? row.returnItem : undefined;
-                    const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
-                    const vehicle = findVehicle(vehicles, plate);
-                    return (
-                      <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
-                        <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
-                        <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
-                        <td className="font-black">{plate}</td>
-                        <td>{row.kind}</td>
-                        <td>{vehicleModelColor(vehicle)}</td>
-                        <td>{clean(dispatch?.orderedBy)}</td>
-                        <td>{clean(dispatch?.customerCarModel)}</td>
-                        <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
-                        <td>{clean(dispatch?.repairShop)}</td>
-                        <td>{clean(dispatch?.notes || ret?.notes)}</td>
-                      </tr>
-                    );
-                  })}</tbody>
-                </table>
-              ) : <p className="py-8 text-center text-sm font-bold text-[#68746d]">안 읽은 메시지가 없습니다.</p>}
-            </div>
+        <OverlayModal
+          align="top"
+          onClose={() => onOpenChange(false)}
+          panelClassName="w-full max-w-full rounded-2xl bg-white p-5 shadow-2xl sm:max-w-6xl"
+        >
+          <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
+          <div className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
+            {unread.length ? (
+              <table className="w-full min-w-[1040px] text-left text-sm">
+                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>정리완료</th></tr></thead>
+                <tbody>{unread.map((row) => {
+                  const dispatch = row.kind === "배차" ? row.dispatch : undefined;
+                  const ret = row.kind === "회차" ? row.returnItem : undefined;
+                  const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
+                  const vehicle = findVehicle(vehicles, plate);
+                  return (
+                    <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
+                      <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
+                      <td className="font-black">{plate}</td>
+                      <td>{row.kind}</td>
+                      <td>{vehicleModelColor(vehicle)}</td>
+                      <td>{clean(dispatch?.orderedBy)}</td>
+                      <td>{clean(dispatch?.customerCarModel)}</td>
+                      <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
+                      <td>{clean(dispatch?.repairShop)}</td>
+                      <td>{clean(dispatch?.notes || ret?.notes)}</td>
+                      <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            ) : <p className="py-12 text-center text-sm font-bold text-[#68746d]">안 읽은 메시지가 없습니다.</p>}
           </div>
-        </div>
+        </OverlayModal>
       ) : null}
     </div>
   );
@@ -303,16 +298,6 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
   const byDate = useMemo(() => groupBy(reservations, (item) => item.date), [reservations]);
   const selectedItems = byDate[selected] || [];
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [onOpenChange]);
-
   return (
     <div className="relative">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
@@ -320,8 +305,11 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
         <span>Today {formatDateDot(today)}</span>
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 p-4 pt-16 sm:justify-end sm:pr-6" onClick={() => onOpenChange(false)}>
-          <div className="relative w-full max-w-md rounded-2xl border border-[#d5ddd6] bg-white p-4 shadow-2xl sm:max-w-lg" onClick={(event) => event.stopPropagation()}>
+        <OverlayModal
+          align="top"
+          onClose={() => onOpenChange(false)}
+          panelClassName="w-full max-w-full rounded-2xl border border-[#d5ddd6] bg-white p-5 shadow-2xl sm:max-w-xl"
+        >
             <div className="mb-3 flex items-center justify-between">
               <button className="small-btn" onClick={() => setSelected(`${selected.slice(0, 4)}-${String(Number(selected.slice(5, 7)) - 1).padStart(2, "0")}-01`)} type="button">
                 이전
@@ -362,8 +350,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
               <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
               {selectedItems.length ? selectedItems.map((item) => <p className="text-sm" key={item.id}>{scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
             </div>
-          </div>
-        </div>
+        </OverlayModal>
       ) : null}
     </div>
   );
