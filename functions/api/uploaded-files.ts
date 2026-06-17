@@ -1,4 +1,4 @@
-import { safeBindValues, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -6,15 +6,18 @@ type Env = {
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
+    await ensureUploadedFilesSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM uploaded_files ORDER BY uploaded_at DESC").all();
     return Response.json(results.map(mapFile));
   } catch (error) {
+    console.error("uploaded files list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     await env.DB.prepare(
       "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -42,6 +45,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
 
     return Response.json({ success: true });
   } catch (error) {
+    console.error("uploaded file save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
@@ -69,4 +73,37 @@ function mapFile(row: any) {
     customerFolderUrl: row.customer_folder_url,
     uploadedAt: row.uploaded_at
   };
+}
+
+async function ensureUploadedFilesSchema(env: Env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      r2_url TEXT NOT NULL,
+      r2_key TEXT NOT NULL,
+      drive_backup_status TEXT,
+      drive_file_id TEXT,
+      drive_url TEXT,
+      drive_folder_id TEXT,
+      drive_folder_url TEXT,
+      vehicle_number TEXT,
+      insurance_number TEXT,
+      customer_name TEXT,
+      intake_type TEXT,
+      file_type TEXT,
+      record_type TEXT,
+      record_id TEXT,
+      vehicle_folder_url TEXT,
+      insurance_folder_url TEXT,
+      customer_folder_url TEXT,
+      uploaded_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await ensureColumns(env.DB, "uploaded_files", [
+    { name: "file_type", definition: "TEXT" },
+    { name: "record_type", definition: "TEXT" },
+    { name: "record_id", definition: "TEXT" },
+  ]);
 }

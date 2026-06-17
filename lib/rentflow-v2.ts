@@ -68,6 +68,7 @@ export type PartnerAddressV2 = {
 export type DispatchV2 = {
   id: string;
   date?: string;
+  time?: string;
   claimNumber?: string;
   customerName: string;
   customerPhone?: string;
@@ -82,6 +83,9 @@ export type DispatchV2 = {
   pickupAddress?: string;
   deliveryAddress?: string;
   fuelDisplay?: string;
+  fuelLevelText?: string;
+  vehicleColor?: string;
+  memo?: string;
   notes?: string;
   status?: string;
   createdAt?: string;
@@ -90,10 +94,14 @@ export type DispatchV2 = {
 export type ReturnV2 = {
   id: string;
   date?: string;
+  time?: string;
   rentalCarNumber: string;
   returnAddress?: string;
   arrivalAddress?: string;
   fuelDisplay?: string;
+  fuelLevelText?: string;
+  vehicleColor?: string;
+  memo?: string;
   mileage?: number;
   notes?: string;
   status?: string;

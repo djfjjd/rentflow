@@ -1,5 +1,5 @@
 import { vehicles as seedVehicles } from "../../lib/erp-data";
-import { safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { ensureColumns, safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -7,6 +7,7 @@ type Env = {
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
+    await ensureVehicleSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM vehicles ORDER BY sort_order ASC").all();
     
     // Seed if empty
@@ -27,12 +28,14 @@ export async function onRequestGet({ env }: { env: Env }) {
 
     return Response.json(results.map(mapVehicle));
   } catch (error) {
+    console.error("vehicle list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    await ensureVehicleSchema(env);
     const vehicle = await request.json() as any;
     
     // Get max sort_order
@@ -52,21 +55,24 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(vehicle.purchaseDate),
       safeText(vehicle.location || "본사 주차장"),
       safeText(vehicle.status || "대기중"),
-      (vehicle.sortOrder !== undefined ? vehicle.sortOrder : (Number(maxSortOrder) + 1)),
+      safeNumber(vehicle.sortOrder) ?? (Number(maxSortOrder) + 1),
       safeText(vehicle.memo)
     ).run();
 
     return Response.json({ success: true });
   } catch (error) {
+    console.error("vehicle save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
 
 export async function onRequestPatch({ request, env }: { request: Request, env: Env }) {
   try {
+    await ensureVehicleSchema(env);
     const url = new URL(request.url);
+    const id = url.searchParams.get("id");
     const plateNumber = url.searchParams.get("plateNumber");
-    if (!plateNumber) return Response.json({ error: "plateNumber is required" }, { status: 400 });
+    if (!id && !plateNumber) return Response.json({ error: "id or plateNumber is required" }, { status: 400 });
 
     const updates = await request.json() as any;
     
@@ -74,38 +80,40 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const fields = [];
     const values = [];
     
-    if (updates.plateNumber !== undefined) { fields.push("plate_number = ?"); values.push(updates.plateNumber); }
-    if (updates.model !== undefined) { fields.push("model = ?"); values.push(updates.model); }
-    if (updates.color !== undefined) { fields.push("color = ?"); values.push(updates.color); }
-    if (updates.fuelType !== undefined) { fields.push("fuel_type = ?"); values.push(updates.fuelType); }
-    if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(updates.fuelLevel); }
-    if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(updates.fuelDisplay); }
-    if (updates.mileage !== undefined) { fields.push("mileage = ?"); values.push(updates.mileage); }
-    if (updates.purchaseDate !== undefined) { fields.push("purchase_date = ?"); values.push(updates.purchaseDate); }
-    if (updates.location !== undefined) { fields.push("location = ?"); values.push(updates.location); }
-    if (updates.status !== undefined) { fields.push("status = ?"); values.push(updates.status); }
-    if (updates.damageVehicle !== undefined) { fields.push("damage_vehicle = ?"); values.push(updates.damageVehicle); }
-    if (updates.activeSummary !== undefined) { fields.push("active_summary = ?"); values.push(updates.activeSummary); }
-    if (updates.sortOrder !== undefined) { fields.push("sort_order = ?"); values.push(updates.sortOrder); }
-    if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(updates.memo); }
+    if (updates.plateNumber !== undefined) { fields.push("plate_number = ?"); values.push(safeText(updates.plateNumber)); }
+    if (updates.model !== undefined) { fields.push("model = ?"); values.push(safeText(updates.model)); }
+    if (updates.color !== undefined) { fields.push("color = ?"); values.push(safeText(updates.color)); }
+    if (updates.fuelType !== undefined) { fields.push("fuel_type = ?"); values.push(safeText(updates.fuelType)); }
+    if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(safeNumber(updates.fuelLevel) || 0); }
+    if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(safeNullableText(updates.fuelDisplay)); }
+    if (updates.mileage !== undefined) { fields.push("mileage = ?"); values.push(safeNumber(updates.mileage) || 0); }
+    if (updates.purchaseDate !== undefined) { fields.push("purchase_date = ?"); values.push(safeNullableText(updates.purchaseDate)); }
+    if (updates.location !== undefined) { fields.push("location = ?"); values.push(safeText(updates.location)); }
+    if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
+    if (updates.damageVehicle !== undefined) { fields.push("damage_vehicle = ?"); values.push(safeText(updates.damageVehicle)); }
+    if (updates.activeSummary !== undefined) { fields.push("active_summary = ?"); values.push(safeText(updates.activeSummary)); }
+    if (updates.sortOrder !== undefined) { fields.push("sort_order = ?"); values.push(safeNumber(updates.sortOrder) || 0); }
+    if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(safeText(updates.memo)); }
     
     if (fields.length === 0) return Response.json({ success: true });
     
     fields.push("updated_at = CURRENT_TIMESTAMP");
-    values.push(plateNumber);
+    values.push(safeText(id || plateNumber));
     
     await env.DB.prepare(
-      `UPDATE vehicles SET ${fields.join(", ")} WHERE plate_number = ?`
+      `UPDATE vehicles SET ${fields.join(", ")} WHERE ${id ? "id" : "plate_number"} = ?`
     ).bind(...safeBindValues(values)).run();
 
     return Response.json({ success: true });
   } catch (error) {
+    console.error("vehicle update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
 
 export async function onRequestDelete({ request, env }: { request: Request, env: Env }) {
   try {
+    await ensureVehicleSchema(env);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
@@ -113,6 +121,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
     await env.DB.prepare("DELETE FROM vehicles WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true });
   } catch (error) {
+    console.error("vehicle delete failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
@@ -137,4 +146,14 @@ function mapVehicle(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+async function ensureVehicleSchema(env: Env) {
+  await ensureColumns(env.DB, "vehicles", [
+    { name: "color", definition: "TEXT" },
+    { name: "fuel_display", definition: "TEXT" },
+    { name: "purchase_date", definition: "TEXT" },
+    { name: "damage_vehicle", definition: "TEXT" },
+    { name: "active_summary", definition: "TEXT" },
+  ]);
 }

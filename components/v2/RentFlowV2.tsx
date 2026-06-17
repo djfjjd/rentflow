@@ -234,7 +234,7 @@ function UnreadMessagesButton({
   const unread = [
     ...dispatches.filter((item) => !item.isCompleted).map((item) => ({ kind: "배차" as const, createdAt: item.createdAt, dispatch: item })),
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
-  ].sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
+  ].sort((a, b) => sortDateCreatedValues(rowDate(b), rowTime(b), b.createdAt, rowDate(a), rowTime(a), a.createdAt));
 
   if (unread.length === 0) return <span className="min-h-11" />;
 
@@ -271,7 +271,7 @@ function UnreadMessagesButton({
                   const vehicle = findVehicle(vehicles, plate);
                   return (
                     <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
-                      <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.createdAt || ret?.createdAt)}</td>
+                      <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
                       <td className="font-black">{plate}</td>
                       <td>{row.kind}</td>
                       <td>{vehicleModelColor(vehicle)}</td>
@@ -472,6 +472,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
+  const [time, setTime] = useState(currentTimeKorea());
   const summaryKeys =
     businessType === "보험"
       ? ["orderedBy", "repairShop", "customerCarModel", "fuelDisplay", "customerPhone"]
@@ -485,7 +486,9 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
         buildPayload={(data) => ({
           id: createId("dispatch"),
           date,
+          time,
           rentalCarNumber: vehicle?.plateNumber || "",
+          vehicleColor: vehicle?.color || "",
           businessType,
           corporateVehicle: data.get("corporateVehicle") === "on",
           customerName: text(data, "customerName") || text(data, "orderedBy") || businessType,
@@ -494,7 +497,9 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           orderedBy: text(data, "orderedBy"),
           repairShop: text(data, "repairShop"),
           fuelDisplay: text(data, "fuelDisplay"),
+          fuelLevelText: text(data, "fuelDisplay"),
           notes: text(data, "notes"),
+          memo: text(data, "notes"),
           status: businessType,
           isCompleted: false,
         })}
@@ -518,7 +523,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
             ) : null}
           </div>
         </FormBlock>
-        <DateTodayField value={date} onChange={setDate} />
+        <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         {businessType === "보험" ? (
           <CompactRow>
             <Input name="orderedBy" label="오더자" />
@@ -551,6 +556,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
 function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: (items: ReturnV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
+  const [time, setTime] = useState(currentTimeKorea());
   const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
   return (
     <section className="space-y-4">
@@ -559,11 +565,15 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
       buildPayload={(data) => ({
         id: createId("return"),
         date,
+        time,
         rentalCarNumber: vehicle?.plateNumber || "",
+        vehicleColor: vehicle?.color || "",
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
+        fuelLevelText: text(data, "fuelDisplay"),
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
+        memo: text(data, "notes"),
         status: "회차등록",
         isCompleted: false,
       })}
@@ -580,7 +590,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
         {latest ? <p className="mt-2 text-sm font-bold text-[#68746d]">최근 배차건: {latest.customerName} · {latest.repairShop}</p> : null}
       </FormBlock>
-      <DateTodayField value={date} onChange={setDate} />
+      <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
         <Input name="fuelDisplay" label="회차주유량" placeholder="7/12" />
@@ -1044,7 +1054,7 @@ function DispatchAdmin({
     ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
     ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
   ].filter((row) => filter === "전체" || (filter === "미정리" ? !row.completed : row.completed))
-    .sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
+    .sort((a, b) => sortDateCreatedValues(rowDate(b), rowTime(b), b.createdAt, rowDate(a), rowTime(a), a.createdAt));
 
   async function toggle(row: typeof rows[number], checked: boolean) {
     if (row.kind === "배차") {
@@ -1069,7 +1079,7 @@ function DispatchAdmin({
           return (
             <tr className="border-b" key={`${row.kind}-${row.id}`}>
               <td><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
-              <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.createdAt || ret?.createdAt)}</td>
+              <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
               <td className="font-black">{plate}</td>
               <td>{row.kind}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1102,7 +1112,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
-              <td>{formatBoardDateTime(item.date, item.createdAt)}</td>
+              <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>{clean(item.businessType || item.status)}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1144,7 +1154,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
-              <td>{formatBoardDateTime(item.date, item.createdAt)}</td>
+              <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>회차</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1174,6 +1184,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
 function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch: DispatchV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: DispatchV2) => void }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, dispatch.rentalCarNumber || ""));
   const [date, setDate] = useState(dispatch.date || todayKorea());
+  const [time, setTime] = useState(dispatch.time || currentTimeKorea());
   return (
     <ModalShell title="배차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
@@ -1182,15 +1193,19 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
         const next = {
           ...dispatch,
           date,
+          time,
           rentalCarNumber: selected?.plateNumber || dispatch.rentalCarNumber,
+          vehicleColor: selected?.color || dispatch.vehicleColor || "",
           businessType: text(data, "businessType"),
           status: text(data, "businessType"),
           orderedBy: text(data, "orderedBy"),
           repairShop: text(data, "repairShop"),
           customerCarModel: text(data, "customerCarModel"),
           fuelDisplay: text(data, "fuelDisplay"),
+          fuelLevelText: text(data, "fuelDisplay"),
           customerPhone: text(data, "customerPhone"),
           notes: text(data, "notes"),
+          memo: text(data, "notes"),
           corporateVehicle: data.get("corporateVehicle") === "on",
         };
         await sendJson(`/api/dispatches?id=${encodeURIComponent(dispatch.id)}`, next, "PATCH");
@@ -1198,7 +1213,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
-        <DateTodayField value={date} onChange={setDate} />
+        <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <label className="label">구분<select className="field min-h-12" name="businessType" defaultValue={dispatch.businessType || dispatch.status || "보험"}><option>보험</option><option>자차</option><option>셀프</option></select></label>
         <Input name="orderedBy" label="오더자" defaultValue={dispatch.orderedBy} />
         <Input name="repairShop" label="수리처" defaultValue={dispatch.repairShop} />
@@ -1216,6 +1231,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
 function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: ReturnV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: ReturnV2) => void }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, record.rentalCarNumber || ""));
   const [date, setDate] = useState(record.date || todayKorea());
+  const [time, setTime] = useState(record.time || currentTimeKorea());
   return (
     <ModalShell title="회차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
@@ -1224,18 +1240,22 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
         const next = {
           ...record,
           date,
+          time,
           rentalCarNumber: selected?.plateNumber || record.rentalCarNumber,
+          vehicleColor: selected?.color || record.vehicleColor || "",
           mileage: Number(text(data, "mileage") || 0),
           fuelDisplay: text(data, "fuelDisplay"),
+          fuelLevelText: text(data, "fuelDisplay"),
           arrivalAddress: text(data, "arrivalAddress"),
           notes: text(data, "notes"),
+          memo: text(data, "notes"),
         };
         await sendJson(`/api/returns?id=${encodeURIComponent(record.id)}`, next, "PATCH");
         onSaved(next);
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={setSelected} /></FormBlock>
-        <DateTodayField value={date} onChange={setDate} />
+        <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <Input name="mileage" label="회차키로수" type="number" defaultValue={record.mileage} />
         <Input name="fuelDisplay" label="회차주유량" defaultValue={record.fuelDisplay} />
         <Input name="arrivalAddress" label="주차구역" defaultValue={record.arrivalAddress} />
@@ -1363,12 +1383,17 @@ function VehicleTable({ vehicles }: { vehicles: VehicleV2[] }) {
 }
 
 function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; onClose: () => void; onSaved: (vehicle: VehicleV2) => void }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
       <form
         className="max-h-[92vh] w-full overflow-auto rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-lg"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (saving) return;
+          setSaving(true);
+          setError("");
           const data = new FormData(event.currentTarget);
           const next = {
             ...vehicle,
@@ -1380,9 +1405,17 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
             purchaseDate: text(data, "purchaseDate"),
             memo: text(data, "memo"),
           };
-          await sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, next, "PATCH");
-          onSaved(next);
-          onClose();
+          try {
+            await sendJson(`/api/vehicles?id=${encodeURIComponent(vehicle.id)}`, next, "PATCH");
+            onSaved(next);
+            onClose();
+          } catch (caught) {
+            const message = caught instanceof Error ? caught.message : String(caught);
+            setError(message);
+            alert(`저장 실패: ${message}`);
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -1398,7 +1431,8 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
           <Input name="purchaseDate" label="매입일" type="date" defaultValue={vehicle.purchaseDate} />
         </div>
         <Textarea name="memo" label="메모" defaultValue={vehicle.memo} />
-        <button className="primary-btn w-full" type="submit">저장</button>
+        {error ? <p className="my-2 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p> : null}
+        <button className="primary-btn w-full disabled:opacity-60" type="submit" disabled={saving}>{saving ? "저장 중" : "저장"}</button>
       </form>
     </div>
   );
@@ -1565,19 +1599,42 @@ function CompactRow({ children }: { children: React.ReactNode }) {
   return <div className="grid gap-2 sm:grid-flow-col sm:auto-cols-fr">{children}</div>;
 }
 
-function DateTodayField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const today = todayKorea();
-  const [isToday, setIsToday] = useState(value === today);
+function DateTimeTodayField({
+  date,
+  time,
+  onDateChange,
+  onTimeChange,
+}: {
+  date: string;
+  time: string;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+}) {
+  const [isToday, setIsToday] = useState(date === todayKorea());
+  function resetToNow() {
+    onDateChange(todayKorea());
+    onTimeChange(currentTimeKorea());
+  }
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_8rem]">
       <Input
         name="date"
-        label="날짜선택"
+        label="날짜"
         type="date"
-        value={value}
+        value={date}
         onChange={(event) => {
-          onChange(event.target.value);
-          setIsToday(event.target.value === today);
+          onDateChange(event.target.value);
+          setIsToday(false);
+        }}
+      />
+      <Input
+        name="time"
+        label="시간"
+        type="time"
+        value={time}
+        onChange={(event) => {
+          onTimeChange(event.target.value);
+          setIsToday(false);
         }}
       />
       <label className="mt-0 flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black sm:mt-6">
@@ -1586,7 +1643,7 @@ function DateTodayField({ value, onChange }: { value: string; onChange: (value: 
           checked={isToday}
           onChange={(event) => {
             setIsToday(event.target.checked);
-            if (event.target.checked) onChange(today);
+            if (event.target.checked) resetToNow();
           }}
         />
         오늘
@@ -1687,13 +1744,13 @@ function paginate<T>(items: T[], page: number, pageSize = 10) {
   return items.slice(start, start + pageSize);
 }
 
-function sortDateCreatedDesc<T extends { date?: string; createdAt?: string }>(a: T, b: T) {
-  return sortDateCreatedValues(b.date, b.createdAt, a.date, a.createdAt);
+function sortDateCreatedDesc<T extends { date?: string; time?: string; createdAt?: string }>(a: T, b: T) {
+  return sortDateCreatedValues(b.date, b.time, b.createdAt, a.date, a.time, a.createdAt);
 }
 
-function sortDateCreatedValues(leftDate?: string, leftCreated?: string, rightDate?: string, rightCreated?: string) {
-  const left = new Date(leftDate || leftCreated || 0).getTime();
-  const right = new Date(rightDate || rightCreated || 0).getTime();
+function sortDateCreatedValues(leftDate?: string, leftTime?: string, leftCreated?: string, rightDate?: string, rightTime?: string, rightCreated?: string) {
+  const left = dateTimeSortValue(leftDate, leftTime, leftCreated);
+  const right = dateTimeSortValue(rightDate, rightTime, rightCreated);
   if (left !== right) return left - right;
   return new Date(leftCreated || 0).getTime() - new Date(rightCreated || 0).getTime();
 }
@@ -1702,11 +1759,20 @@ function rowDate(row: { dispatch?: DispatchV2; returnItem?: ReturnV2 }) {
   return row.dispatch?.date || row.returnItem?.date;
 }
 
-function formatBoardDateTime(date?: string, createdAt?: string) {
+function rowTime(row: { dispatch?: DispatchV2; returnItem?: ReturnV2 }) {
+  return row.dispatch?.time || row.returnItem?.time;
+}
+
+function dateTimeSortValue(date?: string, time?: string, createdAt?: string) {
+  if (date) return new Date(`${date}T${(time || "00:00").slice(0, 5)}:00`).getTime();
+  return new Date(createdAt || 0).getTime();
+}
+
+function formatBoardDateTime(date?: string, time?: string, createdAt?: string) {
   if (!date && !createdAt) return "";
   const datePart = (date || createdAt?.slice(0, 10) || "").replaceAll("-", ".");
-  let timePart = "";
-  if (createdAt) {
+  let timePart = time ? time.slice(0, 5) : "";
+  if (!timePart && createdAt) {
     const parsed = new Date(createdAt);
     if (!Number.isNaN(parsed.getTime())) {
       timePart = new Intl.DateTimeFormat("ko-KR", {
@@ -1720,6 +1786,15 @@ function formatBoardDateTime(date?: string, createdAt?: string) {
     }
   }
   return [datePart, timePart].filter(Boolean).join(" ");
+}
+
+function currentTimeKorea() {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
 }
 
 function clean(value: unknown) {
