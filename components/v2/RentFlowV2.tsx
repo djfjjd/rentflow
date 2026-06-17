@@ -141,12 +141,15 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
     <main className="min-h-screen bg-[#f6f7f4] text-[#16211d]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="flex items-start justify-between gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
             <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
                 <Home size={20} />
               </span>
-              <span className="block text-lg leading-tight">{isAdmin ? "사무실용 관리자" : "배회차톡 (현장용)"}</span>
+              <span className="block leading-tight">
+                <span className="block text-base font-black sm:inline sm:text-lg">{isAdmin ? "사무실용 관리자" : "배회차톡"}</span>
+                {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
+              </span>
             </Link>
             <UnreadMessagesButton
               dispatches={dispatches}
@@ -197,14 +200,14 @@ function QuickMenu({
   onCalendarOpenChange: (open: boolean) => void;
 }) {
   return (
-    <nav className="flex max-w-[62vw] items-center gap-2 overflow-x-auto pb-1 sm:max-w-none">
-      <Link className="quick-btn" href="/photos">
+    <nav className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap sm:overflow-x-auto sm:pb-1">
+      <Link className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
         <Camera size={17} />
-        <span>사진촬영본</span>
+        <span className="hidden sm:inline">사진촬영본</span>
       </Link>
-      <Link className="quick-btn" href="/partners">
+      <Link className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
         <MapPin size={17} />
-        <span>거래처주소</span>
+        <span className="hidden sm:inline">거래처주소</span>
       </Link>
       <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
     </nav>
@@ -233,6 +236,8 @@ function UnreadMessagesButton({
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
   ].sort((a, b) => sortDateCreatedValues(rowDate(b), b.createdAt, rowDate(a), a.createdAt));
 
+  if (unread.length === 0) return <span className="min-h-11" />;
+
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
@@ -244,7 +249,7 @@ function UnreadMessagesButton({
   }
 
   return (
-    <div className="absolute left-1/2 top-4 z-40 -translate-x-1/2">
+    <div className="justify-self-center sm:absolute sm:left-1/2 sm:top-4 sm:z-40 sm:-translate-x-1/2">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         안 읽은 메시지
       </button>
@@ -266,7 +271,7 @@ function UnreadMessagesButton({
                   const vehicle = findVehicle(vehicles, plate);
                   return (
                     <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
-                      <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
+                      <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.createdAt || ret?.createdAt)}</td>
                       <td className="font-black">{plate}</td>
                       <td>{row.kind}</td>
                       <td>{vehicleModelColor(vehicle)}</td>
@@ -299,7 +304,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
   const selectedItems = byDate[selected] || [];
 
   return (
-    <div className="relative">
+    <div className="flex w-full justify-end sm:w-auto sm:block">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         <CalendarDays size={17} />
         <span>Today {formatDateDot(today)}</span>
@@ -1064,7 +1069,7 @@ function DispatchAdmin({
           return (
             <tr className="border-b" key={`${row.kind}-${row.id}`}>
               <td><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
-              <td>{formatBoardDate(dispatch?.date || ret?.date)}</td>
+              <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.createdAt || ret?.createdAt)}</td>
               <td className="font-black">{plate}</td>
               <td>{row.kind}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1097,7 +1102,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
-              <td>{formatBoardDate(item.date)}</td>
+              <td>{formatBoardDateTime(item.date, item.createdAt)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>{clean(item.businessType || item.status)}</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1139,7 +1144,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
-              <td>{formatBoardDate(item.date)}</td>
+              <td>{formatBoardDateTime(item.date, item.createdAt)}</td>
               <td className="font-black">{clean(item.rentalCarNumber)}</td>
               <td>회차</td>
               <td>{vehicleModelColor(vehicle)}</td>
@@ -1697,8 +1702,24 @@ function rowDate(row: { dispatch?: DispatchV2; returnItem?: ReturnV2 }) {
   return row.dispatch?.date || row.returnItem?.date;
 }
 
-function formatBoardDate(value?: string) {
-  return value ? value.replaceAll("-", ".") : "";
+function formatBoardDateTime(date?: string, createdAt?: string) {
+  if (!date && !createdAt) return "";
+  const datePart = (date || createdAt?.slice(0, 10) || "").replaceAll("-", ".");
+  let timePart = "";
+  if (createdAt) {
+    const parsed = new Date(createdAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      timePart = new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(parsed);
+    } else if (createdAt.length >= 16) {
+      timePart = createdAt.slice(11, 16);
+    }
+  }
+  return [datePart, timePart].filter(Boolean).join(" ");
 }
 
 function clean(value: unknown) {
