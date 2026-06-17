@@ -7,9 +7,17 @@ type Env = {
 export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureDispatchSchema(env);
-    const { results } = await env.DB.prepare("SELECT * FROM dispatches ORDER BY created_at DESC").all();
+    const { results } = await env.DB.prepare(`
+      SELECT *
+      FROM dispatches
+      ORDER BY
+        COALESCE(date, '') DESC,
+        COALESCE(time, '') DESC,
+        COALESCE(updated_at, created_at, '') DESC
+    `).all();
+    console.log("dispatch rows from D1", results.length, results[0]);
 
-    return Response.json(results.map(mapDispatch));
+    return Response.json(results.map(mapDispatch), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("dispatch list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -47,8 +55,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeBoolInt(d.isCompleted)
     ).run();
 
-    console.log("saved dispatch id", d.id);
-    return Response.json({ ok: true, success: true, id: safeText(d.id) });
+    console.log("dispatch saved", d.id);
+    return Response.json({ ok: true, success: true, id: safeText(d.id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("dispatch save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -103,7 +111,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeText(id)
     ).run();
 
-    return Response.json({ ok: true, success: true, id: safeText(id) });
+    return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("dispatch update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -118,7 +126,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     await env.DB.prepare("DELETE FROM dispatches WHERE id = ?").bind(safeText(id)).run();
-    return Response.json({ success: true });
+    return Response.json({ success: true }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("dispatch delete failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -126,32 +134,47 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
 }
 
 function mapDispatch(row: any) {
+  const vehicleNumber = row.vehicle_number || row.rental_car_number || row.plate_number || "";
+  const dispatchType = row.dispatch_type || row.business_type || row.status || "";
+  const orderer = row.orderer || row.ordered_by || row.customer_name || "";
+  const fuelLevelText = row.fuel_level_text || row.fuel_display || "";
+  const memo = row.memo || row.notes || "";
   return {
     id: row.id,
     date: row.date,
     time: row.time,
+    vehicle_number: vehicleNumber,
+    dispatch_type: dispatchType,
+    orderer,
+    repair_shop: row.repair_shop,
+    customer_car_model: row.customer_car_model,
+    fuel_level_text: fuelLevelText,
+    customer_phone: row.customer_phone,
+    memo,
+    is_corporate: row.is_corporate ?? row.corporate_vehicle ?? 0,
+    is_completed: row.is_completed ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
     claimNumber: row.claim_number,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     customerCarNumber: row.customer_car_number,
     customerCarModel: row.customer_car_model,
-    vehicleNumber: row.vehicle_number || row.rental_car_number,
-    rentalCarNumber: row.vehicle_number || row.rental_car_number,
-    orderer: row.orderer || row.ordered_by,
-    orderedBy: row.orderer || row.ordered_by,
+    vehicleNumber,
+    rentalCarNumber: vehicleNumber,
+    orderedBy: orderer,
     repairShop: row.repair_shop,
     pickupAddress: row.pickup_address,
     deliveryAddress: row.delivery_address,
     fuelLevel: row.fuel_level,
-    fuelDisplay: row.fuel_level_text || row.fuel_display,
-    fuelLevelText: row.fuel_level_text || row.fuel_display,
+    fuelDisplay: fuelLevelText,
+    fuelLevelText,
     vehicleColor: row.vehicle_color,
-    dispatchType: row.dispatch_type || row.business_type,
-    businessType: row.dispatch_type || row.business_type,
+    dispatchType,
+    businessType: dispatchType,
     corporateVehicle: Boolean(row.is_corporate ?? row.corporate_vehicle),
     isCompleted: Boolean(row.is_completed),
-    notes: row.memo || row.notes,
-    memo: row.memo || row.notes,
+    notes: memo,
     status: row.status,
     intakeType: row.intake_type,
     uploadedAt: row.uploaded_at,
@@ -212,4 +235,10 @@ async function ensureDispatchSchema(env: Env) {
     { name: "vehicle_color", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
   ]);
+}
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  };
 }

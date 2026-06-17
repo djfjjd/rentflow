@@ -1158,6 +1158,9 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [page, setPage] = useState(1);
   const rows = [...dispatches].sort(sortDateCreatedDesc);
+  useEffect(() => {
+    console.log("dispatch board items", dispatches.length);
+  }, [dispatches.length]);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
@@ -1200,6 +1203,9 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
   const rows = [...returns].sort(sortDateCreatedDesc);
+  useEffect(() => {
+    console.log("return board items", returns.length);
+  }, [returns.length]);
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>

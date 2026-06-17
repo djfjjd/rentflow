@@ -7,9 +7,17 @@ type Env = {
 export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureReturnSchema(env);
-    const { results } = await env.DB.prepare("SELECT * FROM returns ORDER BY created_at DESC").all();
+    const { results } = await env.DB.prepare(`
+      SELECT *
+      FROM returns
+      ORDER BY
+        COALESCE(date, '') DESC,
+        COALESCE(time, '') DESC,
+        COALESCE(updated_at, created_at, '') DESC
+    `).all();
+    console.log("return rows from D1", results.length, results[0]);
 
-    return Response.json(results.map(mapReturn));
+    return Response.json(results.map(mapReturn), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("return list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -46,8 +54,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeBoolInt(r.isCompleted)
     ).run();
 
-    console.log("saved return id", r.id);
-    return Response.json({ ok: true, success: true, id: safeText(r.id) });
+    console.log("return saved", r.id);
+    return Response.json({ ok: true, success: true, id: safeText(r.id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("return save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -93,7 +101,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
     await env.DB.prepare(`UPDATE returns SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
-    return Response.json({ ok: true, success: true, id: safeText(id) });
+    return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("return update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -106,7 +114,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     await env.DB.prepare("DELETE FROM returns WHERE id = ?").bind(safeText(id)).run();
-    return Response.json({ success: true });
+    return Response.json({ success: true }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("return delete failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -114,22 +122,32 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
 }
 
 function mapReturn(row: any) {
+  const vehicleNumber = row.vehicle_number || row.rental_car_number || row.plate_number || "";
+  const parkingZone = row.parking_zone || row.arrival_address || row.return_address || row.location || "";
+  const fuelLevelText = row.fuel_level_text || row.fuel_display || "";
+  const memo = row.memo || row.notes || "";
   return {
     id: row.id,
     date: row.date,
     time: row.time,
-    vehicleNumber: row.vehicle_number || row.rental_car_number,
-    rentalCarNumber: row.vehicle_number || row.rental_car_number,
-    returnAddress: row.return_address,
-    arrivalAddress: row.parking_zone || row.arrival_address,
-    parkingZone: row.parking_zone || row.arrival_address,
-    fuelLevel: row.fuel_level,
-    fuelDisplay: row.fuel_level_text || row.fuel_display,
-    fuelLevelText: row.fuel_level_text || row.fuel_display,
-    vehicleColor: row.vehicle_color,
+    vehicle_number: vehicleNumber,
     mileage: row.mileage,
-    notes: row.memo || row.notes,
-    memo: row.memo || row.notes,
+    fuel_level_text: fuelLevelText,
+    parking_zone: parkingZone,
+    memo,
+    is_completed: row.is_completed ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    vehicleNumber,
+    rentalCarNumber: vehicleNumber,
+    returnAddress: row.return_address,
+    arrivalAddress: parkingZone,
+    parkingZone,
+    fuelLevel: row.fuel_level,
+    fuelDisplay: fuelLevelText,
+    fuelLevelText,
+    vehicleColor: row.vehicle_color,
+    notes: memo,
     status: row.status,
     isCompleted: Boolean(row.is_completed),
     createdAt: row.created_at,
@@ -171,6 +189,13 @@ async function ensureReturnSchema(env: Env) {
     { name: "notes", definition: "TEXT" },
     { name: "status", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
+    { name: "created_at", definition: "DATETIME" },
     { name: "updated_at", definition: "DATETIME" },
   ]);
+}
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  };
 }

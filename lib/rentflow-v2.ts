@@ -185,11 +185,15 @@ export function formatDateTime(value?: string) {
 
 export async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
-    const response = await fetch(url);
-    if (!response.ok) return fallback;
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      console.error("fetchJson failed", url, await response.text());
+      return fallback;
+    }
     const data = await response.json();
     return data as T;
-  } catch {
+  } catch (error) {
+    console.error("fetchJson failed", url, error);
     return fallback;
   }
 }
