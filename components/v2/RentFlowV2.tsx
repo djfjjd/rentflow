@@ -983,7 +983,7 @@ function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: 
     ["보험", dashboardRows.filter((row) => row.statusLabel === "보험").length],
     ["자차", dashboardRows.filter((row) => row.statusLabel === "자차").length],
     ["셀프", dashboardRows.filter((row) => row.statusLabel === "셀프").length],
-    ["주차구역표시", dashboardRows.filter((row) => row.statusLabel === "주차구역표시").length],
+    ["삼실", dashboardRows.filter((row) => row.statusLabel === "주차구역표시").length],
     ["오늘 배차", dispatches.filter((d) => d.createdAt?.startsWith(today)).length],
     ["오늘 회차", returns.filter((r) => r.createdAt?.startsWith(today)).length],
     ["미수금", "0원"],
@@ -1911,6 +1911,7 @@ function displayVehicleStatus(vehicle: VehicleV2) {
 }
 
 function StatusPill({ status }: { status: string }) {
+  const label = status === "주차구역표시" ? "삼실" : status;
   const className =
     status === "보험"
       ? "bg-red-100 text-red-700"
@@ -1919,7 +1920,7 @@ function StatusPill({ status }: { status: string }) {
         : status === "셀프"
           ? "bg-green-100 text-green-700"
           : "bg-gray-100 text-gray-700";
-  return <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${className}`}>{status}</span>;
+  return <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${className}`}>{label}</span>;
 }
 
 function vehicleDashboardSummary(vehicle: VehicleV2) {
