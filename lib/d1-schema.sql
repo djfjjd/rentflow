@@ -60,9 +60,11 @@ CREATE TABLE IF NOT EXISTS returns (
   id TEXT PRIMARY KEY,
   date TEXT,
   time TEXT,
-  rental_car_number TEXT NOT NULL,
+  vehicle_number TEXT,
+  rental_car_number TEXT,
   return_address TEXT,
   arrival_address TEXT,
+  parking_zone TEXT,
   fuel_level REAL,
   fuel_display TEXT,
   fuel_level_text TEXT,
@@ -72,18 +74,20 @@ CREATE TABLE IF NOT EXISTS returns (
   memo TEXT,
   status TEXT NOT NULL DEFAULT '회차등록',
   is_completed INTEGER DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Reservations table
 CREATE TABLE IF NOT EXISTS reservations (
   id TEXT PRIMARY KEY,
-  date TEXT NOT NULL,
-  time TEXT NOT NULL,
+  date TEXT,
+  time TEXT,
   end_time TEXT,
   vehicle_number TEXT,
   rent_car_number TEXT,
-  customer_name TEXT NOT NULL,
+  customer_name TEXT,
+  reserver_name TEXT,
   reservation_text TEXT,
   customer_car_number TEXT,
   customer_car_model TEXT,
@@ -95,7 +99,8 @@ CREATE TABLE IF NOT EXISTS reservations (
   route TEXT,
   repair_shop_partner_id TEXT,
   status TEXT NOT NULL DEFAULT '예약',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Maintenance (Pending/Current) table
@@ -136,10 +141,13 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
 -- Maintenance Histories table
 CREATE TABLE IF NOT EXISTS maintenance_histories (
   id TEXT PRIMARY KEY,
+  date TEXT,
+  vehicle_number TEXT,
+  maintenance_content TEXT,
   vehicle_id TEXT,
-  plate_number TEXT NOT NULL,
-  maintenance_type TEXT NOT NULL,
-  title TEXT NOT NULL,
+  plate_number TEXT,
+  maintenance_type TEXT,
+  title TEXT,
   description TEXT,
   repair_shop_id TEXT,
   repair_shop_name TEXT,
@@ -166,8 +174,10 @@ CREATE TABLE IF NOT EXISTS maintenance_histories (
 -- Accident Histories table
 CREATE TABLE IF NOT EXISTS accident_histories (
   id TEXT PRIMARY KEY,
+  date TEXT,
+  vehicle_number TEXT,
   vehicle_id TEXT,
-  plate_number TEXT NOT NULL,
+  plate_number TEXT,
   insurance_number TEXT,
   accident_date TEXT,
   accident_location TEXT,
@@ -256,8 +266,9 @@ CREATE TABLE IF NOT EXISTS receivables (
 -- Lost Items table
 CREATE TABLE IF NOT EXISTS lost_items (
   id TEXT PRIMARY KEY,
+  date TEXT,
   vehicle_number TEXT,
-  item_name TEXT NOT NULL,
+  item_name TEXT,
   customer_name TEXT,
   found_date TEXT,
   found_location TEXT,
@@ -266,6 +277,7 @@ CREATE TABLE IF NOT EXISTS lost_items (
   memo TEXT,
   status TEXT DEFAULT '보관중',
   is_completed INTEGER DEFAULT 0,
+  is_resolved INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

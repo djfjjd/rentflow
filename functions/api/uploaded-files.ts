@@ -102,6 +102,7 @@ async function ensureUploadedFilesSchema(env: Env) {
     )
   `).run();
   await ensureColumns(env.DB, "uploaded_files", [
+    { name: "vehicle_number", definition: "TEXT" },
     { name: "file_type", definition: "TEXT" },
     { name: "record_type", definition: "TEXT" },
     { name: "record_id", definition: "TEXT" },
