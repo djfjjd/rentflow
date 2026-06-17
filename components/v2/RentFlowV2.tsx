@@ -67,6 +67,8 @@ type PageKind =
   | "admin-settings"
   | "admin-stats";
 
+type ReloadHandler<T> = (items?: T[]) => void | Promise<void>;
+
 const appActions = [
   { href: "/app/dispatch", label: "배차", icon: Car, primary: true },
   { href: "/app/return", label: "회차", icon: Check, primary: true },
@@ -120,6 +122,30 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const isAdmin = kind.startsWith("admin");
 
+  async function reloadReservations() {
+    setReservations(await fetchJson<ReservationV2[]>("/api/reservations", []));
+  }
+
+  async function reloadDispatches() {
+    setDispatches(await fetchJson<DispatchV2[]>("/api/dispatches", []));
+  }
+
+  async function reloadReturns() {
+    setReturns(await fetchJson<ReturnV2[]>("/api/returns", []));
+  }
+
+  async function reloadAccidents() {
+    setAccidents(await fetchJson<IncidentRecordV2[]>("/api/accident-histories", []));
+  }
+
+  async function reloadMaintenance() {
+    setMaintenance(await fetchJson<IncidentRecordV2[]>("/api/maintenance-histories", []));
+  }
+
+  async function reloadLostItems() {
+    setLostItems(await fetchJson<LostItemV2[]>("/api/lost-items", []));
+  }
+
   useEffect(() => {
     Promise.all([
       fetchJson<VehicleV2[]>("/api/vehicles", []),
@@ -158,8 +184,8 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
               dispatches={dispatches}
               returns={returns}
               vehicles={vehicles}
-              onDispatches={setDispatches}
-              onReturns={setReturns}
+              onDispatches={reloadDispatches}
+              onReturns={reloadReturns}
               open={activeOverlay === "unread"}
               onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
             />
@@ -170,20 +196,20 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {isAdmin ? <AdminNav /> : null}
 
         {kind === "home" ? <HomeScreen /> : null}
-        {kind === "dispatch" ? <DispatchForm vehicles={vehicles} dispatches={dispatches} onDispatches={setDispatches} /> : null}
-        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={setReturns} /> : null}
-        {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={setReservations} /> : null}
-        {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={setAccidents} onMaintenance={setMaintenance} /> : null}
+        {kind === "dispatch" ? <DispatchForm vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
+        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={reloadReturns} /> : null}
+        {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
+        {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
         {kind === "billing" ? <BillingForm dispatches={dispatches} /> : null}
-        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={setLostItems} /> : null}
+        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
         {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
         {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
-        {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={setReservations} /> : null}
-        {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={setDispatches} onReturns={setReturns} /> : null}
+        {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
+        {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
         {kind === "admin-billing" ? <BillingAdmin /> : null}
         {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
         {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -230,8 +256,8 @@ function UnreadMessagesButton({
   dispatches: DispatchV2[];
   returns: ReturnV2[];
   vehicles: VehicleV2[];
-  onDispatches: (items: DispatchV2[]) => void;
-  onReturns: (items: ReturnV2[]) => void;
+  onDispatches: ReloadHandler<DispatchV2>;
+  onReturns: ReloadHandler<ReturnV2>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -245,11 +271,11 @@ function UnreadMessagesButton({
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
-      onDispatches(dispatches.map((item) => item.id === id ? { ...item, isCompleted: true } : item));
+      await onDispatches();
       return;
     }
     await sendJson(`/api/returns?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
-    onReturns(returns.map((item) => item.id === id ? { ...item, isCompleted: true } : item));
+    await onReturns();
   }
 
   return (
@@ -472,7 +498,7 @@ function AdminNav() {
   );
 }
 
-function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: (items: DispatchV2[]) => void }) {
+function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
@@ -559,7 +585,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   );
 }
 
-function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: (items: ReturnV2[]) => void }) {
+function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: ReloadHandler<ReturnV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
@@ -619,7 +645,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   );
 }
 
-function ReservationForm({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+function ReservationForm({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   const [draft, setDraft] = useState("");
   const parsed = useMemo(() => parseReservationText(draft), [draft]);
   return (
@@ -668,8 +694,8 @@ function IncidentForm({
   vehicles: VehicleV2[];
   accidents: IncidentRecordV2[];
   maintenance: IncidentRecordV2[];
-  onAccidents: (items: IncidentRecordV2[]) => void;
-  onMaintenance: (items: IncidentRecordV2[]) => void;
+  onAccidents: ReloadHandler<IncidentRecordV2>;
+  onMaintenance: ReloadHandler<IncidentRecordV2>;
 }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [type, setType] = useState("사고");
@@ -713,7 +739,7 @@ function IncidentForm({
         <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
         <PhotoUploadButton />
       </DataForm>
-      <IncidentBoard accidents={accidents} maintenance={maintenance} />
+      <IncidentBoard accidents={accidents} maintenance={maintenance} onAccidents={onAccidents} onMaintenance={onMaintenance} />
     </section>
   );
 }
@@ -738,7 +764,7 @@ function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
   );
 }
 
-function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: (items: LostItemV2[]) => void }) {
+function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [resetKey, setResetKey] = useState(0);
   return (
@@ -770,7 +796,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         </CompactRow>
         <PhotoUploadButton />
       </DataForm>
-      <LostItemBoard items={lostItems} />
+      <LostItemBoard items={lostItems} onLostItems={onLostItems} />
     </section>
   );
 }
@@ -1060,7 +1086,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
   );
 }
 
-function ReservationAdmin({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+function ReservationAdmin({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   return <section className="space-y-4"><ReservationForm reservations={reservations} onReservations={onReservations} /><CalendarPage reservations={reservations} /></section>;
 }
 
@@ -1074,8 +1100,8 @@ function DispatchAdmin({
   dispatches: DispatchV2[];
   returns: ReturnV2[];
   vehicles: VehicleV2[];
-  onDispatches: (items: DispatchV2[]) => void;
-  onReturns: (items: ReturnV2[]) => void;
+  onDispatches: ReloadHandler<DispatchV2>;
+  onReturns: ReloadHandler<ReturnV2>;
 }) {
   const [filter, setFilter] = useState("전체");
   const [page, setPage] = useState(1);
@@ -1088,11 +1114,11 @@ function DispatchAdmin({
   async function toggle(row: typeof rows[number], checked: boolean) {
     if (row.kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
-      onDispatches(dispatches.map((item) => item.id === row.id ? { ...item, isCompleted: checked } : item));
+      await onDispatches();
       return;
     }
     await sendJson(`/api/returns?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
-    onReturns(returns.map((item) => item.id === row.id ? { ...item, isCompleted: checked } : item));
+    await onReturns();
   }
 
   return (
@@ -1127,7 +1153,7 @@ function DispatchAdmin({
   );
 }
 
-function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: (items: DispatchV2[]) => void }) {
+function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [page, setPage] = useState(1);
@@ -1159,17 +1185,17 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
-      {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onDispatches(dispatches.map((item) => item.id === next.id ? next : item))} /> : null}
+      {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onDispatches()} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 배차`} onCancel={() => setDeleting(null)} onDelete={async () => {
         await fetch(`/api/dispatches?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
-        onDispatches(dispatches.filter((item) => item.id !== deleting.id));
+        await onDispatches();
         setDeleting(null);
       }} /> : null}
     </section>
   );
 }
 
-function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: (items: ReturnV2[]) => void }) {
+function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: ReloadHandler<ReturnV2> }) {
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
@@ -1200,17 +1226,17 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
-      {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={(next) => onReturns(returns.map((item) => item.id === next.id ? next : item))} /> : null}
+      {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onReturns()} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 회차`} onCancel={() => setDeleting(null)} onDelete={async () => {
         await fetch(`/api/returns?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
-        onReturns(returns.filter((item) => item.id !== deleting.id));
+        await onReturns();
         setDeleting(null);
       }} /> : null}
     </section>
   );
 }
 
-function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch: DispatchV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: DispatchV2) => void }) {
+function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch: DispatchV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: ReloadHandler<DispatchV2> }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, dispatch.rentalCarNumber || ""));
   const [date, setDate] = useState(dispatch.date || todayKorea());
   const [time, setTime] = useState(dispatch.time || currentTimeKorea());
@@ -1238,7 +1264,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
           corporateVehicle: data.get("corporateVehicle") === "on",
         };
         await sendJson(`/api/dispatches?id=${encodeURIComponent(dispatch.id)}`, next, "PATCH");
-        onSaved(next);
+        await onSaved();
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
@@ -1257,7 +1283,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
   );
 }
 
-function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: ReturnV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: (item: ReturnV2) => void }) {
+function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: ReturnV2; vehicles: VehicleV2[]; onClose: () => void; onSaved: ReloadHandler<ReturnV2> }) {
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, record.rentalCarNumber || ""));
   const [date, setDate] = useState(record.date || todayKorea());
   const [time, setTime] = useState(record.time || currentTimeKorea());
@@ -1280,7 +1306,7 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
           memo: text(data, "notes"),
         };
         await sendJson(`/api/returns?id=${encodeURIComponent(record.id)}`, next, "PATCH");
-        onSaved(next);
+        await onSaved();
         onClose();
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={setSelected} /></FormBlock>
@@ -1295,20 +1321,26 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
   );
 }
 
-function IncidentBoard({ accidents, maintenance }: { accidents: IncidentRecordV2[]; maintenance: IncidentRecordV2[] }) {
-  const [accidentRows, setAccidentRows] = useState(accidents);
-  const [maintenanceRows, setMaintenanceRows] = useState(maintenance);
+function IncidentBoard({
+  accidents,
+  maintenance,
+  onAccidents,
+  onMaintenance,
+}: {
+  accidents: IncidentRecordV2[];
+  maintenance: IncidentRecordV2[];
+  onAccidents: ReloadHandler<IncidentRecordV2>;
+  onMaintenance: ReloadHandler<IncidentRecordV2>;
+}) {
   const [page, setPage] = useState(1);
-  useEffect(() => setAccidentRows(accidents), [accidents]);
-  useEffect(() => setMaintenanceRows(maintenance), [maintenance]);
   const rows = [
-    ...accidentRows.map((item) => ({ type: "사고" as const, endpoint: "/api/accident-histories", item })),
-    ...maintenanceRows.map((item) => ({ type: "정비" as const, endpoint: "/api/maintenance-histories", item })),
+    ...accidents.map((item) => ({ type: "사고" as const, endpoint: "/api/accident-histories", item })),
+    ...maintenance.map((item) => ({ type: "정비" as const, endpoint: "/api/maintenance-histories", item })),
   ].sort((a, b) => new Date((b.item.accidentDate || b.item.foundDate || b.item.createdAt || 0) as string).getTime() - new Date((a.item.accidentDate || a.item.foundDate || a.item.createdAt || 0) as string).getTime());
   async function toggle(row: typeof rows[number], checked: boolean) {
     await sendJson(`${row.endpoint}?id=${encodeURIComponent(row.item.id)}`, { isCompleted: checked }, "PATCH");
-    if (row.type === "사고") setAccidentRows(accidentRows.map((item) => item.id === row.item.id ? { ...item, isCompleted: checked } : item));
-    else setMaintenanceRows(maintenanceRows.map((item) => item.id === row.item.id ? { ...item, isCompleted: checked } : item));
+    if (row.type === "사고") await onAccidents();
+    else await onMaintenance();
   }
   return (
     <section className="panel overflow-x-auto">
@@ -1326,20 +1358,19 @@ function IncidentBoard({ accidents, maintenance }: { accidents: IncidentRecordV2
   );
 }
 
-function LostItemBoard({ items }: { items: LostItemV2[] }) {
-  const [rows, setRows] = useState(items);
+function LostItemBoard({ items, onLostItems }: { items: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
   const [page, setPage] = useState(1);
-  useEffect(() => setRows(items), [items]);
+  const rows = [...items].sort((a, b) => new Date(b.foundDate || b.createdAt || 0).getTime() - new Date(a.foundDate || a.createdAt || 0).getTime());
   async function toggle(id: string, checked: boolean) {
     await sendJson(`/api/lost-items?id=${encodeURIComponent(id)}`, { isCompleted: checked }, "PATCH");
-    setRows(rows.map((item) => item.id === id ? { ...item, isCompleted: checked } : item));
+    await onLostItems();
   }
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
-        <tbody>{paginate([...rows].sort((a, b) => new Date(b.foundDate || b.createdAt || 0).getTime() - new Date(a.foundDate || a.createdAt || 0).getTime()), page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
+        <tbody>{paginate(rows, page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
@@ -1525,7 +1556,7 @@ function FuelTypeSelect({ defaultValue }: { defaultValue?: string }) {
   );
 }
 
-function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: (reservations: ReservationV2[]) => void }) {
+function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   const [editing, setEditing] = useState<ReservationV2 | null>(null);
   const [page, setPage] = useState(1);
   const rows = [...reservations].sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
@@ -1533,7 +1564,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   async function remove(id: string) {
     if (!confirm("정말 삭제하시겠습니까?")) return;
     await fetch(`/api/reservations?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    onReservations(reservations.filter((reservation) => reservation.id !== id));
+    await onReservations();
   }
 
   return (
@@ -1554,12 +1585,12 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
         </tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
-      {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={(next) => onReservations(reservations.map((item) => item.id === next.id ? next : item))} /> : null}
+      {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={() => onReservations()} /> : null}
     </section>
   );
 }
 
-function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: ReservationV2; onClose: () => void; onSaved: (reservation: ReservationV2) => void }) {
+function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: ReservationV2; onClose: () => void; onSaved: ReloadHandler<ReservationV2> }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
       <form
@@ -1575,7 +1606,7 @@ function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: 
             memo: text(data, "reservationText"),
           };
           await sendJson(`/api/reservations?id=${encodeURIComponent(reservation.id)}`, next, "PATCH");
-          onSaved(next);
+          await onSaved();
           onClose();
         }}
       >

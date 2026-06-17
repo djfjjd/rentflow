@@ -1,4 +1,3 @@
-import { maintenanceHistories as seedMaintenanceHistories } from "../../lib/erp-data";
 import { ensureColumns, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
@@ -9,22 +8,6 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureMaintenanceHistorySchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM maintenance_histories ORDER BY created_at DESC").all();
-    
-    // Seed if empty
-    if (results.length === 0 && seedMaintenanceHistories.length > 0) {
-      const stmt = env.DB.prepare(
-        "INSERT INTO maintenance_histories (id, vehicle_id, plate_number, maintenance_type, title, description, repair_shop_id, repair_shop_name, found_date, scheduled_date, completed_date, mileage, cost, priority, status, photos, videos, documents, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      );
-      
-      const batch = seedMaintenanceHistories.map(mh => 
-        stmt.bind(...safeBindValues([mh.id, mh.vehicleId, mh.plateNumber, mh.maintenanceType, mh.title, mh.description, mh.repairShopId || null, mh.repairShopName, mh.foundDate, mh.scheduledDate || null, mh.completedDate || null, mh.mileage, mh.cost, mh.priority, mh.status, JSON.stringify(mh.photos), JSON.stringify(mh.videos), JSON.stringify(mh.documents), mh.linkedDispatchId || null, mh.linkedReturnId || null, mh.linkedSmartInboxItemId || null, mh.memo, mh.createdBy]))
-      );
-      
-      await env.DB.batch(batch);
-      
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM maintenance_histories ORDER BY created_at DESC").all();
-      return Response.json(seededResults.map(mapHistory));
-    }
 
     return Response.json(results.map(mapHistory));
   } catch (error) {

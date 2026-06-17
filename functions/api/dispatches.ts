@@ -1,4 +1,3 @@
-import { dispatches as seedDispatches } from "../../lib/erp-data";
 import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
@@ -9,22 +8,6 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureDispatchSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM dispatches ORDER BY created_at DESC").all();
-    
-    // Seed if empty
-    if (results.length === 0 && seedDispatches.length > 0) {
-      const stmt = env.DB.prepare(
-        "INSERT INTO dispatches (id, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, notes, status, intake_type, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      );
-      
-      const batch = seedDispatches.map(d => 
-        stmt.bind(...safeBindValues([d.id, d.claimNumber, d.customerName, d.customerPhone, d.customerCarNumber, d.customerCarModel, d.rentalCarNumber, d.orderedBy, d.repairShop, d.pickupAddress, d.deliveryAddress, d.fuelLevel, d.notes, d.status, d.intakeType || null, d.uploadedAt || null]))
-      );
-      
-      await env.DB.batch(batch);
-      
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM dispatches ORDER BY created_at DESC").all();
-      return Response.json(seededResults.map(mapDispatch));
-    }
 
     return Response.json(results.map(mapDispatch));
   } catch (error) {

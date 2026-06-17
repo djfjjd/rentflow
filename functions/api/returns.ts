@@ -1,4 +1,3 @@
-import { returns as seedReturns } from "../../lib/erp-data";
 import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
@@ -9,22 +8,6 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureReturnSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM returns ORDER BY created_at DESC").all();
-    
-    // Seed if empty
-    if (results.length === 0 && seedReturns.length > 0) {
-      const stmt = env.DB.prepare(
-        "INSERT INTO returns (id, rental_car_number, return_address, arrival_address, fuel_level, mileage, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-      );
-      
-      const batch = seedReturns.map(r => 
-        stmt.bind(...safeBindValues([r.id, r.rentalCarNumber, r.returnAddress, r.arrivalAddress, r.fuelLevel, r.mileage, r.notes, r.status]))
-      );
-      
-      await env.DB.batch(batch);
-      
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM returns ORDER BY created_at DESC").all();
-      return Response.json(seededResults.map(mapReturn));
-    }
 
     return Response.json(results.map(mapReturn));
   } catch (error) {

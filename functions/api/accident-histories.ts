@@ -1,4 +1,3 @@
-import { accidentHistories as seedAccidentHistories } from "../../lib/erp-data";
 import { ensureColumns, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
@@ -9,22 +8,6 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureAccidentSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM accident_histories ORDER BY created_at DESC").all();
-    
-    // Seed if empty
-    if (results.length === 0 && seedAccidentHistories.length > 0) {
-      const stmt = env.DB.prepare(
-        "INSERT INTO accident_histories (id, vehicle_id, plate_number, insurance_number, accident_date, accident_location, accident_type, accident_part, description, customer_name, customer_car_number, customer_car_model, insurance_company, repair_shop_id, repair_shop_name, repair_cost, claim_amount, photos, videos, documents, status, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      );
-      
-      const batch = seedAccidentHistories.map(ah => 
-        stmt.bind(...safeBindValues([ah.id, ah.vehicleId, ah.plateNumber, ah.insuranceNumber, ah.accidentDate, ah.accidentLocation, ah.accidentType, ah.accidentPart, ah.description, ah.customerName, ah.customerCarNumber, ah.customerCarModel, ah.insuranceCompany, ah.repairShopId || null, ah.repairShopName, ah.repairCost, ah.claimAmount, JSON.stringify(ah.photos), JSON.stringify(ah.videos), JSON.stringify(ah.documents), ah.status, ah.linkedDispatchId || null, ah.linkedReturnId || null, ah.linkedSmartInboxItemId || null, ah.memo, ah.createdBy]))
-      );
-      
-      await env.DB.batch(batch);
-      
-      const { results: seededResults } = await env.DB.prepare("SELECT * FROM accident_histories ORDER BY created_at DESC").all();
-      return Response.json(seededResults.map(mapHistory));
-    }
 
     return Response.json(results.map(mapHistory));
   } catch (error) {
