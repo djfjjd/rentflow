@@ -1,5 +1,5 @@
 import { dispatches as seedDispatches } from "../../lib/erp-data";
-import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -37,44 +37,30 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     await ensureDispatchSchema(env);
     const d = await request.json() as any;
-    const fuelLevelText = d.fuelLevelText ?? d.fuelDisplay;
-    const memo = d.memo ?? d.notes;
-    const isCorporate = safeBoolInt(d.isCorporate ?? d.corporateVehicle);
     const vehicleNumber = d.vehicleNumber ?? d.rentalCarNumber;
     const dispatchType = d.dispatchType ?? d.businessType;
     const orderer = d.orderer ?? d.orderedBy;
+    const repairShop = d.repairShop ?? d.repair_shop;
+    const customerCarModel = d.customerCarModel ?? d.customer_car_model;
+    const fuelLevelText = d.fuelLevelText ?? d.fuel_level_text ?? d.fuelDisplay;
+    const customerPhone = d.customerPhone ?? d.customer_phone;
+    const memo = d.memo ?? d.notes;
+    const isCorporate = safeBoolInt(d.isCorporate ?? d.is_corporate ?? d.corporateVehicle);
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, date, time, vehicle_number, rental_car_number, dispatch_type, business_type, orderer, ordered_by, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, fuel_level_text, vehicle_color, corporate_vehicle, is_corporate, notes, memo, status, intake_type, uploaded_at, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, is_corporate, is_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(d.id),
       safeNullableText(d.date),
       safeNullableText(d.time),
       safeText(vehicleNumber),
-      safeText(vehicleNumber),
-      safeNullableText(dispatchType),
-      safeNullableText(dispatchType),
+      safeText(dispatchType),
       safeText(orderer),
-      safeText(orderer),
-      safeNullableText(d.claimNumber),
-      safeText(d.customerName),
-      safeText(d.customerPhone),
-      safeText(d.customerCarNumber),
-      safeText(d.customerCarModel),
-      safeText(d.repairShop),
-      safeText(d.pickupAddress),
-      safeText(d.deliveryAddress),
-      safeNumber(d.fuelLevel),
+      safeText(repairShop),
+      safeText(customerCarModel),
       safeText(fuelLevelText),
-      safeText(fuelLevelText),
-      safeText(d.vehicleColor),
-      safeNullableText(d.businessType),
-      isCorporate,
-      isCorporate,
+      safeText(customerPhone),
       safeText(memo),
-      safeText(memo),
-      safeText(d.status || "배차등록"),
-      safeNullableText(d.intakeType),
-      safeNullableText(d.uploadedAt),
+      isCorporate,
       safeBoolInt(d.isCompleted)
     ).run();
 
@@ -93,58 +79,46 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const id = url.searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
-    const updates = await request.json() as any;
-    const fields = [];
-    const values = [];
-    
-    if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
-    if (updates.date !== undefined) { fields.push("date = ?"); values.push(safeNullableText(updates.date)); }
-    if (updates.time !== undefined) { fields.push("time = ?"); values.push(safeNullableText(updates.time)); }
-    if (updates.businessType !== undefined || updates.dispatchType !== undefined) {
-      const dispatchType = updates.dispatchType ?? updates.businessType;
-      fields.push("dispatch_type = ?", "business_type = ?");
-      values.push(safeText(dispatchType), safeText(dispatchType));
-    }
-    if (updates.corporateVehicle !== undefined || updates.isCorporate !== undefined) {
-      const isCorporate = safeBoolInt(updates.isCorporate ?? updates.corporateVehicle);
-      fields.push("corporate_vehicle = ?", "is_corporate = ?");
-      values.push(isCorporate, isCorporate);
-    }
-    if (updates.rentalCarNumber !== undefined || updates.vehicleNumber !== undefined) {
-      const vehicleNumber = updates.vehicleNumber ?? updates.rentalCarNumber;
-      fields.push("vehicle_number = ?", "rental_car_number = ?");
-      values.push(safeText(vehicleNumber), safeText(vehicleNumber));
-    }
-    if (updates.customerName !== undefined) { fields.push("customer_name = ?"); values.push(safeText(updates.customerName)); }
-    if (updates.customerPhone !== undefined) { fields.push("customer_phone = ?"); values.push(safeText(updates.customerPhone)); }
-    if (updates.customerCarModel !== undefined) { fields.push("customer_car_model = ?"); values.push(safeText(updates.customerCarModel)); }
-    if (updates.orderedBy !== undefined || updates.orderer !== undefined) {
-      const orderer = updates.orderer ?? updates.orderedBy;
-      fields.push("orderer = ?", "ordered_by = ?");
-      values.push(safeText(orderer), safeText(orderer));
-    }
-    if (updates.repairShop !== undefined) { fields.push("repair_shop = ?"); values.push(safeText(updates.repairShop)); }
-    if (updates.claimNumber !== undefined) { fields.push("claim_number = ?"); values.push(safeNullableText(updates.claimNumber)); }
-    if (updates.notes !== undefined || updates.memo !== undefined) {
-      const memo = updates.memo ?? updates.notes;
-      fields.push("notes = ?", "memo = ?");
-      values.push(safeText(memo), safeText(memo));
-    }
-    if (updates.fuelLevel !== undefined) { fields.push("fuel_level = ?"); values.push(safeNumber(updates.fuelLevel)); }
-    if (updates.fuelDisplay !== undefined || updates.fuelLevelText !== undefined) {
-      const fuelLevelText = updates.fuelLevelText ?? updates.fuelDisplay;
-      fields.push("fuel_display = ?", "fuel_level_text = ?");
-      values.push(safeText(fuelLevelText), safeText(fuelLevelText));
-    }
-    if (updates.vehicleColor !== undefined) { fields.push("vehicle_color = ?"); values.push(safeText(updates.vehicleColor)); }
-    if (updates.isCompleted !== undefined) { fields.push("is_completed = ?"); values.push(safeBoolInt(updates.isCompleted)); }
-    
-    if (fields.length === 0) return Response.json({ success: true });
-    
-    values.push(id);
-    
-    fields.push("updated_at = CURRENT_TIMESTAMP");
-    await env.DB.prepare(`UPDATE dispatches SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
+    const body = await request.json() as any;
+    const vehicleNumber = body.vehicleNumber ?? body.vehicle_number ?? body.rentalCarNumber;
+    const dispatchType = body.dispatchType ?? body.dispatch_type ?? body.businessType;
+    const orderer = body.orderer ?? body.orderedBy;
+    const repairShop = body.repairShop ?? body.repair_shop;
+    const customerCarModel = body.customerCarModel ?? body.customer_car_model;
+    const fuelLevelText = body.fuelLevelText ?? body.fuel_level_text ?? body.fuelDisplay;
+    const customerPhone = body.customerPhone ?? body.customer_phone;
+    const memo = body.memo ?? body.notes;
+    const isCorporate = body.isCorporate ?? body.is_corporate ?? body.corporateVehicle;
+
+    await env.DB.prepare(
+      `UPDATE dispatches SET
+        date = ?,
+        time = ?,
+        vehicle_number = ?,
+        dispatch_type = ?,
+        orderer = ?,
+        repair_shop = ?,
+        customer_car_model = ?,
+        fuel_level_text = ?,
+        customer_phone = ?,
+        memo = ?,
+        is_corporate = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`
+    ).bind(
+      safeNullableText(body.date),
+      safeNullableText(body.time),
+      safeText(vehicleNumber),
+      safeText(dispatchType),
+      safeText(orderer),
+      safeText(repairShop),
+      safeText(customerCarModel),
+      safeText(fuelLevelText),
+      safeText(customerPhone),
+      safeText(memo),
+      safeBoolInt(isCorporate),
+      safeText(id)
+    ).run();
 
     return Response.json({ ok: true, success: true, id: safeText(id) });
   } catch (error) {
@@ -152,6 +126,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
+
+export const onRequestPut = onRequestPatch;
 
 export async function onRequestDelete({ request, env }: { request: Request, env: Env }) {
   try {
