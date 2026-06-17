@@ -473,6 +473,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
+  const [resetKey, setResetKey] = useState(0);
   const summaryKeys =
     businessType === "보험"
       ? ["orderedBy", "repairShop", "customerCarModel", "fuelDisplay", "customerPhone"]
@@ -510,11 +511,17 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           activeSummary: summaryKeys.map((key) => String(payload[key] || "")).filter(Boolean).join(" / "),
         }, "PATCH") : undefined}
         onSaved={(payload) => onDispatches([payload as DispatchV2, ...dispatches])}
+        afterReset={() => {
+          setVehicle(undefined);
+          setDate(todayKorea());
+          setTime(currentTimeKorea());
+          setResetKey((key) => key + 1);
+        }}
       >
         <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
         <FormBlock title="차량 선택">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
-            <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+            <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
             {businessType === "보험" ? (
               <label className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
                 <input name="corporateVehicle" type="checkbox" />
@@ -523,7 +530,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
             ) : null}
           </div>
         </FormBlock>
-        <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
+        <DateTimeTodayField key={`dispatch-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         {businessType === "보험" ? (
           <CompactRow>
             <Input name="orderedBy" label="오더자" />
@@ -557,6 +564,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
+  const [resetKey, setResetKey] = useState(0);
   const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
   return (
     <section className="space-y-4">
@@ -585,12 +593,18 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         mileage: Number(payload.mileage || 0),
       }, "PATCH") : undefined}
       onSaved={(payload) => onReturns([payload as ReturnV2, ...returns])}
+      afterReset={() => {
+        setVehicle(undefined);
+        setDate(todayKorea());
+        setTime(currentTimeKorea());
+        setResetKey((key) => key + 1);
+      }}
     >
       <FormBlock title="차량 선택">
-        <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+        <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         {latest ? <p className="mt-2 text-sm font-bold text-[#68746d]">최근 배차건: {latest.customerName} · {latest.repairShop}</p> : null}
       </FormBlock>
-      <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
+      <DateTimeTodayField key={`return-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
         <Input name="fuelDisplay" label="회차주유량" placeholder="7/12" />
@@ -625,6 +639,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           status: "예약",
         })}
         onSaved={(payload) => onReservations([payload as ReservationV2, ...reservations])}
+        afterReset={() => setDraft("")}
       >
         <Input
           name="reservationText"
@@ -657,6 +672,7 @@ function IncidentForm({
 }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [type, setType] = useState("사고");
+  const [resetKey, setResetKey] = useState(0);
   return (
     <section className="space-y-4">
       <DataForm
@@ -681,10 +697,14 @@ function IncidentForm({
           isCompleted: false,
         })}
         onSaved={(payload) => type === "사고" ? onAccidents([payload as IncidentRecordV2, ...accidents]) : onMaintenance([payload as IncidentRecordV2, ...maintenance])}
+        afterReset={() => {
+          setVehicle(undefined);
+          setResetKey((key) => key + 1);
+        }}
       >
         <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
         <FormBlock title="차량 선택">
-          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         </FormBlock>
         <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
         <Textarea name="notes" label="특이사항" />
@@ -718,6 +738,7 @@ function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
 
 function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: (items: LostItemV2[]) => void }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
+  const [resetKey, setResetKey] = useState(0);
   return (
     <section className="space-y-4">
       <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
@@ -731,9 +752,13 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         isCompleted: false,
       })}
       onSaved={(payload) => onLostItems([payload as LostItemV2, ...lostItems])}
+      afterReset={() => {
+        setVehicle(undefined);
+        setResetKey((key) => key + 1);
+      }}
       >
         <FormBlock title="차량 선택">
-          <VehicleSearchCombobox vehicles={vehicles} onChange={setVehicle} />
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         </FormBlock>
         <CompactRow>
           <Input name="customerName" label="고객명" />
@@ -1545,6 +1570,7 @@ function DataForm({
   endpoint,
   buildPayload,
   afterSave,
+  afterReset,
   onSaved,
   buttonLabel = "저장",
 }: {
@@ -1552,6 +1578,7 @@ function DataForm({
   endpoint: string;
   buildPayload: (data: FormData) => Record<string, unknown>;
   afterSave?: (payload: Record<string, unknown>) => void | Promise<unknown>;
+  afterReset?: () => void;
   onSaved?: (payload: Record<string, unknown>) => void;
   buttonLabel?: string;
 }) {
@@ -1561,16 +1588,24 @@ function DataForm({
       className="panel space-y-3"
       onSubmit={async (event) => {
         event.preventDefault();
+        const form = event.currentTarget;
         setStatus("저장 중");
-        const payload = buildPayload(new FormData(event.currentTarget));
+        const payload = buildPayload(new FormData(form));
         try {
           await sendJson(endpoint, payload);
           await afterSave?.(payload);
           onSaved?.(payload);
           setStatus("저장 완료");
-          event.currentTarget.reset();
         } catch (error) {
           setStatus(`저장 실패: ${String(error)}`);
+          return;
+        }
+
+        try {
+          form?.reset();
+          afterReset?.();
+        } catch (error) {
+          console.error("폼 초기화 실패", error);
         }
       }}
     >
