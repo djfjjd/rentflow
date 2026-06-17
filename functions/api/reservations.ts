@@ -62,7 +62,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(r.status || "예약")
     ).run();
 
-    return Response.json({ success: true });
+    console.log("saved reservation id", r.id);
+    return Response.json({ ok: true, success: true, id: safeText(r.id) });
   } catch (error) {
     console.error("reservation save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -80,7 +81,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     await env.DB.prepare(
       "UPDATE reservations SET date = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     ).bind(...safeBindValues([safeText(r.date), safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
-    return Response.json({ success: true });
+    return Response.json({ ok: true, success: true, id: safeText(id) });
   } catch (error) {
     console.error("reservation update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

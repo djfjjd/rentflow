@@ -19,7 +19,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   try {
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
-    await env.DB.prepare(
+    const result = await env.DB.prepare(
       "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(f.fileName),
@@ -43,7 +43,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(f.uploadedAt || new Date().toISOString())
     ).run();
 
-    return Response.json({ success: true });
+    return Response.json({ ok: true, success: true, id: result.meta?.last_row_id ?? null });
   } catch (error) {
     console.error("uploaded file save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

@@ -4,6 +4,23 @@ type Env = {
   DB: any;
 };
 
+export async function onRequestGet({ env }: { env: Env }) {
+  try {
+    await ensureIncidentSchemas(env);
+    const [accidents, maintenance] = await Promise.all([
+      env.DB.prepare("SELECT * FROM accident_histories ORDER BY created_at DESC").all(),
+      env.DB.prepare("SELECT * FROM maintenance_histories ORDER BY created_at DESC").all(),
+    ]);
+    return Response.json({
+      accidents: (accidents.results || []).map((row: any) => ({ ...row, type: "accident" })),
+      maintenance: (maintenance.results || []).map((row: any) => ({ ...row, type: "maintenance" })),
+    });
+  } catch (error) {
+    console.error("incident list failed", { error: error instanceof Error ? error.message : String(error) });
+    return Response.json({ error: String(error) }, { status: 500 });
+  }
+}
+
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
     await ensureIncidentSchemas(env);
@@ -25,7 +42,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         memo,
         safeBoolInt(body.isCompleted)
       ).run();
-      return Response.json({ success: true, type: "maintenance" });
+      console.log("saved maintenance id", id);
+      return Response.json({ ok: true, success: true, id, type: "maintenance" });
     }
 
     await env.DB.prepare(
@@ -38,7 +56,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       memo,
       safeBoolInt(body.isCompleted)
     ).run();
-    return Response.json({ success: true, type: "accident" });
+    console.log("saved accident id", id);
+    return Response.json({ ok: true, success: true, id, type: "accident" });
   } catch (error) {
     console.error("incident save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

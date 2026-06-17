@@ -508,7 +508,8 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           damageVehicle: String(payload.customerCarModel || ""),
           activeSummary: formatOrdererShop(payload.orderedBy || payload.customerName, payload.repairShop),
         }, "PATCH") : undefined}
-        onSaved={(payload) => onDispatches([payload as DispatchV2, ...dispatches])}
+        reloadEndpoint="/api/dispatches"
+        onReloaded={(items) => onDispatches(items as DispatchV2[])}
         afterReset={() => {
           setVehicle(undefined);
           setDate(todayKorea());
@@ -590,7 +591,8 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         activeSummary: String(payload.arrivalAddress || ""),
         mileage: Number(payload.mileage || 0),
       }, "PATCH") : undefined}
-      onSaved={(payload) => onReturns([payload as ReturnV2, ...returns])}
+      reloadEndpoint="/api/returns"
+      onReloaded={(items) => onReturns(items as ReturnV2[])}
       afterReset={() => {
         setVehicle(undefined);
         setDate(todayKorea());
@@ -636,7 +638,8 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           route: "예약",
           status: "예약",
         })}
-        onSaved={(payload) => onReservations([payload as ReservationV2, ...reservations])}
+        reloadEndpoint="/api/reservations"
+        onReloaded={(items) => onReservations(items as ReservationV2[])}
         afterReset={() => setDraft("")}
       >
         <Input
@@ -694,7 +697,8 @@ function IncidentForm({
           createdBy: "field",
           isCompleted: false,
         })}
-        onSaved={(payload) => type === "사고" ? onAccidents([payload as IncidentRecordV2, ...accidents]) : onMaintenance([payload as IncidentRecordV2, ...maintenance])}
+        reloadEndpoint={type === "사고" ? "/api/accident-histories" : "/api/maintenance-histories"}
+        onReloaded={(items) => type === "사고" ? onAccidents(items as IncidentRecordV2[]) : onMaintenance(items as IncidentRecordV2[])}
         afterReset={() => {
           setVehicle(undefined);
           setResetKey((key) => key + 1);
@@ -749,7 +753,8 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         status: "보관중",
         isCompleted: false,
       })}
-      onSaved={(payload) => onLostItems([payload as LostItemV2, ...lostItems])}
+      reloadEndpoint="/api/lost-items"
+      onReloaded={(items) => onLostItems(items as LostItemV2[])}
       afterReset={() => {
         setVehicle(undefined);
         setResetKey((key) => key + 1);
@@ -1583,6 +1588,8 @@ function DataForm({
   buildPayload,
   afterSave,
   afterReset,
+  reloadEndpoint,
+  onReloaded,
   onSaved,
   buttonLabel = "저장",
 }: {
@@ -1591,6 +1598,8 @@ function DataForm({
   buildPayload: (data: FormData) => Record<string, unknown>;
   afterSave?: (payload: Record<string, unknown>) => void | Promise<unknown>;
   afterReset?: () => void;
+  reloadEndpoint?: string;
+  onReloaded?: (items: unknown) => void;
   onSaved?: (payload: Record<string, unknown>) => void;
   buttonLabel?: string;
 }) {
@@ -1606,7 +1615,11 @@ function DataForm({
         try {
           await sendJson(endpoint, payload);
           await afterSave?.(payload);
-          onSaved?.(payload);
+          if (reloadEndpoint) {
+            onReloaded?.(await fetchJson<unknown>(reloadEndpoint, []));
+          } else {
+            onSaved?.(payload);
+          }
           setStatus("저장 완료");
         } catch (error) {
           setStatus(`저장 실패: ${String(error)}`);

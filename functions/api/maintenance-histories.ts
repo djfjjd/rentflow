@@ -46,7 +46,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (fields.length === 0) return Response.json({ success: true });
     values.push(id);
     await env.DB.prepare(`UPDATE maintenance_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
-    return Response.json({ success: true });
+    return Response.json({ ok: true, success: true, id: safeText(id) });
   } catch (error) {
     console.error("maintenance history update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -92,7 +92,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(mh.createdBy || "field")
     ).run();
 
-    return Response.json({ success: true });
+    console.log("saved maintenance id", mh.id);
+    return Response.json({ ok: true, success: true, id: safeText(mh.id) });
   } catch (error) {
     console.error("maintenance history save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
