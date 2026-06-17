@@ -69,6 +69,7 @@ type PageKind =
 const appActions = [
   { href: "/app/dispatch", label: "배차", icon: Car, primary: true },
   { href: "/app/return", label: "회차", icon: Check, primary: true },
+  { href: "/admin/dashboard", label: "차량현황판", icon: Car, emoji: "🚗" },
   { href: "/app/reservation", label: "예약일정 추가", icon: CalendarDays },
   { href: "/app/incident", label: "사고/정비 기록", icon: Wrench },
   { href: "/app/billing", label: "계약서/청구", icon: FileText },
@@ -141,7 +142,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
     <main className="min-h-screen bg-[#f6f7f4] text-[#16211d]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
             <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
                 <Home size={20} />
@@ -236,7 +237,7 @@ function UnreadMessagesButton({
     ...returns.filter((item) => !item.isCompleted).map((item) => ({ kind: "회차" as const, createdAt: item.createdAt, returnItem: item })),
   ].sort((a, b) => sortDateCreatedValues(rowDate(b), rowTime(b), b.createdAt, rowDate(a), rowTime(a), a.createdAt));
 
-  if (unread.length === 0) return <span className="min-h-11" />;
+  if (unread.length === 0) return null;
 
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
@@ -307,7 +308,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
     <div className="flex w-full justify-end sm:w-auto sm:block">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         <CalendarDays size={17} />
-        <span>Today {formatDateDot(today)}</span>
+        <span>{formatDateDot(today)}</span>
       </button>
       {open ? (
         <OverlayModal
@@ -445,7 +446,7 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
   return (
     <Link className={`flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-lg border p-5 text-center shadow-sm ${item.primary ? "border-[#116149] bg-[#116149] text-white" : "border-[#dbe1db] bg-white text-[#16211d]"}`} href={item.href}>
       <span className="text-center text-xl font-black">{item.label}</span>
-      <Icon size={28} />
+      {"emoji" in item ? <span className="text-3xl" aria-hidden="true">{item.emoji}</span> : <Icon size={28} />}
     </Link>
   );
 }
