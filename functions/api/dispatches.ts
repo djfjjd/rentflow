@@ -39,8 +39,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const d = await request.json() as any;
     const fuelLevelText = d.fuelLevelText ?? d.fuelDisplay;
     const memo = d.memo ?? d.notes;
+    const isCorporate = safeBoolInt(d.isCorporate ?? d.corporateVehicle);
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, date, time, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, fuel_level_text, vehicle_color, business_type, corporate_vehicle, notes, memo, status, intake_type, uploaded_at, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO dispatches (id, date, time, claim_number, customer_name, customer_phone, customer_car_number, customer_car_model, rental_car_number, ordered_by, repair_shop, pickup_address, delivery_address, fuel_level, fuel_display, fuel_level_text, vehicle_color, business_type, corporate_vehicle, is_corporate, notes, memo, status, intake_type, uploaded_at, is_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(d.id),
       safeNullableText(d.date),
@@ -60,7 +61,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(fuelLevelText),
       safeText(d.vehicleColor),
       safeNullableText(d.businessType),
-      safeBoolInt(d.corporateVehicle),
+      isCorporate,
+      isCorporate,
       safeText(memo),
       safeText(memo),
       safeText(d.status || "배차등록"),
@@ -91,7 +93,11 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.date !== undefined) { fields.push("date = ?"); values.push(safeNullableText(updates.date)); }
     if (updates.time !== undefined) { fields.push("time = ?"); values.push(safeNullableText(updates.time)); }
     if (updates.businessType !== undefined) { fields.push("business_type = ?"); values.push(safeText(updates.businessType)); }
-    if (updates.corporateVehicle !== undefined) { fields.push("corporate_vehicle = ?"); values.push(safeBoolInt(updates.corporateVehicle)); }
+    if (updates.corporateVehicle !== undefined || updates.isCorporate !== undefined) {
+      const isCorporate = safeBoolInt(updates.isCorporate ?? updates.corporateVehicle);
+      fields.push("corporate_vehicle = ?", "is_corporate = ?");
+      values.push(isCorporate, isCorporate);
+    }
     if (updates.rentalCarNumber !== undefined) { fields.push("rental_car_number = ?"); values.push(safeText(updates.rentalCarNumber)); }
     if (updates.customerName !== undefined) { fields.push("customer_name = ?"); values.push(safeText(updates.customerName)); }
     if (updates.customerPhone !== undefined) { fields.push("customer_phone = ?"); values.push(safeText(updates.customerPhone)); }
@@ -161,7 +167,7 @@ function mapDispatch(row: any) {
     fuelLevelText: row.fuel_level_text || row.fuel_display,
     vehicleColor: row.vehicle_color,
     businessType: row.business_type,
-    corporateVehicle: Boolean(row.corporate_vehicle),
+    corporateVehicle: Boolean(row.is_corporate ?? row.corporate_vehicle),
     isCompleted: Boolean(row.is_completed),
     notes: row.memo || row.notes,
     memo: row.memo || row.notes,
@@ -174,9 +180,29 @@ function mapDispatch(row: any) {
 
 async function ensureDispatchSchema(env: Env) {
   await ensureColumns(env.DB, "dispatches", [
+    { name: "claim_number", definition: "TEXT" },
+    { name: "customer_name", definition: "TEXT NOT NULL DEFAULT ''" },
+    { name: "customer_phone", definition: "TEXT" },
+    { name: "customer_car_number", definition: "TEXT" },
+    { name: "customer_car_model", definition: "TEXT" },
+    { name: "rental_car_number", definition: "TEXT" },
+    { name: "ordered_by", definition: "TEXT" },
+    { name: "repair_shop", definition: "TEXT" },
+    { name: "pickup_address", definition: "TEXT" },
+    { name: "delivery_address", definition: "TEXT" },
+    { name: "fuel_level", definition: "REAL" },
+    { name: "fuel_display", definition: "TEXT" },
+    { name: "business_type", definition: "TEXT" },
+    { name: "notes", definition: "TEXT" },
+    { name: "status", definition: "TEXT NOT NULL DEFAULT '배차등록'" },
+    { name: "intake_type", definition: "TEXT" },
+    { name: "uploaded_at", definition: "DATETIME" },
+    { name: "created_at", definition: "DATETIME" },
     { name: "date", definition: "TEXT" },
     { name: "time", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "is_corporate", definition: "INTEGER DEFAULT 0" },
+    { name: "corporate_vehicle", definition: "INTEGER DEFAULT 0" },
     { name: "fuel_level_text", definition: "TEXT" },
     { name: "vehicle_color", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },

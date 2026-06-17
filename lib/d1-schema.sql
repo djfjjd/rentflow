@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS dispatches (
   vehicle_color TEXT,
   business_type TEXT,
   corporate_vehicle INTEGER DEFAULT 0,
+  is_corporate INTEGER DEFAULT 0,
   notes TEXT,
   memo TEXT,
   status TEXT NOT NULL DEFAULT '배차등록',

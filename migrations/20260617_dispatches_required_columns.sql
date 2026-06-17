@@ -1,0 +1,10 @@
+ALTER TABLE dispatches ADD COLUMN claim_number TEXT;
+ALTER TABLE dispatches ADD COLUMN customer_phone TEXT;
+ALTER TABLE dispatches ADD COLUMN customer_car_model TEXT;
+ALTER TABLE dispatches ADD COLUMN repair_shop TEXT;
+ALTER TABLE dispatches ADD COLUMN fuel_level_text TEXT;
+ALTER TABLE dispatches ADD COLUMN memo TEXT;
+ALTER TABLE dispatches ADD COLUMN date TEXT;
+ALTER TABLE dispatches ADD COLUMN time TEXT;
+ALTER TABLE dispatches ADD COLUMN is_completed INTEGER DEFAULT 0;
+ALTER TABLE dispatches ADD COLUMN is_corporate INTEGER DEFAULT 0;
