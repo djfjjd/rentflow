@@ -137,7 +137,7 @@ export type LostItemV2 = {
 
 export const fuelTypes = ["가솔린", "디젤", "LPG"];
 
-export const vehicleStatuses = ["보험", "자차", "셀프", "주차구역"];
+export const vehicleStatuses = ["보험", "자차", "셀프", "주차구역표시"];
 
 export const parkingLocations = ["독도", "울릉도", "천삼", "제주도", "서해", "천삼읍", "청와대", "광화문", "명동", "제주길가", "명동길가", "천삼읍길가", "현대맨션", "구로", "신정"];
 

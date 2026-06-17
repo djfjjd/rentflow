@@ -474,12 +474,6 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
   const [resetKey, setResetKey] = useState(0);
-  const summaryKeys =
-    businessType === "보험"
-      ? ["orderedBy", "repairShop", "customerCarModel", "fuelDisplay", "customerPhone"]
-      : businessType === "자차"
-        ? ["orderedBy", "fuelDisplay", "customerPhone"]
-        : ["customerName", "fuelDisplay", "customerPhone"];
   return (
     <section className="space-y-4">
       <DataForm
@@ -508,7 +502,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           status: businessType,
           fuelDisplay: String(payload.fuelDisplay || ""),
           damageVehicle: String(payload.customerCarModel || ""),
-          activeSummary: summaryKeys.map((key) => String(payload[key] || "")).filter(Boolean).join(" / "),
+          activeSummary: formatOrdererShop(payload.orderedBy || payload.customerName, payload.repairShop),
         }, "PATCH") : undefined}
         onSaved={(payload) => onDispatches([payload as DispatchV2, ...dispatches])}
         afterReset={() => {
@@ -586,7 +580,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         isCompleted: false,
       })}
       afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
-        status: "주차구역",
+        status: "주차구역표시",
         location: String(payload.arrivalAddress || ""),
         fuelDisplay: String(payload.fuelDisplay || ""),
         activeSummary: String(payload.arrivalAddress || ""),
@@ -950,10 +944,10 @@ function Dashboard({ vehicles, reservations, dispatches }: { vehicles: VehicleV2
   const today = todayKorea();
   const kpis = [
     ["전체차량", vehicles.length],
-    ["대기중", vehicles.filter((v) => v.status === "대기중").length],
-    ["배차중", vehicles.filter((v) => v.status === "배차중").length],
-    ["정비중", vehicles.filter((v) => v.status === "정비중").length],
-    ["사고중", vehicles.filter((v) => v.status === "사고중" || v.status === "사고").length],
+    ["보험", vehicles.filter((v) => displayVehicleStatus(v) === "보험").length],
+    ["자차", vehicles.filter((v) => displayVehicleStatus(v) === "자차").length],
+    ["셀프", vehicles.filter((v) => displayVehicleStatus(v) === "셀프").length],
+    ["주차구역표시", vehicles.filter((v) => displayVehicleStatus(v) === "주차구역표시").length],
     ["오늘 배차", dispatches.filter((d) => d.createdAt?.startsWith(today)).length],
     ["오늘 회차", 0],
     ["미수금", "0원"],
@@ -991,7 +985,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           mileage: Number(text(data, "mileage") || 0),
           purchaseDate: text(data, "purchaseDate"),
           location: "",
-          status: "주차구역",
+          status: "주차구역표시",
           memo: text(data, "memo"),
         })}
         onSaved={(payload) => onVehicles([payload as VehicleV2, ...vehicles])}
@@ -1401,7 +1395,7 @@ function VehicleTable({ vehicles }: { vehicles: VehicleV2[] }) {
       <h2 className="mb-3 text-xl font-black">차량현황</h2>
       <table className="w-full min-w-[960px] text-left text-sm">
         <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>주유량</th><th>피해차량</th><th>오더자/수리처 또는 주차구역</th><th>최근 업데이트</th></tr></thead>
-        <tbody>{vehicles.map((v) => <tr className="border-b" key={v.id}><td className="font-black">{v.plateNumber}</td><td>{v.model}</td><td>{v.status || "주차구역"}</td><td>{v.fuelDisplay || "-"}</td><td>{v.damageVehicle || "-"}</td><td>{v.activeSummary || v.location || "-"}</td><td>{formatDateTime(v.updatedAt)}</td></tr>)}</tbody>
+        <tbody>{vehicles.map((v) => <tr className="border-b" key={v.id}><td className="font-black">{v.plateNumber}</td><td>{v.model}</td><td>{displayVehicleStatus(v)}</td><td>{v.fuelDisplay || "-"}</td><td>{v.damageVehicle || "-"}</td><td>{vehicleDashboardSummary(v)}</td><td>{formatDateTime(v.updatedAt)}</td></tr>)}</tbody>
       </table>
     </section>
   );
@@ -1830,6 +1824,28 @@ function currentTimeKorea() {
     minute: "2-digit",
     hour12: false,
   }).format(new Date());
+}
+
+function displayVehicleStatus(vehicle: VehicleV2) {
+  const status = String(vehicle.status || "");
+  if (status === "보험" || status === "자차" || status === "셀프") return status;
+  return "주차구역표시";
+}
+
+function vehicleDashboardSummary(vehicle: VehicleV2) {
+  if (displayVehicleStatus(vehicle) === "주차구역표시") return normalizeParkingLocation(vehicle.location || vehicle.activeSummary);
+  const [orderer, repairShop] = String(vehicle.activeSummary || "").split("/").map((value) => value.trim());
+  return formatOrdererShop(orderer, repairShop);
+}
+
+function formatOrdererShop(orderer: unknown, repairShop: unknown) {
+  const left = clean(orderer).trim() || "?";
+  const right = clean(repairShop).trim() || "?";
+  return `${left}/${right}`;
+}
+
+function normalizeParkingLocation(value: unknown) {
+  return clean(value).replaceAll("천섬", "천삼");
 }
 
 function clean(value: unknown) {
