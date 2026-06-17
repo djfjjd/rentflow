@@ -179,8 +179,8 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
-        {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} /> : null}
-        {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} /> : null}
+        {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
+        {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
         {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={setReservations} /> : null}
         {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={setDispatches} onReturns={setReturns} /> : null}
@@ -949,16 +949,17 @@ function CalendarPage({ reservations }: { reservations: ReservationV2[] }) {
   );
 }
 
-function Dashboard({ vehicles, reservations, dispatches }: { vehicles: VehicleV2[]; reservations: ReservationV2[]; dispatches: DispatchV2[] }) {
+function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: VehicleV2[]; reservations: ReservationV2[]; dispatches: DispatchV2[]; returns: ReturnV2[] }) {
   const today = todayKorea();
+  const dashboardRows = buildVehicleDashboardRows(vehicles, dispatches, returns);
   const kpis = [
     ["전체차량", vehicles.length],
-    ["보험", vehicles.filter((v) => displayVehicleStatus(v) === "보험").length],
-    ["자차", vehicles.filter((v) => displayVehicleStatus(v) === "자차").length],
-    ["셀프", vehicles.filter((v) => displayVehicleStatus(v) === "셀프").length],
-    ["주차구역표시", vehicles.filter((v) => displayVehicleStatus(v) === "주차구역표시").length],
+    ["보험", dashboardRows.filter((row) => row.statusLabel === "보험").length],
+    ["자차", dashboardRows.filter((row) => row.statusLabel === "자차").length],
+    ["셀프", dashboardRows.filter((row) => row.statusLabel === "셀프").length],
+    ["주차구역표시", dashboardRows.filter((row) => row.statusLabel === "주차구역표시").length],
     ["오늘 배차", dispatches.filter((d) => d.createdAt?.startsWith(today)).length],
-    ["오늘 회차", 0],
+    ["오늘 회차", returns.filter((r) => r.createdAt?.startsWith(today)).length],
     ["미수금", "0원"],
   ];
   return (
@@ -966,7 +967,7 @@ function Dashboard({ vehicles, reservations, dispatches }: { vehicles: VehicleV2
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map(([label, value]) => <Kpi label={String(label)} value={String(value)} key={String(label)} />)}
       </div>
-      <VehicleStatusBoard vehicles={vehicles} dispatches={dispatches} />
+      <VehicleStatusBoard rows={dashboardRows} />
     </section>
   );
 }
@@ -1398,27 +1399,36 @@ function StatusBoard({ labels }: { labels: string[] }) {
   return <section className="grid gap-3 md:grid-cols-2">{labels.map((label) => <article className="panel min-h-24" key={label}><h2 className="text-lg font-black">{label}</h2><p className="text-sm font-bold text-[#68746d]">D1 데이터 기준 관리 영역</p></article>)}</section>;
 }
 
-function VehicleStatusBoard({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[] }) {
+type VehicleDashboardRow = {
+  key: string;
+  vehicleNumber: string;
+  model: string;
+  statusLabel: string;
+  dispatchDate: string;
+  fuelLevelText: string;
+  customerCarModel: string;
+  ordererRepairShop: string;
+  updatedAt?: string;
+};
+
+function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">차량현황</h2>
       <table className="w-full min-w-[960px] text-left text-sm">
         <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
-        <tbody>{vehicles.map((v) => {
-          const latestDispatch = findLatestDispatchForVehicle(dispatches, v.plateNumber);
-          return (
-            <tr className="border-b" key={v.id}>
-              <td className="font-black">{v.plateNumber}</td>
-              <td>{v.model}</td>
-              <td><StatusPill status={displayVehicleStatus(v)} /></td>
-              <td className="whitespace-nowrap">{latestDispatch ? formatBoardDateTime(latestDispatch.date, latestDispatch.time, latestDispatch.createdAt) : ""}</td>
-              <td>{v.fuelDisplay || "-"}</td>
-              <td>{v.damageVehicle || "-"}</td>
-              <td>{vehicleDashboardSummary(v)}</td>
-              <td className="whitespace-nowrap">{formatDateTime(v.updatedAt)}</td>
-            </tr>
-          );
-        })}</tbody>
+        <tbody>{rows.map((row) => (
+          <tr className="border-b" key={row.key}>
+            <td className="font-black">{row.vehicleNumber}</td>
+            <td>{row.model}</td>
+            <td><StatusPill status={row.statusLabel} /></td>
+            <td className="whitespace-nowrap">{row.dispatchDate}</td>
+            <td>{row.fuelLevelText || "-"}</td>
+            <td>{row.customerCarModel || "-"}</td>
+            <td>{row.ordererRepairShop || "-"}</td>
+            <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
+          </tr>
+        ))}</tbody>
       </table>
     </section>
   );
@@ -1881,10 +1891,99 @@ function vehicleDashboardSummary(vehicle: VehicleV2) {
   return formatOrdererShop(orderer, repairShop);
 }
 
-function findLatestDispatchForVehicle(dispatches: DispatchV2[], plateNumber: string) {
-  return dispatches
-    .filter((dispatch) => dispatch.rentalCarNumber === plateNumber)
-    .sort(sortDateCreatedDesc)[0];
+function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2[], returns: ReturnV2[]): VehicleDashboardRow[] {
+  return vehicles.map((vehicle) => {
+    const vehicleNumber = vehicle.plateNumber;
+    const latestDispatch = latestByVehicle(dispatches, vehicleNumber);
+    const latestReturn = latestByVehicle(returns, vehicleNumber);
+    const dispatchTime = latestDispatch ? recordSortValue(latestDispatch) : 0;
+    const returnTime = latestReturn ? recordSortValue(latestReturn) : 0;
+
+    if (latestReturn && returnTime >= dispatchTime) {
+      return {
+        key: vehicle.id,
+        vehicleNumber,
+        model: vehicle.model,
+        statusLabel: "주차구역표시",
+        dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
+        fuelLevelText: firstText(latestReturn.fuelLevelText, latestReturn.fuelDisplay),
+        customerCarModel: "",
+        ordererRepairShop: normalizeParkingLocation(firstText(latestReturn.parkingZone, latestReturn.arrivalAddress, latestReturn.returnAddress, vehicle.location)),
+        updatedAt: latestReturn.updatedAt || latestReturn.createdAt || vehicle.updatedAt,
+      };
+    }
+
+    if (latestDispatch) {
+      return {
+        key: vehicle.id,
+        vehicleNumber,
+        model: vehicle.model,
+        statusLabel: normalizeDispatchStatus(firstText(latestDispatch.dispatchType, latestDispatch.businessType, latestDispatch.status)),
+        dispatchDate: formatMonthDay(latestDispatch.date || latestDispatch.createdAt),
+        fuelLevelText: firstText(latestDispatch.fuelLevelText, latestDispatch.fuelDisplay),
+        customerCarModel: firstText(latestDispatch.customerCarModel),
+        ordererRepairShop: formatDashboardOrdererShop(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.repairShop),
+        updatedAt: latestDispatch.updatedAt || latestDispatch.createdAt || vehicle.updatedAt,
+      };
+    }
+
+    return {
+      key: vehicle.id,
+      vehicleNumber,
+      model: vehicle.model,
+      statusLabel: "주차구역표시",
+      dispatchDate: "",
+      fuelLevelText: vehicle.fuelDisplay || "",
+      customerCarModel: "",
+      ordererRepairShop: normalizeParkingLocation(vehicle.location || vehicle.activeSummary),
+      updatedAt: vehicle.updatedAt,
+    };
+  });
+}
+
+function latestByVehicle<T extends { date?: string; time?: string; createdAt?: string; vehicleNumber?: string; rentalCarNumber?: string; plateNumber?: string }>(items: T[], vehicleNumber: string) {
+  return items
+    .filter((item) => normalizeVehicleNumber(item) === vehicleNumber)
+    .sort((a, b) => recordSortValue(b) - recordSortValue(a))[0];
+}
+
+function normalizeVehicleNumber(row: { vehicleNumber?: string; rentalCarNumber?: string; plateNumber?: string }) {
+  return firstText(row.vehicleNumber, row.rentalCarNumber, row.plateNumber);
+}
+
+function recordSortValue(row: { date?: string; time?: string; createdAt?: string }) {
+  return dateTimeSortValue(row.date, row.time, row.createdAt);
+}
+
+function normalizeDispatchStatus(value: unknown) {
+  const status = firstText(value);
+  if (status === "insurance" || status === "보험") return "보험";
+  if (status === "self" || status === "자차") return "자차";
+  if (status === "direct" || status === "셀프") return "셀프";
+  return "주차구역표시";
+}
+
+function formatDashboardOrdererShop(orderer: unknown, repairShop: unknown) {
+  const left = clean(orderer).trim();
+  const right = clean(repairShop).trim();
+  if (left && right) return `${left} / ${right}`;
+  return left || right;
+}
+
+function formatMonthDay(value?: string) {
+  if (!value) return "";
+  const datePart = value.slice(0, 10);
+  const parsed = new Date(`${datePart}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `${String(parsed.getMonth() + 1).padStart(2, "0")}월 ${String(parsed.getDate()).padStart(2, "0")}일`;
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = clean(value).trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 function formatOrdererShop(orderer: unknown, repairShop: unknown) {

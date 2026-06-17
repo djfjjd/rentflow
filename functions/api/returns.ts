@@ -149,7 +149,8 @@ function mapReturn(row: any) {
     memo: row.memo || row.notes,
     status: row.status,
     isCompleted: Boolean(row.is_completed),
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 

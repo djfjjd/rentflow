@@ -172,7 +172,8 @@ function mapDispatch(row: any) {
     status: row.status,
     intakeType: row.intake_type,
     uploadedAt: row.uploaded_at,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 

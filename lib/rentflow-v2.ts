@@ -69,14 +69,17 @@ export type DispatchV2 = {
   id: string;
   date?: string;
   time?: string;
+  vehicleNumber?: string;
   claimNumber?: string;
   customerName: string;
   customerPhone?: string;
   customerCarNumber?: string;
   customerCarModel?: string;
   rentalCarNumber?: string;
+  orderer?: string;
   orderedBy?: string;
   repairShop?: string;
+  dispatchType?: string;
   businessType?: string;
   corporateVehicle?: boolean;
   isCompleted?: boolean;
@@ -89,15 +92,18 @@ export type DispatchV2 = {
   notes?: string;
   status?: string;
   createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ReturnV2 = {
   id: string;
   date?: string;
   time?: string;
+  vehicleNumber?: string;
   rentalCarNumber: string;
   returnAddress?: string;
   arrivalAddress?: string;
+  parkingZone?: string;
   fuelDisplay?: string;
   fuelLevelText?: string;
   vehicleColor?: string;
@@ -107,6 +113,7 @@ export type ReturnV2 = {
   status?: string;
   isCompleted?: boolean;
   createdAt?: string;
+  updatedAt?: string;
 };
 
 export type IncidentRecordV2 = {
