@@ -1532,7 +1532,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
               <td>{vehicleModelColor(vehicle)}</td>
               <td>{clean(String(item.mileage || ""))}</td>
               <td>{clean(item.fuelDisplay)}</td>
-              <td>{clean(item.arrivalAddress)}</td>
+              <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
               <td>{clean(item.notes)}</td>
               <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
@@ -1619,6 +1619,7 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
           fuelDisplay: text(data, "fuelDisplay"),
           fuelLevelText: text(data, "fuelDisplay"),
           arrivalAddress: text(data, "arrivalAddress"),
+          parkingZone: text(data, "arrivalAddress"),
           notes: text(data, "notes"),
           memo: text(data, "notes"),
         };

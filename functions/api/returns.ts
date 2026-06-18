@@ -70,8 +70,9 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const updates = await request.json() as any;
     const fields = [];
     const values = [];
+    const vehicleNumber = updates.vehicleNumber ?? updates.rentalCarNumber;
+    const parkingZone = updates.parkingZone ?? updates.arrivalAddress;
     if (updates.rentalCarNumber !== undefined || updates.vehicleNumber !== undefined) {
-      const vehicleNumber = updates.vehicleNumber ?? updates.rentalCarNumber;
       fields.push("vehicle_number = ?", "rental_car_number = ?");
       values.push(safeText(vehicleNumber), safeText(vehicleNumber));
     }
@@ -79,7 +80,6 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.time !== undefined) { fields.push("time = ?"); values.push(safeNullableText(updates.time)); }
     if (updates.returnAddress !== undefined) { fields.push("return_address = ?"); values.push(safeText(updates.returnAddress)); }
     if (updates.arrivalAddress !== undefined || updates.parkingZone !== undefined) {
-      const parkingZone = updates.parkingZone ?? updates.arrivalAddress;
       fields.push("arrival_address = ?", "parking_zone = ?");
       values.push(safeText(parkingZone), safeText(parkingZone));
     }
@@ -104,6 +104,11 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
     await env.DB.prepare(`UPDATE returns SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
+    if (parkingZone !== undefined && vehicleNumber !== undefined) {
+      await env.DB.prepare(
+        "UPDATE vehicles SET location = ?, status = ?, active_summary = ?, updated_at = CURRENT_TIMESTAMP WHERE plate_number = ?"
+      ).bind(safeText(parkingZone), "주차구역표시", safeText(parkingZone), safeText(vehicleNumber)).run();
+    }
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("return update failed", { error: error instanceof Error ? error.message : String(error) });
@@ -159,6 +164,23 @@ function mapReturn(row: any) {
 }
 
 async function ensureReturnSchema(env: Env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS vehicles (
+      id TEXT PRIMARY KEY,
+      plate_number TEXT,
+      location TEXT,
+      status TEXT,
+      active_summary TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await ensureColumns(env.DB, "vehicles", [
+    { name: "plate_number", definition: "TEXT" },
+    { name: "location", definition: "TEXT" },
+    { name: "status", definition: "TEXT" },
+    { name: "active_summary", definition: "TEXT" },
+    { name: "updated_at", definition: "DATETIME" },
+  ]);
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS returns (
       id TEXT PRIMARY KEY,
