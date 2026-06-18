@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
+import { Trash2 } from "lucide-react";
 
 type RepairShop = {
   id: number;
@@ -39,6 +40,7 @@ export default function RepairShopMapClient({
   const [adding, setAdding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const markerRefs = useRef<Record<number, L.Marker | null>>({});
 
@@ -94,9 +96,34 @@ export default function RepairShopMapClient({
   }, [selectedShopId]);
 
   async function handleCopyAddress(address: string) {
-    await copyAddress(address);
-    setMessage("주소가 복사되었습니다.");
-    window.setTimeout(() => setMessage(""), 2000);
+    try {
+      await copyAddress(address);
+      showToast("클립보드에 복사되었습니다.");
+    } catch {
+      showToast("복사에 실패했습니다.");
+    }
+  }
+
+  function showToast(text: string) {
+    setToast(text);
+    window.setTimeout(() => setToast(""), 2000);
+  }
+
+  async function deleteShop(shop: RepairShop) {
+    if (!confirm("삭제하시겠습니까?")) return;
+
+    try {
+      const response = await fetch(`/api/repair-shops?id=${encodeURIComponent(String(shop.id))}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(await response.text());
+      setShops((current) => current.filter((item) => item.id !== shop.id));
+      if (selectedShopId === shop.id) setSelectedShopId(null);
+      showToast("삭제되었습니다.");
+    } catch {
+      showToast("삭제에 실패했습니다.");
+    }
   }
 
   const content = (
@@ -108,10 +135,6 @@ export default function RepairShopMapClient({
           </div>
           {showImportLink ? <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link> : null}
         </div>
-
-        <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
-          {subtitle}
-        </p>
 
         <section className="grid gap-2">
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -144,6 +167,18 @@ export default function RepairShopMapClient({
                   <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
                   <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
                   <button className="small-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
+                  <button
+                    aria-label="주소 삭제"
+                    className="inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800"
+                    title="주소 삭제"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void deleteShop(shop);
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </article>
             ))}
@@ -185,10 +220,19 @@ export default function RepairShopMapClient({
 
   const modal = showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null;
   if (embedded) {
-    return <section className="text-[#16211d]">{content}{modal}</section>;
+    return <section className="text-[#16211d]">{content}{modal}<Toast message={toast} /></section>;
   }
 
-  return <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">{content}{modal}</main>;
+  return <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">{content}{modal}<Toast message={toast} /></main>;
+}
+
+function Toast({ message }: { message: string }) {
+  if (!message) return null;
+  return (
+    <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">
+      {message}
+    </div>
+  );
 }
 
 function MapFocus({ shop }: { shop: RepairShop | null }) {

@@ -1262,11 +1262,24 @@ function CalendarPage({ reservations }: { reservations: ReservationV2[] }) {
 
 function CalendarSubscribeBox() {
   const url = "https://rentflow-9yg.pages.dev/api/calendar.ics";
+  const [toast, setToast] = useState("");
+
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setToast("클립보드에 복사되었습니다.");
+    } catch {
+      setToast("복사에 실패했습니다.");
+    }
+    window.setTimeout(() => setToast(""), 2000);
+  }
+
   return (
-    <div className="rounded-lg border border-[#d8ded8] bg-white p-3">
-      <button className="small-btn" type="button" onClick={() => navigator.clipboard?.writeText(url)}>
+    <div className="relative rounded-lg border border-[#d8ded8] bg-white p-3">
+      <button className="small-btn" type="button" onClick={copyUrl}>
         캘린더 구독 URL 복사
       </button>
+      {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
       <p className="mt-2 text-xs font-bold leading-relaxed text-[#68746d]">
         아이폰: 설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가 / 구글 캘린더: 다른 캘린더 + &gt; URL로 추가 / 네이버 캘린더: 외부 캘린더 URL 구독
       </p>

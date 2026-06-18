@@ -75,6 +75,23 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
   }
 }
 
+export async function onRequestDelete({ request, env }: { request: Request; env: Env }) {
+  try {
+    const db = getDb(env);
+    await ensureRepairShopSchema(db);
+    const url = new URL(request.url);
+    const id = safeText(url.searchParams.get("id")).trim();
+    if (!id) return Response.json({ error: "id is required" }, { status: 400, headers: noStoreHeaders() });
+
+    await db.prepare("DELETE FROM repair_shops WHERE id = ?").bind(id).run();
+    return Response.json({ ok: true, id }, { headers: noStoreHeaders() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("repair shop delete failed", { message });
+    return Response.json({ error: message }, { status: 500, headers: noStoreHeaders() });
+  }
+}
+
 function mapRepairShop(row: any) {
   return {
     id: row.id,
