@@ -30,7 +30,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const d = await request.json() as any;
     const vehicleNumber = d.vehicleNumber ?? d.rentalCarNumber;
     const dispatchType = d.dispatchType ?? d.businessType;
-    const orderer = d.orderer ?? d.orderedBy;
+    const orderer = d.orderer ?? d.orderedBy ?? d.customerName;
     const repairShop = d.repairShop ?? d.repair_shop;
     const customerCarModel = d.customerCarModel ?? d.customer_car_model;
     const fuelLevelText = d.fuelLevelText ?? d.fuel_level_text ?? d.fuelDisplay;
@@ -38,13 +38,14 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const memo = d.memo ?? d.notes;
     const isCorporate = safeBoolInt(d.isCorporate ?? d.is_corporate ?? d.corporateVehicle);
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, is_corporate, is_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, customer_name, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, is_corporate, is_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(d.id),
       safeNullableText(d.date),
       safeNullableText(d.time),
       safeText(vehicleNumber),
       safeText(dispatchType),
+      safeText(d.customerName),
       safeText(orderer),
       safeText(repairShop),
       safeText(customerCarModel),
@@ -73,13 +74,23 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const body = await request.json() as any;
     const vehicleNumber = body.vehicleNumber ?? body.vehicle_number ?? body.rentalCarNumber;
     const dispatchType = body.dispatchType ?? body.dispatch_type ?? body.businessType;
-    const orderer = body.orderer ?? body.orderedBy;
+    const orderer = body.orderer ?? body.orderedBy ?? body.customerName;
     const repairShop = body.repairShop ?? body.repair_shop;
     const customerCarModel = body.customerCarModel ?? body.customer_car_model;
     const fuelLevelText = body.fuelLevelText ?? body.fuel_level_text ?? body.fuelDisplay;
     const customerPhone = body.customerPhone ?? body.customer_phone;
     const memo = body.memo ?? body.notes;
     const isCorporate = body.isCorporate ?? body.is_corporate ?? body.corporateVehicle;
+    const isCompleted = body.isCompleted ?? body.is_completed;
+    const keys = Object.keys(body);
+
+    if (isCompleted !== undefined && keys.every((key) => key === "isCompleted" || key === "is_completed")) {
+      await env.DB.prepare("UPDATE dispatches SET is_completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
+        safeBoolInt(isCompleted),
+        safeText(id)
+      ).run();
+      return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
+    }
 
     await env.DB.prepare(
       `UPDATE dispatches SET
@@ -87,6 +98,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
         time = ?,
         vehicle_number = ?,
         dispatch_type = ?,
+        customer_name = ?,
         orderer = ?,
         repair_shop = ?,
         customer_car_model = ?,
@@ -94,6 +106,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
         customer_phone = ?,
         memo = ?,
         is_corporate = ?,
+        is_completed = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     ).bind(
@@ -101,6 +114,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeNullableText(body.time),
       safeText(vehicleNumber),
       safeText(dispatchType),
+      safeText(body.customerName),
       safeText(orderer),
       safeText(repairShop),
       safeText(customerCarModel),
@@ -108,6 +122,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeText(customerPhone),
       safeText(memo),
       safeBoolInt(isCorporate),
+      safeBoolInt(isCompleted),
       safeText(id)
     ).run();
 

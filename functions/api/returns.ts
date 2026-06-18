@@ -96,7 +96,10 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       values.push(safeText(memo), safeText(memo));
     }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
-    if (updates.isCompleted !== undefined) { fields.push("is_completed = ?"); values.push(safeBoolInt(updates.isCompleted)); }
+    if (updates.isCompleted !== undefined || updates.is_completed !== undefined) {
+      fields.push("is_completed = ?");
+      values.push(safeBoolInt(updates.isCompleted ?? updates.is_completed));
+    }
     if (fields.length === 0) return Response.json({ success: true });
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);

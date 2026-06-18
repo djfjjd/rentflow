@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
+  Bell,
   CalendarDays,
   Camera,
   Car,
@@ -86,6 +87,22 @@ const adminItems = [
   { href: "/admin/vehicles", label: "차량수정", icon: Car },
   { href: "/admin/receivables", label: "미수금", icon: CreditCard },
   { href: "/admin/stats", label: "통계", icon: BarChart3 },
+];
+
+const dispatchBoardColumns = [
+  { label: "날짜", width: "w-[130px]" },
+  { label: "차량번호", width: "w-[100px]" },
+  { label: "구분", width: "w-[70px]" },
+  { label: "차종/색상", width: "w-[160px]" },
+  { label: "오더자", width: "w-[180px]" },
+  { label: "고객차종", width: "w-[130px]" },
+  { label: "주유량", width: "w-[80px]" },
+  { label: "수리처", width: "w-[160px]" },
+  { label: "메모", width: "w-[260px]" },
+  { label: "사진링크", width: "w-[80px]" },
+  { label: "사진추가업로드", width: "w-[100px]" },
+  { label: "수정", width: "w-[70px]" },
+  { label: "삭제", width: "w-[70px]" },
 ];
 
 const pageTitles: Record<PageKind, string> = {
@@ -192,6 +209,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
             <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
           </div>
         </header>
+        <PushPermissionButton />
 
         {isAdmin ? <AdminNav /> : null}
 
@@ -383,7 +401,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
             </div>
             <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
               <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
-              {selectedItems.length ? selectedItems.map((item) => <p className="text-sm" key={item.id}>{scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+              {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
             </div>
         </OverlayModal>
       ) : null}
@@ -470,6 +488,55 @@ function HomeScreen() {
   );
 }
 
+function PushPermissionButton() {
+  const [status, setStatus] = useState("");
+
+  async function requestPermission() {
+    if (!("Notification" in window)) {
+      setStatus("알림 미지원");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setStatus("알림 차단됨");
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker?.ready;
+      let subscription = await registration?.pushManager?.getSubscription();
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!subscription && registration?.pushManager && vapidPublicKey) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+      }
+      if (subscription) {
+        await sendJson("/api/push/subscribe", { subscription, userLabel: "field" });
+      }
+      setStatus("알림 허용됨");
+    } catch {
+      setStatus("알림 허용됨");
+    }
+  }
+
+  return (
+    <button className="small-btn w-fit" type="button" onClick={requestPermission} title={status || "알림 권한 요청"}>
+      <Bell size={16} />
+      알림 권한
+    </button>
+  );
+}
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replaceAll("-", "+").replaceAll("_", "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
 function ActionButton({ item }: { item: (typeof appActions)[number] }) {
   const Icon = item.icon;
   return (
@@ -534,6 +601,11 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           damageVehicle: String(payload.customerCarModel || ""),
           activeSummary: formatOrdererShop(payload.orderedBy || payload.customerName, payload.repairShop),
         }, "PATCH") : undefined}
+        notify={(payload) => ({
+          title: "새 배차 등록",
+          body: `${payload.rentalCarNumber || ""} ${businessType} ${payload.customerCarModel || ""}\n${formatOrdererShop(payload.orderedBy || payload.customerName, payload.repairShop)}`.trim(),
+          url: "/app/dispatch",
+        })}
         reloadEndpoint="/api/dispatches"
         onReloaded={(items) => onDispatches(items as DispatchV2[])}
         afterReset={() => {
@@ -617,6 +689,11 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         activeSummary: String(payload.arrivalAddress || ""),
         mileage: Number(payload.mileage || 0),
       }, "PATCH") : undefined}
+      notify={(payload) => ({
+        title: "새 회차 등록",
+        body: `${payload.rentalCarNumber || ""} 회차\n주차구역: ${payload.arrivalAddress || ""}\n주유량: ${payload.fuelDisplay || ""}`.trim(),
+        url: "/app/return",
+      })}
       reloadEndpoint="/api/returns"
       onReloaded={(items) => onReturns(items as ReturnV2[])}
       afterReset={() => {
@@ -650,6 +727,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
   const parsed = useMemo(() => parseReservationText(draft), [draft]);
   return (
     <section className="space-y-4">
+      <CalendarSubscribeBox />
       <DataForm
         endpoint="/api/reservations"
         buttonLabel="예약일정 추가"
@@ -667,6 +745,11 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
         reloadEndpoint="/api/reservations"
         onReloaded={(items) => onReservations(items as ReservationV2[])}
         afterReset={() => setDraft("")}
+        notify={(payload) => ({
+          title: "새 예약 등록",
+          body: String(payload.reservationText || payload.customerName || ""),
+          url: "/app/reservation",
+        })}
       >
         <Input
           name="reservationText"
@@ -729,6 +812,11 @@ function IncidentForm({
           setVehicle(undefined);
           setResetKey((key) => key + 1);
         }}
+        notify={(payload) => ({
+          title: type === "사고" ? "새 사고 기록" : "새 정비 기록",
+          body: `${payload.plateNumber || ""} ${payload.accidentPart || payload.title || ""}`.trim(),
+          url: "/app/incident",
+        })}
       >
         <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
         <FormBlock title="차량 선택">
@@ -785,6 +873,11 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         setVehicle(undefined);
         setResetKey((key) => key + 1);
       }}
+      notify={(payload) => ({
+        title: "새 분실물 등록",
+        body: `${payload.vehicleNumber || ""} ${payload.customerName || payload.memo || ""}`.trim(),
+        url: "/app/lost-items",
+      })}
       >
         <FormBlock title="차량 선택">
           <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
@@ -962,16 +1055,31 @@ function PartnerModal({ partner, onClose, onSaved }: { partner: PartnerAddressV2
 function CalendarPage({ reservations }: { reservations: ReservationV2[] }) {
   const grouped = groupBy(reservations, (item) => item.date);
   return (
-    <section className="panel">
+    <section className="panel space-y-4">
+      <CalendarSubscribeBox />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {Object.keys(grouped).sort().map((date) => (
           <article className="rounded-lg border border-[#d8ded8] bg-white p-4" key={date}>
             <h2 className="mb-2 text-lg font-black">{formatDateDot(date)}</h2>
-            {grouped[date].map((item) => <p className="text-sm" key={item.id}>{scheduleText(item)}</p>)}
+            {grouped[date].map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)}</p>)}
           </article>
         ))}
       </div>
     </section>
+  );
+}
+
+function CalendarSubscribeBox() {
+  const url = "https://rentflow-9yg.pages.dev/api/calendar.ics";
+  return (
+    <div className="rounded-lg border border-[#d8ded8] bg-white p-3">
+      <button className="small-btn" type="button" onClick={() => navigator.clipboard?.writeText(url)}>
+        캘린더 구독 URL 복사
+      </button>
+      <p className="mt-2 text-xs font-bold leading-relaxed text-[#68746d]">
+        아이폰: 설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가 / 구글 캘린더: 다른 캘린더 + &gt; URL로 추가 / 네이버 캘린더: 외부 캘린더 URL 구독
+      </p>
+    </div>
   );
 }
 
@@ -1124,7 +1232,12 @@ function DispatchAdmin({
   return (
     <section className="panel space-y-3 overflow-x-auto">
       <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
-      <table className="w-full min-w-[1080px] text-left text-sm">
+      <table className="w-full min-w-[1360px] table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[80px]" />
+          {dispatchBoardColumns.slice(0, 9).map((column) => <col className={column.width} key={column.label} />)}
+          <col className="w-[120px]" />
+        </colgroup>
         <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
         <tbody>{paginate(rows, page).map((row) => {
           const dispatch = row.kind === "배차" ? row.dispatch : undefined;
@@ -1133,17 +1246,17 @@ function DispatchAdmin({
           const vehicle = findVehicle(vehicles, plate);
           return (
             <tr className="border-b" key={`${row.kind}-${row.id}`}>
-              <td><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
-              <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
-              <td className="font-black">{plate}</td>
-              <td>{row.kind}</td>
-              <td>{vehicleModelColor(vehicle)}</td>
-              <td>{clean(dispatch?.orderedBy)}</td>
-              <td>{clean(dispatch?.customerCarModel)}</td>
-              <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
-              <td>{clean(dispatch?.repairShop)}</td>
-              <td>{clean(dispatch?.notes || ret?.notes)}</td>
-              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(plate)}`}>사진보기</Link></td>
+              <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
+              <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
+              <TruncatedCell className="font-black" value={plate} />
+              <TruncatedCell value={row.kind} />
+              <TruncatedCell value={vehicleModelColor(vehicle)} />
+              <TruncatedCell value={clean(dispatch?.orderedBy)} />
+              <TruncatedCell value={clean(dispatch?.customerCarModel)} />
+              <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
+              <TruncatedCell value={clean(dispatch?.repairShop)} />
+              <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
+              <td className="h-11 whitespace-nowrap"><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(plate)}`}>사진보기</Link></td>
             </tr>
           );
         })}</tbody>
@@ -1164,25 +1277,28 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
   return (
     <section className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
-      <table className="w-full min-w-[1220px] text-left text-sm">
+      <table className="w-full min-w-[1510px] table-fixed text-left text-sm">
+        <colgroup>
+          {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
+        </colgroup>
         <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
-              <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
-              <td className="font-black">{clean(item.rentalCarNumber)}</td>
-              <td>{clean(item.businessType || item.status)}</td>
-              <td>{vehicleModelColor(vehicle)}</td>
-              <td>{clean(item.orderedBy || item.customerName)}</td>
-              <td>{clean(item.customerCarModel)}</td>
-              <td>{clean(item.fuelDisplay)}</td>
-              <td>{clean(item.repairShop)}</td>
-              <td>{clean(item.notes)}</td>
-              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
-              <td><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
-              <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
-              <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+              <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
+              <TruncatedCell className="font-black" value={clean(item.rentalCarNumber)} />
+              <TruncatedCell value={clean(item.businessType || item.status)} />
+              <TruncatedCell value={vehicleModelColor(vehicle)} />
+              <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
+              <TruncatedCell value={clean(item.customerCarModel)} />
+              <TruncatedCell value={clean(item.fuelDisplay)} />
+              <TruncatedCell value={clean(item.repairShop)} />
+              <TruncatedCell value={clean(item.notes)} />
+              <td className="h-11 whitespace-nowrap"><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
+              <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
+              <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
             </tr>
           );
         })}</tbody>
@@ -1638,6 +1754,7 @@ function DataForm({
   reloadEndpoint,
   onReloaded,
   onSaved,
+  notify,
   buttonLabel = "저장",
 }: {
   children: React.ReactNode;
@@ -1648,6 +1765,7 @@ function DataForm({
   reloadEndpoint?: string;
   onReloaded?: (items: unknown) => void;
   onSaved?: (payload: Record<string, unknown>) => void;
+  notify?: (payload: Record<string, unknown>) => { title: string; body: string; url: string };
   buttonLabel?: string;
 }) {
   const [status, setStatus] = useState("");
@@ -1666,6 +1784,9 @@ function DataForm({
             onReloaded?.(await fetchJson<unknown>(reloadEndpoint, []));
           } else {
             onSaved?.(payload);
+          }
+          if (notify) {
+            await notifyWorkflow(notify(payload));
           }
           setStatus("저장 완료");
         } catch (error) {
@@ -1686,6 +1807,23 @@ function DataForm({
       {status ? <p className="text-sm font-black text-[#116149]">{status}</p> : null}
     </form>
   );
+}
+
+async function notifyWorkflow(message: { title: string; body: string; url: string }) {
+  try {
+    await sendJson("/api/push/send", message);
+  } catch (error) {
+    console.error("push send request failed", error);
+  }
+
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  try {
+    const registration = await navigator.serviceWorker?.ready;
+    registration?.active?.postMessage({ type: "rentflow-notification", ...message });
+  } catch (error) {
+    console.error("local notification failed", error);
+  }
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
@@ -1829,6 +1967,15 @@ function EmptyState({ text }: { text: string }) {
   return <div className="panel grid min-h-40 place-items-center text-center font-black text-[#68746d]">{text}</div>;
 }
 
+function TruncatedCell({ value, className = "" }: { value: unknown; className?: string }) {
+  const textValue = clean(value);
+  return (
+    <td className={`h-11 whitespace-nowrap px-1 align-middle ${className}`} title={textValue}>
+      <div className="truncate">{textValue}</div>
+    </td>
+  );
+}
+
 function groupBy<T>(items: T[], key: (item: T) => string) {
   return items.reduce<Record<string, T[]>>((acc, item) => {
     const name = key(item) || "기타";
@@ -1839,7 +1986,7 @@ function groupBy<T>(items: T[], key: (item: T) => string) {
 }
 
 function scheduleText(item: ReservationV2) {
-  return `${item.time || "--:--"}~${item.endTime || "--:--"} ${item.factoryName || item.orderPerson || "-"} ${item.customerCarModel || ""} 대차 ${item.vehicleNumber || item.customerCarNumber || ""}`.trim();
+  return firstText(item.reservationText, item.reserverName, item.customerName, "예약내용 없음");
 }
 
 function newest(files: UploadedFileV2[]) {
@@ -1946,21 +2093,24 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
         fuelLevelText: firstText(latestReturn.fuelLevelText, latestReturn.fuelDisplay),
         customerCarModel: "",
-        ordererRepairShop: normalizeParkingLocation(firstText(latestReturn.parkingZone, latestReturn.arrivalAddress, latestReturn.returnAddress, vehicle.location)),
+        ordererRepairShop: "",
         updatedAt: latestReturn.updatedAt || latestReturn.createdAt || vehicle.updatedAt,
       };
     }
 
     if (latestDispatch) {
+      const statusLabel = normalizeDispatchStatus(firstText(latestDispatch.dispatchType, latestDispatch.businessType, latestDispatch.status));
       return {
         key: vehicle.id,
         vehicleNumber,
         model: vehicle.model,
-        statusLabel: normalizeDispatchStatus(firstText(latestDispatch.dispatchType, latestDispatch.businessType, latestDispatch.status)),
+        statusLabel,
         dispatchDate: formatMonthDay(latestDispatch.date || latestDispatch.createdAt),
         fuelLevelText: firstText(latestDispatch.fuelLevelText, latestDispatch.fuelDisplay),
         customerCarModel: firstText(latestDispatch.customerCarModel),
-        ordererRepairShop: formatDashboardOrdererShop(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.repairShop),
+        ordererRepairShop: statusLabel === "셀프"
+          ? firstText(latestDispatch.customerName, latestDispatch.orderer, latestDispatch.orderedBy)
+          : formatDashboardOrdererShop(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.repairShop),
         updatedAt: latestDispatch.updatedAt || latestDispatch.createdAt || vehicle.updatedAt,
       };
     }
@@ -1973,7 +2123,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       dispatchDate: "",
       fuelLevelText: vehicle.fuelDisplay || "",
       customerCarModel: "",
-      ordererRepairShop: normalizeParkingLocation(vehicle.location || vehicle.activeSummary),
+      ordererRepairShop: "",
       updatedAt: vehicle.updatedAt,
     };
   });

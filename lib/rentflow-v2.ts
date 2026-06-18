@@ -23,6 +23,7 @@ export type ReservationV2 = {
   endTime?: string;
   vehicleNumber?: string;
   customerName?: string;
+  reserverName?: string;
   reservationText?: string;
   customerCarNumber?: string;
   customerCarModel?: string;
