@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
-import { geocodeAddressWithCache } from "@/src/lib/geocodeCache";
 
 type RepairShop = {
   id: number;
@@ -13,11 +12,6 @@ type RepairShop = {
   lat?: number | null;
   lng?: number | null;
   createdAt?: string;
-};
-
-type Coordinates = {
-  lat: number;
-  lng: number;
 };
 
 type RepairShopMapClientProps = {
@@ -40,9 +34,6 @@ export default function RepairShopMapClient({
 }: RepairShopMapClientProps) {
   const [shops, setShops] = useState<RepairShop[]>([]);
   const [query, setQuery] = useState("");
-  const [coordinates, setCoordinates] = useState<Record<string, Coordinates>>({});
-  const [cacheUsedCount, setCacheUsedCount] = useState(0);
-  const [geocodingDone, setGeocodingDone] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState("");
@@ -54,45 +45,9 @@ export default function RepairShopMapClient({
       .catch(() => setShops([]));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      setGeocodingDone(false);
-      setCacheUsedCount(0);
-      const next: Record<string, Coordinates> = {};
-      const seen = new Set<string>();
-
-      for (const shop of shops) {
-        const address = shop.address.trim();
-        if (!address || seen.has(address)) continue;
-        seen.add(address);
-
-        const result = await geocodeAddressWithCache(address);
-        if (cancelled) return;
-        if (result.coordinates) next[address] = result.coordinates;
-        if (result.cacheHit) {
-          setCacheUsedCount((count) => count + 1);
-        } else {
-          await delay(1000);
-        }
-        setCoordinates({ ...next });
-      }
-
-      if (!cancelled) setGeocodingDone(true);
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [shops]);
-
   const filtered = shops.filter((shop) => `${shop.name} ${shop.address}`.toLowerCase().includes(query.toLowerCase()));
-  const mapped = filtered.filter((shop) => coordinates[shop.address]);
-  const missing = filtered.filter((shop) => !coordinates[shop.address]);
-  const firstCoordinate = mapped[0] ? coordinates[mapped[0].address] : null;
-  const center: [number, number] = firstCoordinate ? [firstCoordinate.lat, firstCoordinate.lng] : [37.5665, 126.9780];
+  const mapped = filtered.filter(hasCoordinates);
+  const center: [number, number] = mapped[0] ? [Number(mapped[0].lat), Number(mapped[0].lng)] : [37.5665, 126.9780];
 
   async function addShop(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,7 +63,7 @@ export default function RepairShopMapClient({
       const response = await fetch("/api/repair-shops", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shops: [{ name, address }] }),
+        body: JSON.stringify({ geocode: false, shops: [{ name, address }] }),
         cache: "no-store",
       });
       const body = await response.text();
@@ -137,12 +92,9 @@ export default function RepairShopMapClient({
           {showImportLink ? <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link> : null}
         </div>
 
-        <section className="grid gap-3 sm:grid-cols-4">
-          <SummaryCard label="전체 업체" value={`${filtered.length}건`} />
-          <SummaryCard label="좌표 성공" value={`${mapped.length}건`} />
-          <SummaryCard label="실패" value={`${missing.length}건`} />
-          <SummaryCard label="캐시 사용" value={`${cacheUsedCount}건`} />
-        </section>
+        <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
+          지도에 표시되어 있는 좌표는 네이버지도 및 카카오지도가 더 정확합니다. 현재 지도는 참고용으로만 확인해주세요.
+        </p>
 
         <section className="grid gap-2">
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -168,7 +120,7 @@ export default function RepairShopMapClient({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank">네이버지도</a>
                   <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank">카카오맵</a>
-                  <a className="small-btn" href={tmapSearchUrl(shop.address)} target="_blank">티맵</a>
+                  <button className="small-btn" type="button" onClick={() => copyAddress(shop.address)}>주소복사</button>
                 </div>
               </article>
             ))}
@@ -181,39 +133,22 @@ export default function RepairShopMapClient({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {mapped.map((shop) => {
-                const coordinate = coordinates[shop.address];
-                return (
-                <Marker icon={markerIcon} key={shop.id} position={[coordinate.lat, coordinate.lng]}>
+              {mapped.map((shop) => (
+                <Marker icon={markerIcon} key={shop.id} position={[Number(shop.lat), Number(shop.lng)]}>
                   <Popup>
                     <div className="grid gap-2 text-sm">
                       <strong>{shop.name}</strong>
                       <span>{shop.address}</span>
                       <a href={naverMapUrl(shop.address)} target="_blank">네이버지도 검색</a>
                       <a href={kakaoMapUrl(shop.address)} target="_blank">카카오맵 검색</a>
-                      <a href={tmapSearchUrl(shop.address)} target="_blank">티맵 검색</a>
+                      <button className="small-btn" type="button" onClick={() => copyAddress(shop.address)}>주소복사</button>
                     </div>
                   </Popup>
                 </Marker>
-                );
-              })}
+              ))}
             </MapContainer>
           </div>
         </section>
-
-        {missing.length ? (
-          <section className="panel">
-            <h2 className="mb-3 text-xl font-black">좌표 변환 실패 업체</h2>
-            {!geocodingDone ? <p className="mb-3 text-sm font-bold text-[#667269]">주소 좌표를 순차 조회 중입니다.</p> : null}
-            <div className="grid gap-2 md:grid-cols-2">
-              {missing.map((shop) => (
-                <p className="rounded-lg bg-[#fff7f4] p-3 text-sm font-bold text-[#9a3f24]" key={shop.id}>
-                  {shop.name} · {shop.address}
-                </p>
-              ))}
-            </div>
-          </section>
-        ) : null}
       </section>
       {showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null}
     </main>
@@ -258,13 +193,8 @@ function RepairShopModal({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="rounded-lg border border-[#d8ded8] bg-white p-4">
-      <p className="text-sm font-black text-[#68746d]">{label}</p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
-    </article>
-  );
+function hasCoordinates(shop: RepairShop) {
+  return Number.isFinite(Number(shop.lat)) && Number.isFinite(Number(shop.lng));
 }
 
 function loadShops() {
@@ -279,10 +209,6 @@ function kakaoMapUrl(address: string) {
   return `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
 }
 
-function tmapSearchUrl(address: string) {
-  return `https://www.tmap.co.kr/search?searchKeyword=${encodeURIComponent(address)}`;
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function copyAddress(address: string) {
+  navigator.clipboard?.writeText(address);
 }

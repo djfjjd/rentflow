@@ -29,8 +29,9 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
   try {
     const db = getDb(env);
     await ensureRepairShopSchema(db);
-    const body = await request.json() as { shops?: RepairShopPayload[] };
+    const body = await request.json() as { shops?: RepairShopPayload[]; geocode?: boolean };
     const shops = Array.isArray(body.shops) ? body.shops : [];
+    const shouldGeocode = body.geocode !== false;
     const saved = [];
     const skipped = [];
     const failedGeocode = [];
@@ -50,12 +51,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
       let lat: number | null = null;
       let lng: number | null = null;
-      const geocoded = await geocodeAddress(address);
-      if (geocoded) {
-        lat = geocoded.lat;
-        lng = geocoded.lng;
-      } else {
-        failedGeocode.push({ name, address });
+      if (shouldGeocode) {
+        const geocoded = await geocodeAddress(address);
+        if (geocoded) {
+          lat = geocoded.lat;
+          lng = geocoded.lng;
+        } else {
+          failedGeocode.push({ name, address });
+        }
       }
 
       const result = await db.prepare(
