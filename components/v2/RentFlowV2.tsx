@@ -1416,24 +1416,28 @@ function DispatchAdmin({
   return (
     <section data-horizontal-scroll="true" className="panel space-y-3 overflow-x-auto">
       <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
-      <table className="w-full min-w-[1360px] table-fixed text-left text-sm">
+      <table className="w-full min-w-[1550px] table-fixed text-left text-sm">
         <colgroup>
           <col className="w-[80px]" />
-          {dispatchBoardColumns.slice(0, 9).map((column) => <col className={column.width} key={column.label} />)}
+          {dispatchBoardColumns.slice(0, 3).map((column) => <col className={column.width} key={column.label} />)}
+          <col className="w-[80px]" />
+          {dispatchBoardColumns.slice(3, 9).map((column) => <col className={column.width} key={column.label} />)}
           <col className="w-[120px]" />
         </colgroup>
-        <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+        <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
         <tbody>{paginate(rows, page).map((row) => {
           const dispatch = row.kind === "배차" ? row.dispatch : undefined;
           const ret = row.kind === "회차" ? row.returnItem : undefined;
           const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
           const vehicle = findVehicle(vehicles, plate);
+          const status = dispatch ? dispatchAdminDispatchStatus(dispatch) : dispatchAdminReturnStatus(ret, dispatches);
           return (
             <tr className="border-b" key={`${row.kind}-${row.id}`}>
               <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
               <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
               <TruncatedCell className="font-black" value={plate} />
               <TruncatedCell value={row.kind} />
+              <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
               <TruncatedCell value={vehicleModelColor(vehicle)} />
               <TruncatedCell value={clean(dispatch?.orderedBy)} />
               <TruncatedCell value={clean(dispatch?.customerCarModel)} />
@@ -2676,6 +2680,38 @@ function StatusPill({ status }: { status: string }) {
           ? "bg-green-100 text-green-700"
           : "bg-gray-100 text-gray-700";
   return <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${className}`}>{label}</span>;
+}
+
+function DispatchAdminStatusPill({ status }: { status: string }) {
+  if (!status) return <span />;
+  const label = status === "주차구역표시" ? "삼실" : status;
+  const className =
+    status === "보험"
+      ? "bg-red-100 text-red-700"
+      : status === "자차"
+        ? "bg-green-100 text-green-700"
+        : status === "셀프"
+          ? "bg-blue-100 text-blue-700"
+          : "bg-gray-100 text-gray-700";
+  return <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${className}`}>{label}</span>;
+}
+
+function dispatchAdminDispatchStatus(dispatch: DispatchV2) {
+  const raw = dispatch.dispatchType || dispatch.businessType || dispatch.status;
+  return raw ? normalizeDispatchStatus(raw) : "";
+}
+
+function dispatchAdminReturnStatus(returnItem: ReturnV2 | undefined, dispatches: DispatchV2[]) {
+  if (!returnItem) return "";
+  const rawReturn = returnStatusValue(returnItem);
+  if (rawReturn) return normalizeDispatchStatus(rawReturn);
+  const latestDispatch = latestByVehicle(dispatches, returnItem.rentalCarNumber || returnItem.vehicleNumber || "");
+  return latestDispatch ? dispatchAdminDispatchStatus(latestDispatch) : "";
+}
+
+function returnStatusValue(returnItem: ReturnV2) {
+  const raw = returnItem as ReturnV2 & { dispatchType?: string; businessType?: string; statusType?: string; typeDetail?: string; category?: string };
+  return firstText(raw.dispatchType, raw.businessType, raw.statusType, raw.typeDetail, raw.category);
 }
 
 function vehicleDashboardSummary(vehicle: VehicleV2) {
