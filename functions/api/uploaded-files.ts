@@ -1,12 +1,15 @@
 import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
+import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures } from "./_photo-retention";
 
 type Env = {
   DB: any;
+  RENTFLOW_UPLOADS?: any;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureUploadedFilesSchema(env);
+    await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
     const { results } = await env.DB.prepare(`
       SELECT
         uf.*,
@@ -42,6 +45,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       LEFT JOIN maintenance_histories mh ON uf.record_type = 'maintenance' AND uf.record_id = mh.id
       LEFT JOIN lost_items li ON uf.record_type = 'lost_item' AND uf.record_id = li.id
       LEFT JOIN reservations res ON uf.record_type = 'reservation' AND uf.record_id = res.id
+      WHERE ${activePhotoRetentionWhere("uf")}
       ORDER BY COALESCE(business_date, uf.uploaded_at, uf.created_at) DESC, COALESCE(uf.uploaded_at, uf.created_at) DESC
     `).all();
     return Response.json(results.map(mapFile), { headers: noStoreHeaders() });
@@ -191,5 +195,7 @@ async function ensureUploadedFilesSchema(env: Env) {
     { name: "mime_type", definition: "TEXT" },
     { name: "record_type", definition: "TEXT" },
     { name: "record_id", definition: "TEXT" },
+    { name: "uploaded_at", definition: "DATETIME" },
+    { name: "created_at", definition: "DATETIME" },
   ]);
 }

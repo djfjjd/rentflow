@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type {
   AccidentHistory,
@@ -58,6 +59,7 @@ function postJson(url: string, body: unknown, method = "POST") {
 }
 
 export function ERPProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -69,6 +71,11 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    if (pathname?.startsWith("/admin/repair-shops")) {
+      setIsLoaded(true);
+      return;
+    }
+
     let cancelled = false;
 
     Promise.all([
@@ -96,7 +103,7 @@ export function ERPProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]);
 
   const updateVehicle = (plateNumber: string, updates: Partial<Vehicle>) => {
     setVehicles((current) => current.map((v) => (v.plateNumber === plateNumber ? { ...v, ...updates } : v)));

@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeText } from "./_d1-utils";
+import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures, isActivePhotoCaptureObject } from "./_photo-retention";
 
 type UploadEnv = {
   DB?: any;
@@ -105,6 +106,16 @@ export async function onRequestGet({ request, env }: UploadContext) {
 
   // Handle R2 file download/view
   if (key && env.RENTFLOW_UPLOADS) {
+    if (env.DB) {
+      await ensureUploadedFilesSchema(env);
+      await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
+      const active = await isActivePhotoCaptureObject(env.DB, key);
+      if (!active) {
+        await env.RENTFLOW_UPLOADS.delete(key);
+        return new Response("File not found", { status: 404, headers: noStoreHeaders() });
+      }
+    }
+
     const object = await env.RENTFLOW_UPLOADS.get(key);
     if (!object) return new Response("File not found", { status: 404 });
 
@@ -118,6 +129,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
 
   if ((recordType || vehicleNumber) && env.DB) {
     await ensureUploadedFilesSchema(env);
+    await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
     let results: any[] = [];
 
     if (recordType && recordId) {
@@ -125,6 +137,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
         `SELECT *
          FROM uploaded_files
          WHERE record_type = ? AND record_id = ?
+           AND ${activePhotoRetentionWhere()}
          ORDER BY uploaded_at DESC, created_at DESC`
       ).bind(safeText(recordType), safeText(recordId)).all();
       results = response.results || [];
@@ -135,6 +148,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
         `SELECT *
          FROM uploaded_files
          WHERE record_type = ? AND vehicle_number = ?
+           AND ${activePhotoRetentionWhere()}
          ORDER BY uploaded_at DESC, created_at DESC`
       ).bind(safeText(recordType), safeText(vehicleNumber)).all();
       results = response.results || [];
@@ -145,6 +159,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
         `SELECT *
          FROM uploaded_files
          WHERE vehicle_number = ?
+           AND ${activePhotoRetentionWhere()}
          ORDER BY uploaded_at DESC, created_at DESC`
       ).bind(safeText(vehicleNumber)).all();
       results = response.results || [];
@@ -237,6 +252,7 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
     { name: "mime_type", definition: "TEXT" },
     { name: "record_type", definition: "TEXT" },
     { name: "record_id", definition: "TEXT" },
+    { name: "uploaded_at", definition: "DATETIME" },
     { name: "created_at", definition: "DATETIME" },
   ]);
 }

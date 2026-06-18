@@ -13,6 +13,7 @@ type ImportResult = {
   skipped?: Array<ParsedShop & { reason?: string }>;
   failedGeocode?: ParsedShop[];
   error?: string;
+  message?: string;
 };
 
 export function RepairShopImportPage() {
@@ -31,9 +32,11 @@ export function RepairShopImportPage() {
         body: JSON.stringify({ shops: parsed }),
         cache: "no-store",
       });
-      const data = await response.json() as ImportResult;
-      if (!response.ok) throw new Error(data.error || "저장 실패");
-      setResult(data);
+      const responseBody = await response.text();
+      console.log("repair shops import response", { status: response.status, body: responseBody });
+      const data = parseImportResponse(responseBody);
+      if (!response.ok) throw new Error(data.error || responseBody || "저장 실패");
+      setResult({ ...data, message: `저장 완료: ${data.saved?.length || 0}건` });
     } catch (error) {
       setResult({ error: `저장 실패: ${error instanceof Error ? error.message : String(error)}` });
     } finally {
@@ -105,6 +108,7 @@ export function RepairShopImportPage() {
           <section className="panel space-y-3">
             <h2 className="text-xl font-black">처리 결과</h2>
             {result.error ? <p className="font-black text-red-700">{result.error}</p> : null}
+            {result.message ? <p className="font-black text-green-700">{result.message}</p> : null}
             <div className="grid gap-2 sm:grid-cols-3">
               <ResultCard label="저장" value={`${result.saved?.length || 0}건`} />
               <ResultCard label="중복 제외" value={`${result.skipped?.length || 0}건`} />
@@ -127,6 +131,15 @@ export function RepairShopImportPage() {
       </section>
     </main>
   );
+}
+
+function parseImportResponse(value: string): ImportResult {
+  if (!value) return {};
+  try {
+    return JSON.parse(value) as ImportResult;
+  } catch {
+    return { error: value };
+  }
 }
 
 function ResultCard({ label, value }: { label: string; value: string }) {
