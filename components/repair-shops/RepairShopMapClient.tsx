@@ -151,25 +151,25 @@ export default function RepairShopMapClient({
           {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[minmax(420px,420px)_minmax(0,1fr)]">
-          <aside className="order-2 grid max-h-[70vh] gap-2 overflow-auto lg:order-1">
+        <section className="grid min-h-[640px] grid-cols-[45vw_55vw] gap-2 overflow-hidden lg:grid-cols-[minmax(420px,420px)_minmax(0,1fr)] lg:gap-4">
+          <aside className="grid max-h-[calc(100vh-260px)] min-h-[420px] w-[45vw] max-w-[45vw] gap-2 overflow-auto lg:max-h-[70vh] lg:w-auto lg:max-w-none">
             {filtered.map((shop) => (
               <article
-                className={`rounded-lg border bg-white p-4 text-left shadow-sm ${selectedShopId === shop.id ? "border-[#116149] ring-2 ring-[#116149]/20" : "border-[#d8ded8]"}`}
+                className={`rounded-lg border bg-white p-2 text-left shadow-sm lg:p-4 ${selectedShopId === shop.id ? "border-[#116149] ring-2 ring-[#116149]/20" : "border-[#d8ded8]"}`}
                 key={shop.id}
                 onClick={() => {
                   if (hasCoordinates(shop)) setSelectedShopId(shop.id);
                 }}
               >
-                <h2 className="font-black">{shop.name}</h2>
-                <p className="mt-1 text-sm font-bold text-[#667269]">{shop.address}</p>
-                <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
-                  <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
-                  <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
-                  <button className="small-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
+                <h2 className="text-sm font-black lg:text-base">{shop.name}</h2>
+                <p className="mt-1 text-xs font-bold text-[#667269] lg:text-sm">{shop.address}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 lg:flex-nowrap lg:gap-2 lg:overflow-x-auto">
+                  <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
+                  <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
+                  <button className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
                   <button
                     aria-label="주소 삭제"
-                    className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800"
+                    className="inline-flex h-8 min-h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800 lg:h-11 lg:min-h-11 lg:w-11 lg:min-w-11"
                     title="주소 삭제"
                     type="button"
                     onClick={(event) => {
@@ -185,8 +185,8 @@ export default function RepairShopMapClient({
             {!filtered.length ? <div className="panel text-center font-black text-[#667269]">검색 결과가 없습니다.</div> : null}
           </aside>
 
-          <div className="order-1 overflow-hidden rounded-lg border border-[#d8ded8] bg-white shadow-sm lg:order-2">
-            <MapContainer center={center} zoom={12} scrollWheelZoom className="h-[58vh] min-h-[360px] w-full lg:h-[70vh]">
+          <div className="w-[55vw] max-w-[55vw] overflow-hidden rounded-lg border border-[#d8ded8] bg-white shadow-sm lg:w-auto lg:max-w-none">
+            <MapContainer center={center} zoom={12} scrollWheelZoom className="h-[calc(100vh-260px)] min-h-[420px] w-full lg:h-[70vh]">
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
