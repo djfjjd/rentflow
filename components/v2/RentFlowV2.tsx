@@ -1033,43 +1033,83 @@ function PhotosPage({ admin }: { admin: boolean }) {
 
 function buildPhotoArchiveFolders(files: UploadedFileV2[]) {
   const folders = new Map<string, PhotoArchiveFolder>();
+  const legacyFiles: UploadedFileV2[] = [];
 
   for (const file of files) {
     const recordType = clean(file.recordType);
     const recordId = clean(file.recordId);
-    const vehicleNumber = clean(file.vehicleNumber);
-    const key = recordType && recordId ? `${recordType}:${recordId}` : `${recordType || "unknown"}:${vehicleNumber || "unknown"}:${uploadedMinuteKey(file)}`;
-    const kind = clean(file.businessKind) || photoRecordKind(recordType);
-    const businessDate = clean(file.businessDate) || undefined;
-    const businessTime = clean(file.businessTime) || undefined;
-    const folderName = [kind, vehicleNumber].filter(Boolean).join(" ") || "사진";
-    const uploadedAt = fileUploadedTime(file);
-    const sortValue = uploadedAt;
-    const existing = folders.get(key);
 
-    if (existing) {
-      existing.files.push(file);
-      existing.newestUpload = Math.max(existing.newestUpload, uploadedAt);
-      existing.sortValue = Math.max(existing.sortValue, sortValue);
+    if (!recordId) {
+      legacyFiles.push(file);
       continue;
     }
 
-    folders.set(key, {
-      key,
-      folderName,
-      kind,
-      vehicleNumber,
-      businessDate,
-      businessTime,
-      newestUpload: uploadedAt,
-      sortValue,
-      files: [file],
-    });
+    addFileToPhotoFolder(folders, `${recordType || "unknown"}:${recordId}`, file);
+  }
+
+  const sortedLegacyFiles = [...legacyFiles].sort((a, b) => {
+    const typeCompare = clean(a.recordType).localeCompare(clean(b.recordType));
+    if (typeCompare) return typeCompare;
+    const vehicleCompare = clean(a.vehicleNumber).localeCompare(clean(b.vehicleNumber));
+    if (vehicleCompare) return vehicleCompare;
+    return fileUploadedTime(a) - fileUploadedTime(b);
+  });
+  let lastLegacyType = "";
+  let lastLegacyVehicle = "";
+  let lastLegacyTime = 0;
+  let lastLegacyKey = "";
+  let legacyGroupIndex = 0;
+
+  for (const file of sortedLegacyFiles) {
+    const recordType = clean(file.recordType) || "unknown";
+    const vehicleNumber = clean(file.vehicleNumber) || "unknown";
+    const uploadedAt = fileUploadedTime(file);
+    const canMerge =
+      recordType === lastLegacyType &&
+      vehicleNumber === lastLegacyVehicle &&
+      uploadedAt - lastLegacyTime <= 5 * 60 * 1000;
+    const key = canMerge ? lastLegacyKey : `legacy:${recordType}:${vehicleNumber}:${legacyGroupIndex++}`;
+
+    addFileToPhotoFolder(folders, key, file);
+    lastLegacyType = recordType;
+    lastLegacyVehicle = vehicleNumber;
+    lastLegacyTime = uploadedAt;
+    lastLegacyKey = key;
   }
 
   return [...folders.values()].sort((a, b) => {
     if (b.sortValue !== a.sortValue) return b.sortValue - a.sortValue;
     return b.newestUpload - a.newestUpload;
+  });
+}
+
+function addFileToPhotoFolder(folders: Map<string, PhotoArchiveFolder>, key: string, file: UploadedFileV2) {
+  const recordType = clean(file.recordType);
+  const vehicleNumber = clean(file.vehicleNumber);
+  const kind = clean(file.businessKind) || photoRecordKind(recordType);
+  const businessDate = clean(file.businessDate) || undefined;
+  const businessTime = clean(file.businessTime) || undefined;
+  const folderName = [kind, vehicleNumber].filter(Boolean).join(" ") || "사진";
+  const uploadedAt = fileUploadedTime(file);
+  const existing = folders.get(key);
+
+  if (existing) {
+    existing.files.push(file);
+    existing.newestUpload = Math.max(existing.newestUpload, uploadedAt);
+    existing.sortValue = Math.max(existing.sortValue, uploadedAt);
+    return;
+  }
+
+  folders.set(key, {
+    key,
+    folderName,
+    kind,
+    vehicleNumber,
+    businessDate,
+    businessTime,
+    newestUpload: uploadedAt,
+    sortValue: uploadedAt,
+    files: [file],
   });
 }
 
@@ -1086,21 +1126,6 @@ function photoRecordKind(recordType: string) {
 function fileUploadedTime(file: UploadedFileV2) {
   const value = new Date(file.uploadedAt || file.createdAt || 0).getTime();
   return Number.isFinite(value) ? value : 0;
-}
-
-function uploadedMinuteKey(file: UploadedFileV2) {
-  const date = new Date(file.uploadedAt || file.createdAt || 0);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  const formatted = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-  return formatted.replace(/\D/g, "").slice(0, 12);
 }
 
 function PartnersPage() {
