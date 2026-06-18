@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -941,7 +941,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
   const [query, setQuery] = useState("");
   const [fileType, setFileType] = useState("");
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<UploadedFileV2 | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetchJson<UploadedFileV2[]>("/api/uploaded-files", []).then(setFiles);
@@ -968,7 +968,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
       <section className="space-y-4">
         <div className="panel">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <button className="small-btn" type="button" onClick={() => setSelectedFolderKey(null)}>뒤로가기</button>
+            <button className="small-btn" type="button" onClick={() => { setSelectedIndex(null); setSelectedFolderKey(null); }}>뒤로가기</button>
             <div className="min-w-0 text-right">
               <h2 className="truncate text-lg font-black">{selectedFolder.folderName}</h2>
               <p className="text-sm font-bold text-[#68746d]">총 {sortedFiles.length}개</p>
@@ -976,8 +976,8 @@ function PhotosPage({ admin }: { admin: boolean }) {
           </div>
           {sortedFiles.length ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-              {sortedFiles.map((file) => (
-                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedFile(file)}>
+              {sortedFiles.map((file, index) => (
+                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
                     <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
                   ) : isVideoFile(file) ? (
@@ -992,9 +992,9 @@ function PhotosPage({ admin }: { admin: boolean }) {
             <p className="py-12 text-center text-sm font-bold text-[#68746d]">업로드된 사진이 없습니다.</p>
           )}
         </div>
-        {selectedFile ? (
-          <OverlayModal onClose={() => setSelectedFile(null)} panelClassName="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-2xl">
-            <PhotoDetailView file={selectedFile} onBack={() => setSelectedFile(null)} />
+        {selectedIndex !== null ? (
+          <OverlayModal onClose={() => setSelectedIndex(null)} panelClassName="h-[90vh] w-[95vw] max-w-5xl overflow-hidden rounded-2xl bg-white p-4 shadow-2xl">
+            <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onIndexChange={setSelectedIndex} />
           </OverlayModal>
         ) : null}
       </section>
@@ -1752,7 +1752,7 @@ function PhotoFolderGalleryModal({
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<UploadedFileV2 | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const folderName = formatPhotoFolderName(date, time, kind, vehicleNumber);
   const sortedFiles = [...files].sort((a, b) => new Date(b.createdAt || b.uploadedAt || 0).getTime() - new Date(a.createdAt || a.uploadedAt || 0).getTime());
   const photoCount = sortedFiles.filter((file) => !isVideoFile(file)).length;
@@ -1772,8 +1772,8 @@ function PhotoFolderGalleryModal({
         <button className="small-btn" type="button" onClick={onClose}>닫기</button>
       </div>
 
-      {selectedFile ? (
-        <PhotoDetailView file={selectedFile} onBack={() => setSelectedFile(null)} />
+      {selectedIndex !== null ? (
+        <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onIndexChange={setSelectedIndex} />
       ) : galleryOpen ? (
         <div>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -1782,8 +1782,8 @@ function PhotoFolderGalleryModal({
           </div>
           {sortedFiles.length ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-              {sortedFiles.map((file) => (
-                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedFile(file)}>
+              {sortedFiles.map((file, index) => (
+                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
                     <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
                   ) : isVideoFile(file) ? (
@@ -1817,19 +1817,147 @@ function PhotoFolderGalleryModal({
   );
 }
 
-function PhotoDetailView({ file, onBack }: { file: UploadedFileV2; onBack: () => void }) {
+function PhotoDetailView({
+  files,
+  currentIndex,
+  onIndexChange,
+  onBack,
+}: {
+  files: UploadedFileV2[];
+  currentIndex: number;
+  onIndexChange: (index: number) => void;
+  onBack: () => void;
+}) {
+  const file = files[currentIndex];
   const url = fileUrl(file);
+  const [zoom, setZoom] = useState(1);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const canPrev = currentIndex > 0;
+  const canNext = currentIndex < files.length - 1;
+  const isVideo = isVideoFile(file);
+
+  function goTo(index: number) {
+    if (index < 0 || index >= files.length) return;
+    setZoom(1);
+    onIndexChange(index);
+  }
+
+  useEffect(() => {
+    setZoom(1);
+  }, [currentIndex]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (canPrev) goTo(currentIndex - 1);
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (canNext) goTo(currentIndex + 1);
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onBack();
+      }
+    }
+
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [canNext, canPrev, currentIndex, onBack]);
+
+  function zoomBy(delta: number) {
+    setZoom((value) => Math.min(4, Math.max(1, value + delta)));
+  }
+
+  function touchDistance(touches: React.TouchList) {
+    const first = touches[0];
+    const second = touches[1];
+    return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+  }
+
   return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div
+      className="flex h-full flex-col"
+      onTouchStart={(event) => {
+        if (event.touches.length === 2 && !isVideo) {
+          pinchStartRef.current = { distance: touchDistance(event.touches), zoom };
+          touchStartRef.current = null;
+          return;
+        }
+        if (event.touches.length === 1) {
+          const touch = event.touches[0];
+          touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+          pinchStartRef.current = null;
+        }
+      }}
+      onTouchMove={(event) => {
+        if (event.touches.length === 2 && pinchStartRef.current && !isVideo) {
+          const nextDistance = touchDistance(event.touches);
+          const ratio = nextDistance / pinchStartRef.current.distance;
+          setZoom(Math.min(4, Math.max(1, pinchStartRef.current.zoom * ratio)));
+        }
+      }}
+      onTouchEnd={(event) => {
+        if (pinchStartRef.current) {
+          pinchStartRef.current = null;
+          return;
+        }
+        if (!touchStartRef.current || event.changedTouches.length === 0) return;
+        const touch = event.changedTouches[0];
+        const deltaX = touch.clientX - touchStartRef.current.x;
+        const deltaY = touch.clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+          if (deltaX < 0 && canNext) goTo(currentIndex + 1);
+          if (deltaX > 0 && canPrev) goTo(currentIndex - 1);
+        }
+      }}
+    >
+      <div className="mb-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
         <button className="small-btn" type="button" onClick={onBack}>닫기</button>
+        <p className="text-center text-sm font-black">{currentIndex + 1} / {files.length}</p>
         {url ? <a className="small-btn" download={fileName(file)} href={url} target="_blank">다운로드</a> : null}
       </div>
-      <div className="grid max-h-[70vh] place-items-center rounded-lg bg-[#111] p-2">
-        {isVideoFile(file) ? (
-          <video className="max-h-[68vh] max-w-full" controls src={url} />
+      {!isVideo ? (
+        <div className="mb-3 flex items-center justify-center gap-2">
+          <button className="small-btn" disabled={zoom <= 1} type="button" onClick={() => zoomBy(-0.5)}>-</button>
+          <button className="small-btn min-w-14" type="button" onClick={() => setZoom(1)}>{zoom.toFixed(zoom % 1 === 0 ? 0 : 1)}x</button>
+          <button className="small-btn" disabled={zoom >= 4} type="button" onClick={() => zoomBy(0.5)}>+</button>
+        </div>
+      ) : null}
+      <div className="relative grid min-h-0 flex-1 place-items-center overflow-auto rounded-lg bg-[#111] p-2">
+        <button
+          className="absolute left-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full bg-white/80 text-xl font-black shadow disabled:opacity-40"
+          disabled={!canPrev}
+          type="button"
+          onClick={() => goTo(currentIndex - 1)}
+          aria-label="이전 사진"
+        >
+          ←
+        </button>
+        <button
+          className="absolute right-2 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full bg-white/80 text-xl font-black shadow disabled:opacity-40"
+          disabled={!canNext}
+          type="button"
+          onClick={() => goTo(currentIndex + 1)}
+          aria-label="다음 사진"
+        >
+          →
+        </button>
+        {isVideo ? (
+          <video className="max-h-[72vh] max-w-full" controls src={url} />
         ) : isImageFile(file) ? (
-          <img alt={fileName(file)} className="max-h-[68vh] max-w-full object-contain" src={url} />
+          <img
+            alt={fileName(file)}
+            className="max-h-[72vh] max-w-full object-contain transition-transform"
+            src={url}
+            style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+          />
         ) : (
           <a className="font-black text-white underline" href={url} target="_blank">{fileName(file)}</a>
         )}
