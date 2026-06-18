@@ -12,20 +12,23 @@ type RepairShopPayload = {
 
 export async function onRequestGet({ env }: { env: Env }) {
   try {
-    await ensureRepairShopSchema(env.DB);
-    const { results } = await env.DB.prepare(
+    const db = getDb(env);
+    await ensureRepairShopSchema(db);
+    const { results } = await db.prepare(
       "SELECT * FROM repair_shops ORDER BY created_at DESC, id DESC"
     ).all();
     return Response.json((results || []).map(mapRepairShop), { headers: noStoreHeaders() });
   } catch (error) {
-    console.error("repair shops list failed", { error: error instanceof Error ? error.message : String(error) });
-    return Response.json({ error: String(error) }, { status: 500, headers: noStoreHeaders() });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("repair shops list failed", { message });
+    return Response.json({ error: message }, { status: 500, headers: noStoreHeaders() });
   }
 }
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
-    await ensureRepairShopSchema(env.DB);
+    const db = getDb(env);
+    await ensureRepairShopSchema(db);
     const body = await request.json() as { shops?: RepairShopPayload[] };
     const shops = Array.isArray(body.shops) ? body.shops : [];
     const saved = [];
@@ -37,7 +40,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       const address = safeText(item.address).trim();
       if (!name || !address) continue;
 
-      const existing = await env.DB.prepare(
+      const existing = await db.prepare(
         "SELECT id FROM repair_shops WHERE name = ? AND address = ? LIMIT 1"
       ).bind(name, address).first();
       if (existing) {
@@ -55,7 +58,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         failedGeocode.push({ name, address });
       }
 
-      const result = await env.DB.prepare(
+      const result = await db.prepare(
         "INSERT INTO repair_shops (name, address, lat, lng) VALUES (?, ?, ?, ?)"
       ).bind(name, address, lat, lng).run();
       saved.push({ id: result.meta?.last_row_id ?? null, name, address, lat, lng });
@@ -63,8 +66,9 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
     return Response.json({ ok: true, saved, skipped, failedGeocode }, { headers: noStoreHeaders() });
   } catch (error) {
-    console.error("repair shops import failed", { error: error instanceof Error ? error.message : String(error) });
-    return Response.json({ error: String(error) }, { status: 500, headers: noStoreHeaders() });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("repair shops import failed", { message });
+    return Response.json({ error: message }, { status: 500, headers: noStoreHeaders() });
   }
 }
 
@@ -77,6 +81,13 @@ function mapRepairShop(row: any) {
     lng: row.lng,
     createdAt: row.created_at,
   };
+}
+
+function getDb(env: Env) {
+  if (!env?.DB) {
+    throw new Error("D1 binding DB is not configured. Check wrangler.toml [[d1_databases]] binding = \"DB\".");
+  }
+  return env.DB;
 }
 
 async function ensureRepairShopSchema(db: any) {

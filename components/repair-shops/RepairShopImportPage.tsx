@@ -35,7 +35,7 @@ export function RepairShopImportPage() {
       if (!response.ok) throw new Error(data.error || "저장 실패");
       setResult(data);
     } catch (error) {
-      setResult({ error: error instanceof Error ? error.message : String(error) });
+      setResult({ error: `저장 실패: ${error instanceof Error ? error.message : String(error)}` });
     } finally {
       setSaving(false);
     }
