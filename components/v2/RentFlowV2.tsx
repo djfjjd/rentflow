@@ -29,7 +29,6 @@ import { Pagination } from "@/components/Pagination";
 import {
   createId,
   fetchJson,
-  fileTypes,
   formatDateDot,
   formatDateTime,
   fuelTypes,
@@ -939,7 +938,6 @@ type PhotoArchiveFolder = {
 function PhotosPage({ admin }: { admin: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [query, setQuery] = useState("");
-  const [fileType, setFileType] = useState("");
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -955,8 +953,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
       files: folder.files.filter((file) => {
         const haystack = `${folder.folderName} ${folder.vehicleNumber} ${folder.kind} ${fileName(file)} ${file.vehicleNumber || ""} ${file.insuranceNumber || ""} ${file.customerName || ""}`.toLowerCase();
         const matchesQuery = haystack.includes(queryText);
-        const matchesType = !fileType || file.fileType === fileType || file.intakeType === fileType;
-        return matchesQuery && matchesType;
+        return matchesQuery;
       }),
     }))
     .filter((folder) => folder.files.length > 0);
@@ -1004,10 +1001,9 @@ function PhotosPage({ admin }: { admin: boolean }) {
   return (
     <section className="space-y-4">
       <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명, 파일명 검색" />
-      <select className="field min-h-12 w-full sm:w-64" value={fileType} onChange={(event) => setFileType(event.target.value)}>
-        <option value="">파일 종류 전체</option>
-        {fileTypes.map((type) => <option key={type}>{type}</option>)}
-      </select>
+      <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
+        파일 보관기간은 업로드 후 60일이며, 이후 자동삭제 됩니다.
+      </p>
       {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filteredFolders.map((folder) => {
