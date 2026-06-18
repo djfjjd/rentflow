@@ -2572,7 +2572,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
         fuelLevelText: firstText(latestReturn.fuelLevelText, latestReturn.fuelDisplay),
         customerCarModel: "",
-        ordererRepairShop: "",
+        ordererRepairShop: normalizeParkingLocation(firstText(latestReturn.parkingZone, latestReturn.arrivalAddress, latestReturn.returnAddress)),
         updatedAt: latestReturn.updatedAt || latestReturn.createdAt || vehicle.updatedAt,
       };
     }
@@ -2602,7 +2602,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       dispatchDate: "",
       fuelLevelText: vehicle.fuelDisplay || "",
       customerCarModel: "",
-      ordererRepairShop: "",
+      ordererRepairShop: normalizeParkingLocation(vehicle.location || vehicle.activeSummary),
       updatedAt: vehicle.updatedAt,
     };
   });
