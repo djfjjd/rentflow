@@ -20,14 +20,17 @@
     "@supabase/supabase-js": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
+    "leaflet": "^1.9.4",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-leaflet": "^5.0.0",
     "tailwind-merge": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260613.1",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

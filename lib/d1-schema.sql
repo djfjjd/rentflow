@@ -282,6 +282,16 @@ CREATE TABLE IF NOT EXISTS lost_items (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Repair Shops table
+CREATE TABLE IF NOT EXISTS repair_shops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  lat REAL,
+  lng REAL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create some indexes
 CREATE INDEX IF NOT EXISTS idx_vehicles_plate_number ON vehicles(plate_number);
 CREATE INDEX IF NOT EXISTS idx_dispatches_rental_car_number ON dispatches(rental_car_number);
@@ -295,3 +305,4 @@ CREATE INDEX IF NOT EXISTS idx_uploaded_files_vehicle_number ON uploaded_files(v
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_insurance_number ON uploaded_files(insurance_number);
 CREATE INDEX IF NOT EXISTS idx_uploaded_files_record ON uploaded_files(record_type, record_id);
 CREATE INDEX IF NOT EXISTS idx_lost_items_vehicle_number ON lost_items(vehicle_number);
+CREATE INDEX IF NOT EXISTS idx_repair_shops_name ON repair_shops(name);
