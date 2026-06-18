@@ -40,6 +40,7 @@ export type UploadedFileV2 = {
   r2Url: string;
   r2Key: string;
   driveUrl?: string;
+  mimeType?: string;
   vehicleNumber?: string;
   insuranceNumber?: string;
   customerName?: string;
@@ -48,6 +49,7 @@ export type UploadedFileV2 = {
   recordType?: string;
   recordId?: string;
   uploadedAt?: string;
+  createdAt?: string;
 };
 
 export type PartnerAddressV2 = {

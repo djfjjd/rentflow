@@ -1,6 +1,7 @@
-import { noStoreHeaders } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeText } from "./_d1-utils";
 
 type UploadEnv = {
+  DB?: any;
   GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
   GOOGLE_APPS_SCRIPT_TOKEN?: string;
   RENTFLOW_UPLOADS?: any; // R2Bucket
@@ -98,6 +99,8 @@ export async function onRequestPost({ request, env }: UploadContext) {
 export async function onRequestGet({ request, env }: UploadContext) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
+  const recordType = url.searchParams.get("recordType");
+  const recordId = url.searchParams.get("recordId");
 
   // Handle R2 file download/view
   if (key && env.RENTFLOW_UPLOADS) {
@@ -107,8 +110,21 @@ export async function onRequestGet({ request, env }: UploadContext) {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
+    headers.set("Cache-Control", "no-store");
     
     return new Response(object.body, { headers });
+  }
+
+  if (recordType && recordId && env.DB) {
+    await ensureUploadedFilesSchema(env);
+    const { results } = await env.DB.prepare(
+      `SELECT *
+       FROM uploaded_files
+       WHERE record_type = ? AND record_id = ?
+       ORDER BY uploaded_at DESC, created_at DESC`
+    ).bind(safeText(recordType), safeText(recordId)).all();
+
+    return Response.json((results || []).map(mapUploadedFile), { headers: noStoreHeaders() });
   }
 
   // Handle listing (from Drive if configured)
@@ -130,6 +146,61 @@ export async function onRequestGet({ request, env }: UploadContext) {
   } catch (error) {
     return Response.json({ files: [], error: String(error) }, { headers: noStoreHeaders() });
   }
+}
+
+function mapUploadedFile(row: any) {
+  return {
+    id: row.id,
+    file_name: row.file_name,
+    fileName: row.file_name,
+    r2_url: row.r2_url,
+    r2Url: row.r2_url,
+    r2_key: row.r2_key,
+    r2Key: row.r2_key,
+    drive_url: row.drive_url,
+    driveUrl: row.drive_url,
+    mime_type: row.mime_type || row.file_type,
+    mimeType: row.mime_type || row.file_type,
+    file_type: row.file_type,
+    fileType: row.file_type,
+    record_type: row.record_type,
+    recordType: row.record_type,
+    record_id: row.record_id,
+    recordId: row.record_id,
+    vehicle_number: row.vehicle_number,
+    vehicleNumber: row.vehicle_number,
+    created_at: row.created_at,
+    createdAt: row.created_at,
+    uploaded_at: row.uploaded_at,
+    uploadedAt: row.uploaded_at,
+  };
+}
+
+async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      r2_url TEXT NOT NULL,
+      r2_key TEXT NOT NULL,
+      drive_url TEXT,
+      vehicle_number TEXT,
+      file_type TEXT,
+      record_type TEXT,
+      record_id TEXT,
+      uploaded_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await ensureColumns(env.DB, "uploaded_files", [
+    { name: "drive_url", definition: "TEXT" },
+    { name: "vehicle_number", definition: "TEXT" },
+    { name: "file_type", definition: "TEXT" },
+    { name: "mime_type", definition: "TEXT" },
+    { name: "record_type", definition: "TEXT" },
+    { name: "record_id", definition: "TEXT" },
+    { name: "created_at", definition: "DATETIME" },
+  ]);
 }
 
 export async function onRequestDelete({ request, env }: UploadContext) {

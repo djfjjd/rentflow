@@ -209,7 +209,6 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
             <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
           </div>
         </header>
-        <PushPermissionButton />
 
         {isAdmin ? <AdminNav /> : null}
 
@@ -249,6 +248,7 @@ function QuickMenu({
 }) {
   return (
     <nav className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap sm:overflow-x-auto sm:pb-1">
+      <PushPermissionButton />
       <Link className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
         <Camera size={17} />
         <span className="hidden sm:inline">사진촬영본</span>
@@ -490,6 +490,15 @@ function HomeScreen() {
 
 function PushPermissionButton() {
   const [status, setStatus] = useState("");
+  const [permission, setPermission] = useState<string>("default");
+
+  useEffect(() => {
+    if ("Notification" in window) {
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  if (permission === "granted") return null;
 
   async function requestPermission() {
     if (!("Notification" in window)) {
@@ -498,6 +507,7 @@ function PushPermissionButton() {
     }
 
     const permission = await Notification.requestPermission();
+    setPermission(permission);
     if (permission !== "granted") {
       setStatus("알림 차단됨");
       return;
@@ -517,15 +527,17 @@ function PushPermissionButton() {
         await sendJson("/api/push/subscribe", { subscription, userLabel: "field" });
       }
       setStatus("알림 허용됨");
+      setPermission("granted");
     } catch {
       setStatus("알림 허용됨");
+      setPermission("granted");
     }
   }
 
   return (
-    <button className="small-btn w-fit" type="button" onClick={requestPermission} title={status || "알림 권한 요청"}>
+    <button className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" type="button" onClick={requestPermission} title={status || "알림 권한"} aria-label="알림 권한">
       <Bell size={16} />
-      알림 권한
+      <span className="hidden sm:inline">알림</span>
     </button>
   );
 }
@@ -1256,7 +1268,16 @@ function DispatchAdmin({
               <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
               <TruncatedCell value={clean(dispatch?.repairShop)} />
               <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
-              <td className="h-11 whitespace-nowrap"><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(plate)}`}>사진보기</Link></td>
+              <td className="h-11 whitespace-nowrap">
+                <PhotoGalleryButton
+                  date={dispatch?.date || ret?.date}
+                  kind={row.kind}
+                  recordId={row.id}
+                  recordType={row.kind === "배차" ? "dispatch" : "return"}
+                  time={dispatch?.time || ret?.time}
+                  vehicleNumber={plate}
+                />
+              </td>
             </tr>
           );
         })}</tbody>
@@ -1295,7 +1316,9 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
               <TruncatedCell value={clean(item.fuelDisplay)} />
               <TruncatedCell value={clean(item.repairShop)} />
               <TruncatedCell value={clean(item.notes)} />
-              <td className="h-11 whitespace-nowrap"><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td className="h-11 whitespace-nowrap">
+                <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
+              </td>
               <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
               <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
@@ -1339,7 +1362,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
               <td>{clean(item.fuelDisplay)}</td>
               <td>{clean(item.arrivalAddress)}</td>
               <td>{clean(item.notes)}</td>
-              <td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.rentalCarNumber || "")}`}>사진보기</Link></td>
+              <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
               <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
               <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
@@ -1472,7 +1495,7 @@ function IncidentBoard({
         <tbody>{paginate(rows, page).map((row) => {
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
-          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td className="font-black">{clean(row.item.plateNumber)}</td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(row.item.plateNumber || "")}`}>사진보기</Link></td></tr>;
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td className="font-black">{clean(row.item.plateNumber)}</td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType={row.type === "사고" ? "accident" : "maintenance"} vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -1492,10 +1515,153 @@ function LostItemBoard({ items, onLostItems }: { items: LostItemV2[]; onLostItem
       <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
-        <tbody>{paginate(rows, page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><Link className="font-black text-[#116149]" href={`/photos?vehicle=${encodeURIComponent(item.vehicleNumber || "")}`}>사진보기</Link></td></tr>)}</tbody>
+        <tbody>{paginate(rows, page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lost_item" vehicleNumber={item.vehicleNumber || ""} /></td></tr>)}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
+  );
+}
+
+function PhotoGalleryButton({
+  date,
+  time,
+  kind,
+  recordType,
+  recordId,
+  vehicleNumber,
+}: {
+  date?: string;
+  time?: string;
+  kind: string;
+  recordType: string;
+  recordId: string;
+  vehicleNumber?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button className="font-black text-[#116149]" type="button" onClick={() => setOpen(true)}>
+        사진보기
+      </button>
+      {open ? (
+        <PhotoFolderGalleryModal
+          date={date}
+          kind={kind}
+          onClose={() => setOpen(false)}
+          recordId={recordId}
+          recordType={recordType}
+          time={time}
+          vehicleNumber={vehicleNumber}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function PhotoFolderGalleryModal({
+  date,
+  time,
+  kind,
+  recordType,
+  recordId,
+  vehicleNumber,
+  onClose,
+}: {
+  date?: string;
+  time?: string;
+  kind: string;
+  recordType: string;
+  recordId: string;
+  vehicleNumber?: string;
+  onClose: () => void;
+}) {
+  const [files, setFiles] = useState<UploadedFileV2[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<UploadedFileV2 | null>(null);
+  const folderName = formatPhotoFolderName(date, time, kind, vehicleNumber);
+  const sortedFiles = [...files].sort((a, b) => new Date(b.createdAt || b.uploadedAt || 0).getTime() - new Date(a.createdAt || a.uploadedAt || 0).getTime());
+  const photoCount = sortedFiles.filter((file) => !isVideoFile(file)).length;
+  const videoCount = sortedFiles.filter(isVideoFile).length;
+
+  useEffect(() => {
+    setLoading(true);
+    fetchJson<UploadedFileV2[]>(`/api/uploads?recordType=${encodeURIComponent(recordType)}&recordId=${encodeURIComponent(recordId)}`, [])
+      .then(setFiles)
+      .finally(() => setLoading(false));
+  }, [recordId, recordType]);
+
+  return (
+    <OverlayModal onClose={onClose} panelClassName="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-2xl">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h2 className="text-lg font-black">사진촬영본</h2>
+        <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+      </div>
+
+      {selectedFile ? (
+        <PhotoDetailView file={selectedFile} onBack={() => setSelectedFile(null)} />
+      ) : galleryOpen ? (
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button className="small-btn" type="button" onClick={() => setGalleryOpen(false)}>폴더 목록</button>
+            <p className="truncate text-sm font-black">{folderName}</p>
+          </div>
+          {sortedFiles.length ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              {sortedFiles.map((file) => (
+                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedFile(file)}>
+                  {isImageFile(file) ? (
+                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
+                  ) : isVideoFile(file) ? (
+                    <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
+                  ) : (
+                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{fileName(file)}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm font-bold text-[#68746d]">업로드된 사진이 없습니다.</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          {loading ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">불러오는 중</p> : null}
+          {!loading && !sortedFiles.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">업로드된 사진이 없습니다.</p> : null}
+          {!loading && sortedFiles.length ? (
+            <button className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#d8ded8] bg-white p-4 text-left hover:bg-[#f5f7f4]" type="button" onClick={() => setGalleryOpen(true)}>
+              <div className="min-w-0">
+                <p className="truncate text-base font-black">📁 {folderName}</p>
+                <p className="mt-1 text-sm font-bold text-[#68746d]">{folderFileSummary(photoCount, videoCount)}</p>
+              </div>
+              <p className="shrink-0 text-xs font-bold text-[#68746d]">{formatPhotoBusinessDate(date, time)}</p>
+            </button>
+          ) : null}
+        </div>
+      )}
+    </OverlayModal>
+  );
+}
+
+function PhotoDetailView({ file, onBack }: { file: UploadedFileV2; onBack: () => void }) {
+  const url = fileUrl(file);
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button className="small-btn" type="button" onClick={onBack}>닫기</button>
+        {url ? <a className="small-btn" download={fileName(file)} href={url} target="_blank">다운로드</a> : null}
+      </div>
+      <div className="grid max-h-[70vh] place-items-center rounded-lg bg-[#111] p-2">
+        {isVideoFile(file) ? (
+          <video className="max-h-[68vh] max-w-full" controls src={url} />
+        ) : isImageFile(file) ? (
+          <img alt={fileName(file)} className="max-h-[68vh] max-w-full object-contain" src={url} />
+        ) : (
+          <a className="font-black text-white underline" href={url} target="_blank">{fileName(file)}</a>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2016,6 +2182,72 @@ async function uploadSelectedFiles(files: File[], metadata: { recordType: string
 function fileCountLabel(files: File[]) {
   const allImages = files.every((file) => file.type.startsWith("image/"));
   return allImages ? `사진 ${files.length}장` : `파일 ${files.length}개`;
+}
+
+function fileName(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { file_name?: string };
+  return raw.fileName || raw.file_name || "파일";
+}
+
+function fileUrl(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { r2_url?: string; drive_url?: string };
+  return raw.r2Url || raw.r2_url || raw.driveUrl || raw.drive_url || "";
+}
+
+function fileMime(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { mime_type?: string; file_type?: string };
+  return `${raw.mimeType || raw.mime_type || raw.fileType || raw.file_type || ""}`.toLowerCase();
+}
+
+function isVideoFile(file: UploadedFileV2) {
+  const name = fileName(file).toLowerCase();
+  const mime = fileMime(file);
+  return mime.startsWith("video/") || mime.includes("영상") || name.endsWith(".mp4");
+}
+
+function isImageFile(file: UploadedFileV2) {
+  const name = fileName(file).toLowerCase();
+  const mime = fileMime(file);
+  if (name.endsWith(".heic")) return false;
+  return mime.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(name) || mime.includes("사진");
+}
+
+function folderFileSummary(photoCount: number, videoCount: number) {
+  const parts = [];
+  if (photoCount) parts.push(`사진 ${photoCount}장`);
+  if (videoCount) parts.push(`영상 ${videoCount}개`);
+  return parts.length ? parts.join(" / ") : "파일 없음";
+}
+
+function formatPhotoFolderName(date: string | undefined, time: string | undefined, kind: string, vehicleNumber?: string) {
+  const parsed = parseBusinessDateTime(date, time);
+  return `${parsed.dateKey}_${parsed.timeText} ${kind}${vehicleNumber ? ` ${vehicleNumber}` : ""}`;
+}
+
+function formatPhotoBusinessDate(date: string | undefined, time: string | undefined) {
+  const parsed = parseBusinessDateTime(date, time);
+  return `${parsed.dateText} ${parsed.timeText}`;
+}
+
+function parseBusinessDateTime(date: string | undefined, time: string | undefined) {
+  const source = clean(date);
+  const normalizedDate = source
+    .replaceAll(".", "-")
+    .replace(/\s+/g, "")
+    .replace(/-$/g, "");
+  const dateMatch = normalizedDate.match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  const timeMatch = clean(time).match(/(\d{1,2}):(\d{2})/) || source.match(/(\d{1,2}):(\d{2})/);
+  const year = dateMatch?.[1] || "0000";
+  const month = dateMatch?.[2] || "00";
+  const day = dateMatch?.[3] || "00";
+  const hour = timeMatch?.[1]?.padStart(2, "0") || "00";
+  const minute = timeMatch?.[2] || "00";
+
+  return {
+    dateKey: `${year}${month}${day}`,
+    dateText: `${year}.${month}.${day}`,
+    timeText: `${hour}:${minute}`,
+  };
 }
 
 function Segmented({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {
