@@ -141,12 +141,25 @@ export default function RepairShopMapClient({
             <button className="primary-btn w-full shrink-0 sm:w-[120px]" type="button" onClick={() => setShowAddModal(true)}>
               주소 추가
             </button>
-            <input
-              className="field flex-1"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="검색할 주소를 입력하세요."
-            />
+            <div className="relative flex-1">
+              <input
+                className="field pr-12"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="검색할 주소를 입력하세요."
+              />
+              {query ? (
+                <button
+                  aria-label="검색어 지우기"
+                  className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-lg font-black text-[#667269] hover:bg-[#eef4ed] hover:text-[#16211d]"
+                  title="검색어 지우기"
+                  type="button"
+                  onClick={() => setQuery("")}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
           </div>
           {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
         </section>
