@@ -34,6 +34,7 @@ export function OverlayModal({
 
   return createPortal(
     <div
+      data-overlay-modal="true"
       className={`fixed inset-0 z-[9999] flex bg-black/20 p-4 ${align === "top" ? "items-start justify-center pt-16 sm:pt-20" : "items-center justify-center"}`}
       onClick={onClose}
     >

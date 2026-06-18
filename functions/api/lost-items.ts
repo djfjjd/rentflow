@@ -1,4 +1,4 @@
-import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -8,7 +8,7 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureLostItemsSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM lost_items ORDER BY created_at DESC").all();
-    return Response.json(results.map(mapLostItem));
+    return Response.json(results.map(mapLostItem), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("lost item list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -29,10 +29,10 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
       values.push(isResolved, isResolved);
     }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
-    if (fields.length === 0) return Response.json({ success: true });
+    if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
     values.push(id);
     await env.DB.prepare(`UPDATE lost_items SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
-    return Response.json({ ok: true, success: true, id: safeText(id) });
+    return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("lost item update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -62,7 +62,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       isResolved,
     ).run();
     console.log("saved lost item id", item.id);
-    return Response.json({ ok: true, success: true, id: safeText(item.id) });
+    return Response.json({ ok: true, success: true, id: safeText(item.id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("lost item save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

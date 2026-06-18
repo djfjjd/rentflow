@@ -1,4 +1,4 @@
-import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -106,7 +106,6 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
         customer_phone = ?,
         memo = ?,
         is_corporate = ?,
-        is_completed = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     ).bind(
@@ -122,7 +121,6 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeText(customerPhone),
       safeText(memo),
       safeBoolInt(isCorporate),
-      safeBoolInt(isCompleted),
       safeText(id)
     ).run();
 
@@ -250,10 +248,4 @@ async function ensureDispatchSchema(env: Env) {
     { name: "vehicle_color", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
   ]);
-}
-
-function noStoreHeaders() {
-  return {
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  };
 }

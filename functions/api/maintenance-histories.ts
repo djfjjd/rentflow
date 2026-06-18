@@ -1,4 +1,4 @@
-import { ensureColumns, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -9,7 +9,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     await ensureMaintenanceHistorySchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM maintenance_histories ORDER BY created_at DESC").all();
 
-    return Response.json(results.map(mapHistory));
+    return Response.json(results.map(mapHistory), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("maintenance history list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -26,10 +26,10 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const values = [];
     if (updates.isCompleted !== undefined) { fields.push("is_completed = ?"); values.push(safeBoolInt(updates.isCompleted)); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
-    if (fields.length === 0) return Response.json({ success: true });
+    if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
     values.push(id);
     await env.DB.prepare(`UPDATE maintenance_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
-    return Response.json({ ok: true, success: true, id: safeText(id) });
+    return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("maintenance history update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -76,7 +76,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     ).run();
 
     console.log("saved maintenance id", mh.id);
-    return Response.json({ ok: true, success: true, id: safeText(mh.id) });
+    return Response.json({ ok: true, success: true, id: safeText(mh.id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("maintenance history save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

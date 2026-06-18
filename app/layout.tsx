@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { PwaRegister } from "./pwa-register";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { ERPProvider } from "@/lib/erp-state";
 import "./globals.css";
 
@@ -28,6 +29,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
   themeColor: "#176B5B",
 };
 
@@ -41,7 +47,7 @@ export default function RootLayout({
       <body>
         <ERPProvider>
           <PwaRegister />
-          {children}
+          <PullToRefresh>{children}</PullToRefresh>
         </ERPProvider>
       </body>
     </html>

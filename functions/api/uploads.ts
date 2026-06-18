@@ -1,3 +1,5 @@
+import { noStoreHeaders } from "./_d1-utils";
+
 type UploadEnv = {
   GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
   GOOGLE_APPS_SCRIPT_TOKEN?: string;
@@ -37,7 +39,7 @@ export async function onRequestPost({ request, env }: UploadContext) {
   const metadata = parseMetadata(formData.get("metadata"));
 
   if (!(file instanceof File)) {
-    return Response.json({ stored: false, error: "file is required" }, { status: 400 });
+    return Response.json({ stored: false, error: "file is required" }, { status: 400, headers: noStoreHeaders() });
   }
 
   const uploadedAt = new Date().toISOString();
@@ -90,7 +92,7 @@ export async function onRequestPost({ request, env }: UploadContext) {
   return Response.json({
     stored: true,
     ...record,
-  });
+  }, { headers: noStoreHeaders() });
 }
 
 export async function onRequestGet({ request, env }: UploadContext) {
@@ -111,7 +113,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
 
   // Handle listing (from Drive if configured)
   if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    return Response.json({ files: [], fallback: true, message: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." });
+    return Response.json({ files: [], fallback: true, message: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { headers: noStoreHeaders() });
   }
 
   const query = url.searchParams.get("query") || "";
@@ -124,9 +126,9 @@ export async function onRequestGet({ request, env }: UploadContext) {
 
     return Response.json({
       files: files.map((file) => toFileRecord("", "", "success", file as Record<string, unknown>, {})),
-    });
+    }, { headers: noStoreHeaders() });
   } catch (error) {
-    return Response.json({ files: [], error: String(error) });
+    return Response.json({ files: [], error: String(error) }, { headers: noStoreHeaders() });
   }
 }
 
@@ -150,7 +152,7 @@ export async function onRequestDelete({ request, env }: UploadContext) {
     }
   }
 
-  return Response.json({ deleted: true });
+  return Response.json({ deleted: true }, { headers: noStoreHeaders() });
 }
 
 async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) {

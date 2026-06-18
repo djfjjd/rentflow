@@ -1,4 +1,4 @@
-import { ensureColumns, safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -195,10 +195,4 @@ async function ensureReturnSchema(env: Env) {
     { name: "created_at", definition: "DATETIME" },
     { name: "updated_at", definition: "DATETIME" },
   ]);
-}
-
-function noStoreHeaders() {
-  return {
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  };
 }

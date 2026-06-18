@@ -11,6 +11,17 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   color: #111827;
@@ -18,11 +29,23 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+#__next,
+#root {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
 button,
 input,
 select,
 textarea {
   font: inherit;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px;
 }
 
 @layer components {

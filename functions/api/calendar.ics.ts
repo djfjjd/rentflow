@@ -1,4 +1,4 @@
-import { ensureColumns } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -44,7 +44,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     return new Response(lines.join("\r\n"), {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Cache-Control": "no-store",
+        ...noStoreHeaders(),
       },
     });
   } catch (error) {

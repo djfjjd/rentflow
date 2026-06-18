@@ -1,4 +1,4 @@
-import { ensureColumns } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -26,7 +26,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     return Response.json({
       dispatches: dispatches.results || [],
       returns: returns.results || [],
-    }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
+    }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("unread messages list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

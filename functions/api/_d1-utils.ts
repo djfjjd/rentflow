@@ -27,6 +27,14 @@ export function safeBindValues(values: unknown[]) {
   return values.map((value) => (value === undefined ? null : value));
 }
 
+export function noStoreHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+  };
+}
+
 export async function ensureColumns(db: any, table: string, columns: { name: string; definition: string }[]) {
   const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
   const existing = new Set((results || []).map((row: any) => String(row.name)));

@@ -1,4 +1,4 @@
-import { ensureColumns, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -9,7 +9,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     await ensureReservationSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM reservations ORDER BY date DESC, time DESC").all();
 
-    return Response.json(results.map(mapReservation));
+    return Response.json(results.map(mapReservation), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -46,7 +46,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     ).run();
 
     console.log("saved reservation id", r.id);
-    return Response.json({ ok: true, success: true, id: safeText(r.id) });
+    return Response.json({ ok: true, success: true, id: safeText(r.id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -64,7 +64,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     await env.DB.prepare(
       "UPDATE reservations SET date = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     ).bind(...safeBindValues([safeText(r.date), safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
-    return Response.json({ ok: true, success: true, id: safeText(id) });
+    return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation update failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -77,7 +77,7 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     await env.DB.prepare("DELETE FROM reservations WHERE id = ?").bind(safeText(id)).run();
-    return Response.json({ success: true });
+    return Response.json({ success: true }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation delete failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -104,7 +104,7 @@ export async function onRequestPut({ request, env }: { request: Request, env: En
       await env.DB.batch(batch);
     }
 
-    return Response.json({ success: true });
+    return Response.json({ success: true }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation replace failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

@@ -308,7 +308,7 @@ function UnreadMessagesButton({
           panelClassName="w-full max-w-full rounded-2xl bg-white p-5 shadow-2xl sm:max-w-6xl"
         >
           <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
-          <div className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
+          <div data-horizontal-scroll="true" className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
             {unread.length ? (
               <table className="w-full min-w-[1040px] text-left text-sm">
                 <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>정리완료</th></tr></thead>
@@ -550,7 +550,7 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 function AdminNav() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-2 overflow-x-auto pb-2">
+    <nav data-horizontal-scroll="true" className="flex gap-2 overflow-x-auto pb-2">
       {adminItems.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -650,7 +650,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           </CompactRow>
         )}
         <Textarea name="notes" label="특이사항" />
-        <PhotoUploadButton />
+        <PhotoUploadButton key={`dispatch-upload-${resetKey}`} recordType="dispatch" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <DispatchBoard dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
     </section>
@@ -714,7 +714,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         <Input name="location" label="주차구역" list="parking-locations" />
       </CompactRow>
       <Textarea name="notes" label="특이사항" />
-      <PhotoUploadButton />
+      <PhotoUploadButton key={`return-upload-${resetKey}`} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
     <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} />
@@ -825,7 +825,7 @@ function IncidentForm({
         <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
         <Textarea name="notes" label="특이사항" />
         <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
-        <PhotoUploadButton />
+        <PhotoUploadButton key={`incident-upload-${resetKey}`} recordType={type === "사고" ? "accident" : "maintenance"} vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <IncidentBoard accidents={accidents} maintenance={maintenance} onAccidents={onAccidents} onMaintenance={onMaintenance} />
     </section>
@@ -887,7 +887,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
           <Input name="notes" label="특이사항" />
           <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
         </CompactRow>
-        <PhotoUploadButton />
+        <PhotoUploadButton key={`lost-upload-${resetKey}`} recordType="lost_item" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <LostItemBoard items={lostItems} onLostItems={onLostItems} />
     </section>
@@ -1144,7 +1144,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         </div>
         <Textarea name="memo" label="메모" />
       </DataForm>
-      <section className="panel overflow-x-auto">
+      <section data-horizontal-scroll="true" className="panel overflow-x-auto">
         <h2 className="mb-3 text-xl font-black">차량현황</h2>
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
@@ -1230,7 +1230,7 @@ function DispatchAdmin({
   }
 
   return (
-    <section className="panel space-y-3 overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel space-y-3 overflow-x-auto">
       <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
       <table className="w-full min-w-[1360px] table-fixed text-left text-sm">
         <colgroup>
@@ -1275,7 +1275,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
     console.log("dispatch board items", dispatches.length);
   }, [dispatches.length]);
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
       <table className="w-full min-w-[1510px] table-fixed text-left text-sm">
         <colgroup>
@@ -1323,7 +1323,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
     console.log("return board items", returns.length);
   }, [returns.length]);
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
       <table className="w-full min-w-[1080px] text-left text-sm">
         <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
@@ -1465,7 +1465,7 @@ function IncidentBoard({
     else await onMaintenance();
   }
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">사고/정비 현황판</h2>
       <table className="w-full min-w-[760px] text-left text-sm">
         <thead><tr className="border-b"><th>작업완료</th><th>차량번호</th><th>사고부위 또는 정비내용</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
@@ -1488,7 +1488,7 @@ function LostItemBoard({ items, onLostItems }: { items: LostItemV2[]; onLostItem
     await onLostItems();
   }
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
@@ -1566,7 +1566,7 @@ type VehicleDashboardRow = {
 
 function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">차량현황</h2>
       <table className="w-full min-w-[960px] text-left text-sm">
         <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
@@ -1690,7 +1690,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   }
 
   return (
-    <section className="panel overflow-x-auto">
+    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">예약 목록</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>수정</th><th>삭제</th></tr></thead>
@@ -1897,58 +1897,125 @@ function DateTimeTodayField({
   );
 }
 
-function PhotoUploadButton() {
+function PhotoUploadButton({ recordType, vehicleNumber }: { recordType: string; vehicleNumber: string }) {
+  const [status, setStatus] = useState("");
+  const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFiles(files: File[], input: HTMLInputElement) {
+    if (!files.length) {
+      setStatus("");
+      setUploading(false);
+      return;
+    }
+
+    const label = fileCountLabel(files);
+    setStatus(`${label} 선택됨`);
+    setStatusTone("info");
+    setUploading(true);
+
+    try {
+      setStatus(`${files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진"} 업로드 중...`);
+      await uploadSelectedFiles(files, { recordType, vehicleNumber });
+      setStatus(`${label} 업로드 완료`);
+      setStatusTone("success");
+      setTimeout(() => setStatus(""), 3000);
+    } catch (error) {
+      setStatus(`파일 업로드 실패: ${error instanceof Error ? error.message : String(error)}`);
+      setStatusTone("error");
+    } finally {
+      setUploading(false);
+      input.value = "";
+    }
+  }
+
   return (
-    <label className="primary-btn w-full cursor-pointer">
-      <Camera size={20} />
-      사진업로드
-      <input className="sr-only" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4" multiple />
-    </label>
+    <div>
+      <label className={`primary-btn w-full cursor-pointer ${uploading ? "pointer-events-none opacity-70" : ""}`}>
+        <Camera size={20} />
+        {uploading ? "업로드 중" : "사진업로드"}
+        <input
+          className="sr-only"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4"
+          multiple
+          disabled={uploading}
+          onChange={(event) => handleFiles(Array.from(event.target.files || []), event.currentTarget)}
+        />
+      </label>
+      {status ? <p className={`mt-2 text-sm font-bold ${statusTone === "error" ? "text-red-700" : statusTone === "success" ? "text-green-700" : "text-[#116149]"}`}>{status}</p> : null}
+    </div>
   );
 }
 
 function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recordType: "dispatch" | "return"; recordId: string; vehicleNumber: string }) {
   const [status, setStatus] = useState("");
+  const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
+  const [uploading, setUploading] = useState(false);
   return (
-    <label className="small-btn cursor-pointer">
-      {status || "추가"}
-      <input
-        className="sr-only"
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4"
-        multiple
-        onChange={async (event) => {
-          const files = Array.from(event.target.files || []);
-          if (!files.length) return;
-          setStatus("업로드중");
-          try {
-            for (const file of files) {
-              const metadata = {
-                fileName: file.name,
-                vehicleNumber,
-                recordType,
-                recordId,
-                intakeType: recordType,
-                fileType: file.type.startsWith("video/") ? "영상" : "사진",
-              };
-              const formData = new FormData();
-              formData.append("file", file);
-              formData.append("metadata", JSON.stringify(metadata));
-              const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData });
-              const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
-              await sendJson("/api/uploaded-files", { ...metadata, ...uploaded });
+    <div className="min-w-0">
+      <label className={`small-btn cursor-pointer whitespace-nowrap ${uploading ? "pointer-events-none opacity-70" : ""}`}>
+        {uploading ? "업로드중" : "추가"}
+        <input
+          className="sr-only"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4"
+          multiple
+          disabled={uploading}
+          onChange={async (event) => {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) {
+              setStatus("");
+              return;
             }
-            setStatus("완료");
-          } catch {
-            setStatus("실패");
-          } finally {
-            event.target.value = "";
-            setTimeout(() => setStatus(""), 1400);
-          }
-        }}
-      />
-    </label>
+            const label = fileCountLabel(files);
+            setStatus(`${label} 선택됨`);
+            setStatusTone("info");
+            setUploading(true);
+            try {
+              setStatus(`${files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진"} 업로드 중...`);
+              await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber });
+              setStatus(`${label} 업로드 완료`);
+              setStatusTone("success");
+              setTimeout(() => setStatus(""), 3000);
+            } catch (error) {
+              setStatus(`파일 업로드 실패: ${error instanceof Error ? error.message : String(error)}`);
+              setStatusTone("error");
+            } finally {
+              setUploading(false);
+              event.currentTarget.value = "";
+            }
+          }}
+        />
+      </label>
+      {status ? <p className={`mt-2 max-w-[160px] truncate text-xs font-bold ${statusTone === "error" ? "text-red-700" : statusTone === "success" ? "text-green-700" : "text-[#116149]"}`} title={status}>{status}</p> : null}
+    </div>
   );
+}
+
+async function uploadSelectedFiles(files: File[], metadata: { recordType: string; recordId?: string; vehicleNumber: string }) {
+  for (const file of files) {
+    const fileMetadata = {
+      fileName: file.name,
+      vehicleNumber: metadata.vehicleNumber,
+      recordType: metadata.recordType,
+      recordId: metadata.recordId || "",
+      intakeType: metadata.recordType,
+      fileType: file.type.startsWith("video/") ? "영상" : "사진",
+    };
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("metadata", JSON.stringify(fileMetadata));
+    const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
+    if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
+    const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
+    await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
+  }
+}
+
+function fileCountLabel(files: File[]) {
+  const allImages = files.every((file) => file.type.startsWith("image/"));
+  return allImages ? `사진 ${files.length}장` : `파일 ${files.length}개`;
 }
 
 function Segmented({ value, values, onChange }: { value: string; values: string[]; onChange: (value: string) => void }) {

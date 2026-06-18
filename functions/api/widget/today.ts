@@ -1,4 +1,4 @@
-import { ensureColumns } from "../_d1-utils";
+import { ensureColumns, noStoreHeaders } from "../_d1-utils";
 
 type Env = {
   DB: any;
@@ -22,7 +22,7 @@ export async function onRequestGet({ env }: { env: Env }) {
         reservation_text: row.reservation_text || "",
         reserver_name: row.reserver_name || "",
       })),
-    }, { headers: { "Cache-Control": "no-store" } });
+    }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("widget today failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

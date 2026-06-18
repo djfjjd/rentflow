@@ -186,7 +186,9 @@ export function formatDateTime(value?: string) {
 
 export async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const nextUrl = new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.origin);
+    nextUrl.searchParams.set("_", Date.now().toString());
+    const response = await fetch(nextUrl.toString(), { cache: "no-store" });
     if (!response.ok) {
       console.error("fetchJson failed", url, await response.text());
       return fallback;

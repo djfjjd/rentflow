@@ -1,4 +1,4 @@
-import { ensureColumns, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -8,7 +8,7 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureUploadedFilesSchema(env);
     const { results } = await env.DB.prepare("SELECT * FROM uploaded_files ORDER BY uploaded_at DESC").all();
-    return Response.json(results.map(mapFile));
+    return Response.json(results.map(mapFile), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("uploaded files list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -43,7 +43,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(f.uploadedAt || new Date().toISOString())
     ).run();
 
-    return Response.json({ ok: true, success: true, id: result.meta?.last_row_id ?? null });
+    return Response.json({ ok: true, success: true, id: result.meta?.last_row_id ?? null }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("uploaded file save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });

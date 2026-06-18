@@ -1,4 +1,4 @@
-import { ensureColumns, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { ensureColumns, noStoreHeaders, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
 
 type Env = {
   DB: any;
@@ -14,7 +14,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     return Response.json({
       accidents: (accidents.results || []).map((row: any) => ({ ...row, type: "accident" })),
       maintenance: (maintenance.results || []).map((row: any) => ({ ...row, type: "maintenance" })),
-    });
+    }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("incident list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -43,7 +43,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         safeBoolInt(body.isCompleted)
       ).run();
       console.log("saved maintenance id", id);
-      return Response.json({ ok: true, success: true, id, type: "maintenance" });
+      return Response.json({ ok: true, success: true, id, type: "maintenance" }, { headers: noStoreHeaders() });
     }
 
     await env.DB.prepare(
@@ -57,7 +57,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       safeBoolInt(body.isCompleted)
     ).run();
     console.log("saved accident id", id);
-    return Response.json({ ok: true, success: true, id, type: "accident" });
+    return Response.json({ ok: true, success: true, id, type: "accident" }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("incident save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
