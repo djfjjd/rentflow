@@ -44,6 +44,7 @@ export default function RepairShopMapClient({
   const [cacheUsedCount, setCacheUsedCount] = useState(0);
   const [geocodingDone, setGeocodingDone] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function RepairShopMapClient({
       const refreshed = await loadShops().then((result) => result.json());
       setShops(Array.isArray(refreshed) ? refreshed : []);
       setMessage("저장 완료");
+      setShowAddModal(false);
       form.reset();
     } catch (error) {
       setMessage(`저장 실패: ${error instanceof Error ? error.message : String(error)}`);
@@ -142,17 +144,20 @@ export default function RepairShopMapClient({
           <SummaryCard label="캐시 사용" value={`${cacheUsedCount}건`} />
         </section>
 
-        <form className="panel grid gap-3 sm:grid-cols-[1fr_2fr_auto]" onSubmit={addShop}>
-          <input className="field" name="name" placeholder="업체명" required />
-          <input className="field" name="address" placeholder="주소" required />
-          <button className="primary-btn" disabled={adding} type="submit">{adding ? "저장 중" : "주소 추가"}</button>
-          {message ? <p className={`text-sm font-black sm:col-span-3 ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
-        </form>
-
-        <label className="label">
-          업체명/주소 검색
-          <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="업체명 또는 주소" />
-        </label>
+        <section className="grid gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button className="primary-btn w-full shrink-0 sm:w-[120px]" type="button" onClick={() => setShowAddModal(true)}>
+              주소 추가
+            </button>
+            <input
+              className="field flex-1"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="검색할 주소를 입력하세요."
+            />
+          </div>
+          {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
+        </section>
 
         <section className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <aside className="order-2 grid max-h-[70vh] gap-2 overflow-auto lg:order-1">
@@ -210,7 +215,46 @@ export default function RepairShopMapClient({
           </section>
         ) : null}
       </section>
+      {showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null}
     </main>
+  );
+}
+
+function RepairShopModal({
+  adding,
+  onClose,
+  onSubmit,
+}: {
+  adding: boolean;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4" onClick={onClose}>
+      <form
+        className="w-full rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-md sm:rounded-lg"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={onSubmit}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">주소 추가/수정</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        <div className="grid gap-3">
+          <label className="label">
+            상호명
+            <input className="field" name="name" placeholder="상호명 입력" required />
+          </label>
+          <label className="label">
+            주소
+            <input className="field" name="address" placeholder="주소 입력" required />
+          </label>
+          <button className="primary-btn w-full" disabled={adding} type="submit">
+            {adding ? "저장 중" : "저장"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
