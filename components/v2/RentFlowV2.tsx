@@ -586,13 +586,14 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
+  const [recordId, setRecordId] = useState(() => createId("dispatch"));
   const [resetKey, setResetKey] = useState(0);
   return (
     <section className="space-y-4">
       <DataForm
         endpoint="/api/dispatches"
         buildPayload={(data) => ({
-          id: createId("dispatch"),
+          id: recordId,
           date,
           time,
           rentalCarNumber: vehicle?.plateNumber || "",
@@ -628,6 +629,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           setVehicle(undefined);
           setDate(todayKorea());
           setTime(currentTimeKorea());
+          setRecordId(createId("dispatch"));
           setResetKey((key) => key + 1);
         }}
       >
@@ -666,7 +668,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           </CompactRow>
         )}
         <Textarea name="notes" label="특이사항" />
-        <PhotoUploadButton key={`dispatch-upload-${resetKey}`} recordType="dispatch" vehicleNumber={vehicle?.plateNumber || ""} />
+        <PhotoUploadButton key={`dispatch-upload-${resetKey}`} recordId={recordId} recordType="dispatch" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <DispatchBoard dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
     </section>
@@ -677,6 +679,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
+  const [recordId, setRecordId] = useState(() => createId("return"));
   const [resetKey, setResetKey] = useState(0);
   const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
   return (
@@ -684,7 +687,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
     <DataForm
       endpoint="/api/returns"
       buildPayload={(data) => ({
-        id: createId("return"),
+        id: recordId,
         date,
         time,
         rentalCarNumber: vehicle?.plateNumber || "",
@@ -716,6 +719,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         setVehicle(undefined);
         setDate(todayKorea());
         setTime(currentTimeKorea());
+        setRecordId(createId("return"));
         setResetKey((key) => key + 1);
       }}
     >
@@ -730,7 +734,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         <Input name="location" label="주차구역" list="parking-locations" />
       </CompactRow>
       <Textarea name="notes" label="특이사항" />
-      <PhotoUploadButton key={`return-upload-${resetKey}`} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
+      <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
     <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} />
@@ -798,13 +802,20 @@ function IncidentForm({
 }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [type, setType] = useState("사고");
+  const [recordId, setRecordId] = useState(() => createId("accident"));
   const [resetKey, setResetKey] = useState(0);
+
+  function changeType(nextType: string) {
+    setType(nextType);
+    setRecordId(createId(nextType === "사고" ? "accident" : "maintenance"));
+  }
+
   return (
     <section className="space-y-4">
       <DataForm
         endpoint={type === "사고" ? "/api/accident-histories" : "/api/maintenance-histories"}
         buildPayload={(data) => ({
-          id: createId(type === "사고" ? "accident" : "maintenance"),
+          id: recordId,
           plateNumber: vehicle?.plateNumber || "",
           accidentPart: text(data, "content"),
           title: text(data, "content"),
@@ -826,6 +837,7 @@ function IncidentForm({
         onReloaded={(items) => type === "사고" ? onAccidents(items as IncidentRecordV2[]) : onMaintenance(items as IncidentRecordV2[])}
         afterReset={() => {
           setVehicle(undefined);
+          setRecordId(createId(type === "사고" ? "accident" : "maintenance"));
           setResetKey((key) => key + 1);
         }}
         notify={(payload) => ({
@@ -834,14 +846,14 @@ function IncidentForm({
           url: "/app/incident",
         })}
       >
-        <Segmented value={type} values={["사고", "정비"]} onChange={setType} />
+        <Segmented value={type} values={["사고", "정비"]} onChange={changeType} />
         <FormBlock title="차량 선택">
           <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         </FormBlock>
         <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
         <Textarea name="notes" label="특이사항" />
         <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
-        <PhotoUploadButton key={`incident-upload-${resetKey}`} recordType={type === "사고" ? "accident" : "maintenance"} vehicleNumber={vehicle?.plateNumber || ""} />
+        <PhotoUploadButton key={`incident-upload-${resetKey}`} recordId={recordId} recordType={type === "사고" ? "accident" : "maintenance"} vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <IncidentBoard accidents={accidents} maintenance={maintenance} onAccidents={onAccidents} onMaintenance={onMaintenance} />
     </section>
@@ -870,11 +882,12 @@ function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
 
 function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
+  const [recordId, setRecordId] = useState(() => createId("lost"));
   const [resetKey, setResetKey] = useState(0);
   return (
     <section className="space-y-4">
       <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
-        id: createId("lost"),
+        id: recordId,
         vehicleNumber: vehicle?.plateNumber || "",
         itemName: text(data, "customerName") || "분실물",
         customerName: text(data, "customerName"),
@@ -887,6 +900,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
       onReloaded={(items) => onLostItems(items as LostItemV2[])}
       afterReset={() => {
         setVehicle(undefined);
+        setRecordId(createId("lost"));
         setResetKey((key) => key + 1);
       }}
       notify={(payload) => ({
@@ -903,7 +917,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
           <Input name="notes" label="특이사항" />
           <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
         </CompactRow>
-        <PhotoUploadButton key={`lost-upload-${resetKey}`} recordType="lost_item" vehicleNumber={vehicle?.plateNumber || ""} />
+        <PhotoUploadButton key={`lost-upload-${resetKey}`} recordId={recordId} recordType="lost_item" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
       <LostItemBoard items={lostItems} onLostItems={onLostItems} />
     </section>
@@ -949,7 +963,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
 
   if (selectedFolder) {
-    const sortedFiles = [...selectedFolder.files].sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime());
+    const sortedFiles = [...selectedFolder.files].sort((a, b) => fileUploadedTime(a) - fileUploadedTime(b));
     return (
       <section className="space-y-4">
         <div className="panel">
@@ -1023,14 +1037,14 @@ function buildPhotoArchiveFolders(files: UploadedFileV2[]) {
   for (const file of files) {
     const recordType = clean(file.recordType);
     const recordId = clean(file.recordId);
-    const key = recordType && recordId ? `${recordType}:${recordId}` : `file:${file.id || fileName(file)}`;
-    const kind = clean(file.businessKind) || photoRecordKind(recordType);
     const vehicleNumber = clean(file.vehicleNumber);
+    const key = recordType && recordId ? `${recordType}:${recordId}` : `${recordType || "unknown"}:${vehicleNumber || "unknown"}:${uploadedMinuteKey(file)}`;
+    const kind = clean(file.businessKind) || photoRecordKind(recordType);
     const businessDate = clean(file.businessDate) || undefined;
     const businessTime = clean(file.businessTime) || undefined;
-    const folderName = formatPhotoFolderName(businessDate, businessTime, kind, vehicleNumber);
-    const uploadedAt = new Date(file.uploadedAt || file.createdAt || 0).getTime();
-    const sortValue = dateTimeSortValue(businessDate, businessTime, file.uploadedAt || file.createdAt);
+    const folderName = [kind, vehicleNumber].filter(Boolean).join(" ") || "사진";
+    const uploadedAt = fileUploadedTime(file);
+    const sortValue = uploadedAt;
     const existing = folders.get(key);
 
     if (existing) {
@@ -1067,6 +1081,26 @@ function photoRecordKind(recordType: string) {
   if (recordType === "lost_item") return "분실물";
   if (recordType === "reservation") return "예약";
   return "사진";
+}
+
+function fileUploadedTime(file: UploadedFileV2) {
+  const value = new Date(file.uploadedAt || file.createdAt || 0).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function uploadedMinuteKey(file: UploadedFileV2) {
+  const date = new Date(file.uploadedAt || file.createdAt || 0);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  const formatted = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return formatted.replace(/\D/g, "").slice(0, 12);
 }
 
 function PartnersPage() {
@@ -2176,7 +2210,7 @@ function DateTimeTodayField({
   );
 }
 
-function PhotoUploadButton({ recordType, vehicleNumber }: { recordType: string; vehicleNumber: string }) {
+function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType: string; recordId?: string; vehicleNumber: string }) {
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [uploading, setUploading] = useState(false);
@@ -2195,7 +2229,7 @@ function PhotoUploadButton({ recordType, vehicleNumber }: { recordType: string; 
 
     try {
       setStatus(`${files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진"} 업로드 중...`);
-      await uploadSelectedFiles(files, { recordType, vehicleNumber });
+      await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber });
       setStatus(`${label} 업로드 완료`);
       setStatusTone("success");
       setTimeout(() => setStatus(""), 3000);
