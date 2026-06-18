@@ -1435,50 +1435,54 @@ function DispatchAdmin({
   }
 
   return (
-    <section data-horizontal-scroll="true" className="panel space-y-3 overflow-x-auto">
-      <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
-      <table className="w-full min-w-[1550px] table-fixed text-left text-sm">
-        <colgroup>
-          <col className="w-[80px]" />
-          {dispatchBoardColumns.slice(0, 3).map((column) => <col className={column.width} key={column.label} />)}
-          <col className="w-[80px]" />
-          {dispatchBoardColumns.slice(3, 9).map((column) => <col className={column.width} key={column.label} />)}
-          <col className="w-[120px]" />
-        </colgroup>
-        <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
-        <tbody>{paginate(rows, page).map((row) => {
-          const dispatch = row.kind === "배차" ? row.dispatch : undefined;
-          const ret = row.kind === "회차" ? row.returnItem : undefined;
-          const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
-          const vehicle = findVehicle(vehicles, plate);
-          const status = dispatch ? dispatchAdminDispatchStatus(dispatch) : dispatchAdminReturnStatus(ret, dispatches);
-          return (
-            <tr className="border-b" key={`${row.kind}-${row.id}`}>
-              <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
-              <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
-              <TruncatedCell className="font-black" value={plate} />
-              <TruncatedCell value={row.kind} />
-              <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
-              <TruncatedCell value={vehicleModelColor(vehicle)} />
-              <TruncatedCell value={clean(dispatch?.orderedBy)} />
-              <TruncatedCell value={clean(dispatch?.customerCarModel)} />
-              <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
-              <TruncatedCell value={clean(dispatch?.repairShop)} />
-              <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
-              <td className="h-11 whitespace-nowrap">
-                <PhotoGalleryButton
-                  date={dispatch?.date || ret?.date}
-                  kind={row.kind}
-                  recordId={row.id}
-                  recordType={row.kind === "배차" ? "dispatch" : "return"}
-                  time={dispatch?.time || ret?.time}
-                  vehicleNumber={plate}
-                />
-              </td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
+    <section className="panel space-y-3 overflow-hidden">
+      <div className="sticky top-0 z-10 rounded-lg bg-[#eef4ed] p-1.5">
+        <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
+      </div>
+      <div data-horizontal-scroll="true" className="w-full overflow-x-auto">
+        <table className="w-full min-w-[1550px] table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[80px]" />
+            {dispatchBoardColumns.slice(0, 3).map((column) => <col className={column.width} key={column.label} />)}
+            <col className="w-[80px]" />
+            {dispatchBoardColumns.slice(3, 9).map((column) => <col className={column.width} key={column.label} />)}
+            <col className="w-[120px]" />
+          </colgroup>
+          <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+          <tbody>{paginate(rows, page).map((row) => {
+            const dispatch = row.kind === "배차" ? row.dispatch : undefined;
+            const ret = row.kind === "회차" ? row.returnItem : undefined;
+            const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
+            const vehicle = findVehicle(vehicles, plate);
+            const status = dispatch ? dispatchAdminDispatchStatus(dispatch) : dispatchAdminReturnStatus(ret, dispatches);
+            return (
+              <tr className="border-b" key={`${row.kind}-${row.id}`}>
+                <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
+                <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
+                <TruncatedCell className="font-black" value={plate} />
+                <TruncatedCell value={row.kind} />
+                <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
+                <TruncatedCell value={vehicleModelColor(vehicle)} />
+                <TruncatedCell value={clean(dispatch?.orderedBy)} />
+                <TruncatedCell value={clean(dispatch?.customerCarModel)} />
+                <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
+                <TruncatedCell value={clean(dispatch?.repairShop)} />
+                <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
+                <td className="h-11 whitespace-nowrap">
+                  <PhotoGalleryButton
+                    date={dispatch?.date || ret?.date}
+                    kind={row.kind}
+                    recordId={row.id}
+                    recordType={row.kind === "배차" ? "dispatch" : "return"}
+                    time={dispatch?.time || ret?.time}
+                    vehicleNumber={plate}
+                  />
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
   );
