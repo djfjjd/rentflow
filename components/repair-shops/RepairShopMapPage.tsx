@@ -2,6 +2,12 @@
 
 import dynamic from "next/dynamic";
 
+type RepairShopMapPageProps = {
+  title?: string;
+  subtitle?: string;
+  showImportLink?: boolean;
+};
+
 const RepairShopMapClient = dynamic(() => import("./RepairShopMapClient"), {
   ssr: false,
   loading: () => (
@@ -13,6 +19,6 @@ const RepairShopMapClient = dynamic(() => import("./RepairShopMapClient"), {
   ),
 });
 
-export function RepairShopMapPage() {
-  return <RepairShopMapClient />;
+export function RepairShopMapPage(props: RepairShopMapPageProps) {
+  return <RepairShopMapClient {...props} />;
 }

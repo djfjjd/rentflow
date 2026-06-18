@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
+import { geocodeAddressWithCache } from "@/src/lib/geocodeCache";
 
 type RepairShop = {
   id: number;
@@ -14,6 +15,17 @@ type RepairShop = {
   createdAt?: string;
 };
 
+type Coordinates = {
+  lat: number;
+  lng: number;
+};
+
+type RepairShopMapClientProps = {
+  title?: string;
+  subtitle?: string;
+  showImportLink?: boolean;
+};
+
 const markerIcon = L.divIcon({
   className: "",
   html: "<div style=\"width:18px;height:18px;border-radius:999px;background:#116149;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)\"></div>",
@@ -21,38 +33,121 @@ const markerIcon = L.divIcon({
   iconAnchor: [9, 9],
 });
 
-export default function RepairShopMapClient() {
+export default function RepairShopMapClient({
+  title = "정비업체 지도",
+  subtitle = "OpenStreetMap 기반으로 주소를 좌표 변환해 표시합니다.",
+  showImportLink = true,
+}: RepairShopMapClientProps) {
   const [shops, setShops] = useState<RepairShop[]>([]);
   const [query, setQuery] = useState("");
+  const [coordinates, setCoordinates] = useState<Record<string, Coordinates>>({});
+  const [cacheUsedCount, setCacheUsedCount] = useState(0);
+  const [geocodingDone, setGeocodingDone] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch("/api/repair-shops", { cache: "no-store" })
+    loadShops()
       .then((response) => response.json())
       .then((data) => setShops(Array.isArray(data) ? data : []))
       .catch(() => setShops([]));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      setGeocodingDone(false);
+      setCacheUsedCount(0);
+      const next: Record<string, Coordinates> = {};
+      const seen = new Set<string>();
+
+      for (const shop of shops) {
+        const address = shop.address.trim();
+        if (!address || seen.has(address)) continue;
+        seen.add(address);
+
+        const result = await geocodeAddressWithCache(address);
+        if (cancelled) return;
+        if (result.coordinates) next[address] = result.coordinates;
+        if (result.cacheHit) {
+          setCacheUsedCount((count) => count + 1);
+        } else {
+          await delay(1000);
+        }
+        setCoordinates({ ...next });
+      }
+
+      if (!cancelled) setGeocodingDone(true);
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [shops]);
+
   const filtered = shops.filter((shop) => `${shop.name} ${shop.address}`.toLowerCase().includes(query.toLowerCase()));
-  const mapped = filtered.filter(hasCoordinates);
-  const missing = filtered.filter((shop) => !hasCoordinates(shop));
-  const center: [number, number] = mapped[0] ? [Number(mapped[0].lat), Number(mapped[0].lng)] : [37.5665, 126.9780];
+  const mapped = filtered.filter((shop) => coordinates[shop.address]);
+  const missing = filtered.filter((shop) => !coordinates[shop.address]);
+  const firstCoordinate = mapped[0] ? coordinates[mapped[0].address] : null;
+  const center: [number, number] = firstCoordinate ? [firstCoordinate.lat, firstCoordinate.lng] : [37.5665, 126.9780];
+
+  async function addShop(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get("name") || "").trim();
+    const address = String(data.get("address") || "").trim();
+    if (!name || !address) return;
+
+    setAdding(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/repair-shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shops: [{ name, address }] }),
+        cache: "no-store",
+      });
+      const body = await response.text();
+      console.log("repair shop add response", { status: response.status, body });
+      if (!response.ok) throw new Error(body || "저장 실패");
+      const refreshed = await loadShops().then((result) => result.json());
+      setShops(Array.isArray(refreshed) ? refreshed : []);
+      setMessage("저장 완료");
+      form.reset();
+    } catch (error) {
+      setMessage(`저장 실패: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAdding(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">
       <section className="mx-auto grid max-w-7xl gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-black">정비업체 지도</h1>
-            <p className="text-sm font-bold text-[#667269]">OpenStreetMap 기반으로 좌표 등록 업체를 표시합니다.</p>
+            <h1 className="text-2xl font-black">{title}</h1>
+            <p className="text-sm font-bold text-[#667269]">{subtitle}</p>
           </div>
-          <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link>
+          {showImportLink ? <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link> : null}
         </div>
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="총 업체 수" value={`${filtered.length}건`} />
-          <SummaryCard label="좌표 등록 완료" value={`${mapped.length}건`} />
-          <SummaryCard label="좌표 미등록" value={`${missing.length}건`} />
+        <section className="grid gap-3 sm:grid-cols-4">
+          <SummaryCard label="전체 업체" value={`${filtered.length}건`} />
+          <SummaryCard label="좌표 성공" value={`${mapped.length}건`} />
+          <SummaryCard label="실패" value={`${missing.length}건`} />
+          <SummaryCard label="캐시 사용" value={`${cacheUsedCount}건`} />
         </section>
+
+        <form className="panel grid gap-3 sm:grid-cols-[1fr_2fr_auto]" onSubmit={addShop}>
+          <input className="field" name="name" placeholder="업체명" required />
+          <input className="field" name="address" placeholder="주소" required />
+          <button className="primary-btn" disabled={adding} type="submit">{adding ? "저장 중" : "주소 추가"}</button>
+          {message ? <p className={`text-sm font-black sm:col-span-3 ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
+        </form>
 
         <label className="label">
           업체명/주소 검색
@@ -65,9 +160,11 @@ export default function RepairShopMapClient() {
               <article className="rounded-lg border border-[#d8ded8] bg-white p-4 shadow-sm" key={shop.id}>
                 <h2 className="font-black">{shop.name}</h2>
                 <p className="mt-1 text-sm font-bold text-[#667269]">{shop.address}</p>
-                <p className={`mt-2 text-xs font-black ${hasCoordinates(shop) ? "text-[#116149]" : "text-[#a13f24]"}`}>
-                  {hasCoordinates(shop) ? `${shop.lat}, ${shop.lng}` : "좌표 미등록"}
-                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank">네이버지도</a>
+                  <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank">카카오맵</a>
+                  <a className="small-btn" href={tmapSearchUrl(shop.address)} target="_blank">티맵</a>
+                </div>
               </article>
             ))}
             {!filtered.length ? <div className="panel text-center font-black text-[#667269]">검색 결과가 없습니다.</div> : null}
@@ -79,19 +176,22 @@ export default function RepairShopMapClient() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {mapped.map((shop) => (
-                <Marker icon={markerIcon} key={shop.id} position={[Number(shop.lat), Number(shop.lng)]}>
+              {mapped.map((shop) => {
+                const coordinate = coordinates[shop.address];
+                return (
+                <Marker icon={markerIcon} key={shop.id} position={[coordinate.lat, coordinate.lng]}>
                   <Popup>
                     <div className="grid gap-2 text-sm">
                       <strong>{shop.name}</strong>
                       <span>{shop.address}</span>
-                      <a href={naverDirectionUrl(shop.address)} target="_blank">네이버 길찾기</a>
-                      <a href={kakaoDirectionUrl(shop.address)} target="_blank">카카오맵 길찾기</a>
-                      <a href={tmapDirectionUrl(shop.name, shop.lat, shop.lng)} target="_blank">티맵 길찾기</a>
+                      <a href={naverMapUrl(shop.address)} target="_blank">네이버지도 검색</a>
+                      <a href={kakaoMapUrl(shop.address)} target="_blank">카카오맵 검색</a>
+                      <a href={tmapSearchUrl(shop.address)} target="_blank">티맵 검색</a>
                     </div>
                   </Popup>
                 </Marker>
-              ))}
+                );
+              })}
             </MapContainer>
           </div>
         </section>
@@ -99,6 +199,7 @@ export default function RepairShopMapClient() {
         {missing.length ? (
           <section className="panel">
             <h2 className="mb-3 text-xl font-black">좌표 변환 실패 업체</h2>
+            {!geocodingDone ? <p className="mb-3 text-sm font-bold text-[#667269]">주소 좌표를 순차 조회 중입니다.</p> : null}
             <div className="grid gap-2 md:grid-cols-2">
               {missing.map((shop) => (
                 <p className="rounded-lg bg-[#fff7f4] p-3 text-sm font-bold text-[#9a3f24]" key={shop.id}>
@@ -122,23 +223,22 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function hasCoordinates(shop: RepairShop) {
-  return Number.isFinite(Number(shop.lat)) && Number.isFinite(Number(shop.lng));
+function loadShops() {
+  return fetch("/api/repair-shops", { cache: "no-store" });
 }
 
-function naverDirectionUrl(address: string) {
+function naverMapUrl(address: string) {
   return `https://map.naver.com/v5/search/${encodeURIComponent(address)}`;
 }
 
-function kakaoDirectionUrl(address: string) {
+function kakaoMapUrl(address: string) {
   return `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
 }
 
-function tmapDirectionUrl(name: string, lat?: number | null, lng?: number | null) {
-  const query = new URLSearchParams({
-    name,
-    lon: String(lng || ""),
-    lat: String(lat || ""),
-  });
-  return `https://apis.openapi.sk.com/tmap/app/routes?${query.toString()}`;
+function tmapSearchUrl(address: string) {
+  return `https://www.tmap.co.kr/search?searchKeyword=${encodeURIComponent(address)}`;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
