@@ -48,6 +48,9 @@ export type UploadedFileV2 = {
   fileType?: string;
   recordType?: string;
   recordId?: string;
+  businessDate?: string;
+  businessTime?: string;
+  businessKind?: string;
   uploadedAt?: string;
   createdAt?: string;
 };

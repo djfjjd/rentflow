@@ -910,55 +910,163 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
   );
 }
 
+type PhotoArchiveFolder = {
+  key: string;
+  folderName: string;
+  kind: string;
+  vehicleNumber: string;
+  businessDate?: string;
+  businessTime?: string;
+  newestUpload: number;
+  sortValue: number;
+  files: UploadedFileV2[];
+};
+
 function PhotosPage({ admin }: { admin: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [query, setQuery] = useState("");
   const [fileType, setFileType] = useState("");
+  const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<UploadedFileV2 | null>(null);
 
   useEffect(() => {
     fetchJson<UploadedFileV2[]>("/api/uploaded-files", []).then(setFiles);
   }, []);
 
-  const filtered = files.filter((file) => {
-    const haystack = `${file.vehicleNumber || ""} ${file.insuranceNumber || ""} ${file.customerName || ""}`.toLowerCase();
-    return haystack.includes(query.toLowerCase()) && (!fileType || file.fileType === fileType || file.intakeType === fileType);
-  });
-  const groups = groupBy(filtered, (file) => file.vehicleNumber || "차량번호 없음");
-  const sortedKeys = Object.keys(groups).sort((a, b) => newest(groups[b]) - newest(groups[a]));
+  const folders = useMemo(() => buildPhotoArchiveFolders(files), [files]);
+  const queryText = query.toLowerCase();
+  const filteredFolders = folders
+    .map((folder) => ({
+      ...folder,
+      files: folder.files.filter((file) => {
+        const haystack = `${folder.folderName} ${folder.vehicleNumber} ${folder.kind} ${fileName(file)} ${file.vehicleNumber || ""} ${file.insuranceNumber || ""} ${file.customerName || ""}`.toLowerCase();
+        const matchesQuery = haystack.includes(queryText);
+        const matchesType = !fileType || file.fileType === fileType || file.intakeType === fileType;
+        return matchesQuery && matchesType;
+      }),
+    }))
+    .filter((folder) => folder.files.length > 0);
+  const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
+
+  if (selectedFolder) {
+    const sortedFiles = [...selectedFolder.files].sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0).getTime() - new Date(a.uploadedAt || a.createdAt || 0).getTime());
+    return (
+      <section className="space-y-4">
+        <div className="panel">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <button className="small-btn" type="button" onClick={() => setSelectedFolderKey(null)}>뒤로가기</button>
+            <div className="min-w-0 text-right">
+              <h2 className="truncate text-lg font-black">{selectedFolder.folderName}</h2>
+              <p className="text-sm font-bold text-[#68746d]">총 {sortedFiles.length}개</p>
+            </div>
+          </div>
+          {sortedFiles.length ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              {sortedFiles.map((file) => (
+                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedFile(file)}>
+                  {isImageFile(file) ? (
+                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
+                  ) : isVideoFile(file) ? (
+                    <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
+                  ) : (
+                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{fileName(file)}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm font-bold text-[#68746d]">업로드된 사진이 없습니다.</p>
+          )}
+        </div>
+        {selectedFile ? (
+          <OverlayModal onClose={() => setSelectedFile(null)} panelClassName="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-2xl">
+            <PhotoDetailView file={selectedFile} onBack={() => setSelectedFile(null)} />
+          </OverlayModal>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4">
-      <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명 검색" />
+      <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명, 파일명 검색" />
       <select className="field min-h-12 w-full sm:w-64" value={fileType} onChange={(event) => setFileType(event.target.value)}>
         <option value="">파일 종류 전체</option>
         {fileTypes.map((type) => <option key={type}>{type}</option>)}
       </select>
       {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
-      {sortedKeys.map((plate) => (
-        <section className="panel" key={plate}>
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="text-xl font-black">{plate}</h2>
-              <p className="text-sm font-bold text-[#68746d]">최근 업로드 {formatDateTime(groups[plate][0]?.uploadedAt)}</p>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {groups[plate].map((file, index) => (
-              <article className="rounded-lg border border-[#d9dfd8] bg-white p-3" key={`${file.r2Key}-${index}`}>
-                <a className="grid aspect-[4/3] place-items-center rounded-md bg-[#eef2ed] text-[#526157]" href={file.r2Url || file.driveUrl || "#"} target="_blank">
-                  <Camera size={34} />
-                </a>
-                <p className="mt-2 truncate text-sm font-black">{file.fileName}</p>
-                <p className="text-xs font-bold text-[#69736d]">{file.fileType || file.intakeType || "기타"} · {file.customerName || "-"}</p>
-                {file.driveUrl ? <a className="mt-2 inline-flex text-sm font-black text-[#116149]" href={file.driveUrl} target="_blank">Drive 열기</a> : null}
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
-      {!sortedKeys.length ? <EmptyState text="사진촬영본 데이터가 없습니다." /> : null}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {filteredFolders.map((folder) => {
+          const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;
+          const videoCount = folder.files.filter(isVideoFile).length;
+          return (
+            <button className="rounded-lg border border-[#d9dfd8] bg-white p-4 text-left shadow-sm hover:bg-[#f5f7f4]" key={folder.key} type="button" onClick={() => setSelectedFolderKey(folder.key)}>
+              <p className="truncate text-base font-black">📁 {folder.folderName}</p>
+              <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
+                <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
+                <p>{folderFileSummary(photoCount, videoCount)}</p>
+                <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {!files.length ? <EmptyState text="업로드된 사진이 없습니다." /> : null}
+      {files.length && !filteredFolders.length ? <EmptyState text="검색 결과가 없습니다." /> : null}
     </section>
   );
+}
+
+function buildPhotoArchiveFolders(files: UploadedFileV2[]) {
+  const folders = new Map<string, PhotoArchiveFolder>();
+
+  for (const file of files) {
+    const recordType = clean(file.recordType);
+    const recordId = clean(file.recordId);
+    const key = recordType && recordId ? `${recordType}:${recordId}` : `file:${file.id || fileName(file)}`;
+    const kind = clean(file.businessKind) || photoRecordKind(recordType);
+    const vehicleNumber = clean(file.vehicleNumber);
+    const businessDate = clean(file.businessDate) || undefined;
+    const businessTime = clean(file.businessTime) || undefined;
+    const folderName = formatPhotoFolderName(businessDate, businessTime, kind, vehicleNumber);
+    const uploadedAt = new Date(file.uploadedAt || file.createdAt || 0).getTime();
+    const sortValue = dateTimeSortValue(businessDate, businessTime, file.uploadedAt || file.createdAt);
+    const existing = folders.get(key);
+
+    if (existing) {
+      existing.files.push(file);
+      existing.newestUpload = Math.max(existing.newestUpload, uploadedAt);
+      existing.sortValue = Math.max(existing.sortValue, sortValue);
+      continue;
+    }
+
+    folders.set(key, {
+      key,
+      folderName,
+      kind,
+      vehicleNumber,
+      businessDate,
+      businessTime,
+      newestUpload: uploadedAt,
+      sortValue,
+      files: [file],
+    });
+  }
+
+  return [...folders.values()].sort((a, b) => {
+    if (b.sortValue !== a.sortValue) return b.sortValue - a.sortValue;
+    return b.newestUpload - a.newestUpload;
+  });
+}
+
+function photoRecordKind(recordType: string) {
+  if (recordType === "dispatch") return "배차";
+  if (recordType === "return") return "회차";
+  if (recordType === "accident") return "사고";
+  if (recordType === "maintenance") return "정비";
+  if (recordType === "lost_item") return "분실물";
+  if (recordType === "reservation") return "예약";
+  return "사진";
 }
 
 function PartnersPage() {
