@@ -151,7 +151,7 @@ export default function RepairShopMapClient({
           {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <section className="grid gap-4 lg:grid-cols-[minmax(420px,420px)_minmax(0,1fr)]">
           <aside className="order-2 grid max-h-[70vh] gap-2 overflow-auto lg:order-1">
             {filtered.map((shop) => (
               <article
@@ -163,13 +163,13 @@ export default function RepairShopMapClient({
               >
                 <h2 className="font-black">{shop.name}</h2>
                 <p className="mt-1 text-sm font-bold text-[#667269]">{shop.address}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto">
                   <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
                   <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
                   <button className="small-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
                   <button
                     aria-label="주소 삭제"
-                    className="inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800"
+                    className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800"
                     title="주소 삭제"
                     type="button"
                     onClick={(event) => {
