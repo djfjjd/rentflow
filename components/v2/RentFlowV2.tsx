@@ -187,7 +187,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
     <main className="min-h-screen bg-[#f6f7f4] text-[#16211d]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
+          <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
             <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
                 <Home size={20} />
@@ -247,7 +247,7 @@ function QuickMenu({
   onCalendarOpenChange: (open: boolean) => void;
 }) {
   return (
-    <nav className="col-start-3 row-start-1 flex flex-col items-end gap-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end sm:overflow-x-auto sm:pb-1">
+    <nav className="relative z-20 col-start-3 row-start-1 flex flex-col items-end gap-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end sm:overflow-x-auto sm:pb-1">
       <div className="flex flex-nowrap items-center justify-end gap-2">
         <PushPermissionButton />
         <Link className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
@@ -301,7 +301,7 @@ function UnreadMessagesButton({
   }
 
   return (
-    <div className="justify-self-center sm:absolute sm:left-1/2 sm:top-4 sm:z-40 sm:-translate-x-1/2">
+    <div className="absolute left-1/2 top-1 z-40 -translate-x-1/2 sm:top-4">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         안 읽은 메시지
       </button>
