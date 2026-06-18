@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { OverlayModal } from "@/components/OverlayModal";
 import { Pagination } from "@/components/Pagination";
+import { RepairShopMapPage } from "@/components/repair-shops/RepairShopMapPage";
 import {
   createId,
   fetchJson,
@@ -1125,6 +1126,17 @@ function fileUploadedTime(file: UploadedFileV2) {
 }
 
 function PartnersPage() {
+  return (
+    <RepairShopMapPage
+      title="거래처주소"
+      subtitle="지도에 표시되어 있는 좌표는 네이버지도 및 카카오지도가 더 정확합니다. 현재 지도는 참고용으로만 확인해주세요."
+      showImportLink={false}
+      embedded
+    />
+  );
+}
+
+function LegacyPartnersPage() {
   const [partners, setPartners] = useState<PartnerAddressV2[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<PartnerAddressV2 | null>(null);

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 
 type RepairShop = {
@@ -18,6 +18,7 @@ type RepairShopMapClientProps = {
   title?: string;
   subtitle?: string;
   showImportLink?: boolean;
+  embedded?: boolean;
 };
 
 const markerIcon = L.divIcon({
@@ -29,19 +30,22 @@ const markerIcon = L.divIcon({
 
 export default function RepairShopMapClient({
   title = "정비업체 지도",
-  subtitle = "OpenStreetMap 기반으로 주소를 좌표 변환해 표시합니다.",
+  subtitle = "지도에 표시되어 있는 좌표는 네이버지도 및 카카오지도가 더 정확합니다. 현재 지도는 참고용으로만 확인해주세요.",
   showImportLink = true,
+  embedded = false,
 }: RepairShopMapClientProps) {
   const [shops, setShops] = useState<RepairShop[]>([]);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
+  const markerRefs = useRef<Record<number, L.Marker | null>>({});
 
   useEffect(() => {
     loadShops()
       .then((response) => response.json())
-      .then((data) => setShops(Array.isArray(data) ? data : []))
+      .then((data) => setShops(Array.isArray(data) ? data.map(normalizeRepairShop) : []))
       .catch(() => setShops([]));
   }, []);
 
@@ -70,7 +74,7 @@ export default function RepairShopMapClient({
       console.log("repair shop add response", { status: response.status, body });
       if (!response.ok) throw new Error(body || "저장 실패");
       const refreshed = await loadShops().then((result) => result.json());
-      setShops(Array.isArray(refreshed) ? refreshed : []);
+      setShops(Array.isArray(refreshed) ? refreshed.map(normalizeRepairShop) : []);
       setMessage("저장 완료");
       setShowAddModal(false);
       form.reset();
@@ -81,9 +85,22 @@ export default function RepairShopMapClient({
     }
   }
 
-  return (
-    <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">
-      <section className="mx-auto grid max-w-7xl gap-4">
+  useEffect(() => {
+    if (selectedShopId === null) return;
+    const marker = markerRefs.current[selectedShopId];
+    if (!marker) return;
+    const timer = window.setTimeout(() => marker.openPopup(), 120);
+    return () => window.clearTimeout(timer);
+  }, [selectedShopId]);
+
+  async function handleCopyAddress(address: string) {
+    await copyAddress(address);
+    setMessage("주소가 복사되었습니다.");
+    window.setTimeout(() => setMessage(""), 2000);
+  }
+
+  const content = (
+    <section className="mx-auto grid max-w-7xl gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-black">{title}</h1>
@@ -93,7 +110,7 @@ export default function RepairShopMapClient({
         </div>
 
         <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
-          지도에 표시되어 있는 좌표는 네이버지도 및 카카오지도가 더 정확합니다. 현재 지도는 참고용으로만 확인해주세요.
+          {subtitle}
         </p>
 
         <section className="grid gap-2">
@@ -114,13 +131,19 @@ export default function RepairShopMapClient({
         <section className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
           <aside className="order-2 grid max-h-[70vh] gap-2 overflow-auto lg:order-1">
             {filtered.map((shop) => (
-              <article className="rounded-lg border border-[#d8ded8] bg-white p-4 shadow-sm" key={shop.id}>
+              <article
+                className={`rounded-lg border bg-white p-4 text-left shadow-sm ${selectedShopId === shop.id ? "border-[#116149] ring-2 ring-[#116149]/20" : "border-[#d8ded8]"}`}
+                key={shop.id}
+                onClick={() => {
+                  if (hasCoordinates(shop)) setSelectedShopId(shop.id);
+                }}
+              >
                 <h2 className="font-black">{shop.name}</h2>
                 <p className="mt-1 text-sm font-bold text-[#667269]">{shop.address}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank">네이버지도</a>
-                  <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank">카카오맵</a>
-                  <button className="small-btn" type="button" onClick={() => copyAddress(shop.address)}>주소복사</button>
+                  <a className="small-btn" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
+                  <a className="small-btn" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
+                  <button className="small-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
                 </div>
               </article>
             ))}
@@ -133,15 +156,23 @@ export default function RepairShopMapClient({
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              <MapFocus shop={mapped.find((shop) => shop.id === selectedShopId) || null} />
               {mapped.map((shop) => (
-                <Marker icon={markerIcon} key={shop.id} position={[Number(shop.lat), Number(shop.lng)]}>
+                <Marker
+                  icon={markerIcon}
+                  key={shop.id}
+                  position={[Number(shop.lat), Number(shop.lng)]}
+                  ref={(marker) => {
+                    markerRefs.current[shop.id] = marker;
+                  }}
+                >
                   <Popup>
                     <div className="grid gap-2 text-sm">
                       <strong>{shop.name}</strong>
                       <span>{shop.address}</span>
                       <a href={naverMapUrl(shop.address)} target="_blank">네이버지도 검색</a>
                       <a href={kakaoMapUrl(shop.address)} target="_blank">카카오맵 검색</a>
-                      <button className="small-btn" type="button" onClick={() => copyAddress(shop.address)}>주소복사</button>
+                      <button className="small-btn" type="button" onClick={() => void handleCopyAddress(shop.address)}>주소복사</button>
                     </div>
                   </Popup>
                 </Marker>
@@ -150,9 +181,25 @@ export default function RepairShopMapClient({
           </div>
         </section>
       </section>
-      {showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null}
-    </main>
   );
+
+  const modal = showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null;
+  if (embedded) {
+    return <section className="text-[#16211d]">{content}{modal}</section>;
+  }
+
+  return <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">{content}{modal}</main>;
+}
+
+function MapFocus({ shop }: { shop: RepairShop | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!shop || !hasCoordinates(shop)) return;
+    map.flyTo([Number(shop.lat), Number(shop.lng)], Math.max(map.getZoom(), 15), { duration: 0.5 });
+  }, [map, shop]);
+
+  return null;
 }
 
 function RepairShopModal({
@@ -197,6 +244,17 @@ function hasCoordinates(shop: RepairShop) {
   return Number.isFinite(Number(shop.lat)) && Number.isFinite(Number(shop.lng));
 }
 
+function normalizeRepairShop(shop: RepairShop): RepairShop {
+  return {
+    ...shop,
+    name: cleanShopName(shop.name),
+  };
+}
+
+function cleanShopName(name: string) {
+  return String(name || "").replace(/\([^)]*\)/g, "").trim();
+}
+
 function loadShops() {
   return fetch("/api/repair-shops", { cache: "no-store" });
 }
@@ -209,6 +267,6 @@ function kakaoMapUrl(address: string) {
   return `https://map.kakao.com/link/search/${encodeURIComponent(address)}`;
 }
 
-function copyAddress(address: string) {
-  navigator.clipboard?.writeText(address);
+async function copyAddress(address: string) {
+  await navigator.clipboard?.writeText(address);
 }

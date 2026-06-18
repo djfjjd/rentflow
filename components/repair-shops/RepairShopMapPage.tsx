@@ -6,6 +6,7 @@ type RepairShopMapPageProps = {
   title?: string;
   subtitle?: string;
   showImportLink?: boolean;
+  embedded?: boolean;
 };
 
 const RepairShopMapClient = dynamic(() => import("./RepairShopMapClient"), {
