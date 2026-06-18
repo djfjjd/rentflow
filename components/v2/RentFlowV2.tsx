@@ -247,17 +247,21 @@ function QuickMenu({
   onCalendarOpenChange: (open: boolean) => void;
 }) {
   return (
-    <nav className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap sm:overflow-x-auto sm:pb-1">
-      <PushPermissionButton />
-      <Link className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
-        <Camera size={17} />
-        <span className="hidden sm:inline">사진촬영본</span>
-      </Link>
-      <Link className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
-        <MapPin size={17} />
-        <span className="hidden sm:inline">거래처주소</span>
-      </Link>
-      <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
+    <nav className="col-start-3 row-start-1 flex flex-col items-end gap-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end sm:overflow-x-auto sm:pb-1">
+      <div className="flex flex-nowrap items-center justify-end gap-2">
+        <PushPermissionButton />
+        <Link className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
+          <Camera size={17} />
+          <span className="hidden sm:inline">사진촬영본</span>
+        </Link>
+        <Link className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
+          <MapPin size={17} />
+          <span className="hidden sm:inline">거래처주소</span>
+        </Link>
+      </div>
+      <div className="flex w-full justify-end sm:w-auto">
+        <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
+      </div>
     </nav>
   );
 }
@@ -535,7 +539,7 @@ function PushPermissionButton() {
   }
 
   return (
-    <button className="quick-btn min-h-11 min-w-11 px-0 sm:px-3" type="button" onClick={requestPermission} title={status || "알림 권한"} aria-label="알림 권한">
+    <button className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" type="button" onClick={requestPermission} title={status || "알림 권한"} aria-label="알림 권한">
       <Bell size={16} />
       <span className="hidden sm:inline">알림</span>
     </button>
@@ -1098,6 +1102,7 @@ function CalendarSubscribeBox() {
 function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: VehicleV2[]; reservations: ReservationV2[]; dispatches: DispatchV2[]; returns: ReturnV2[] }) {
   const today = todayKorea();
   const dashboardRows = buildVehicleDashboardRows(vehicles, dispatches, returns);
+  const todayReservationsCount = reservations.filter((reservation) => normalizeReservationDate(reservation.date) === today).length;
   const kpis = [
     ["전체차량", vehicles.length],
     ["보험", dashboardRows.filter((row) => row.statusLabel === "보험").length],
@@ -1106,7 +1111,7 @@ function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: 
     ["삼실", dashboardRows.filter((row) => row.statusLabel === "주차구역표시").length],
     ["오늘 배차", dispatches.filter((d) => d.createdAt?.startsWith(today)).length],
     ["오늘 회차", returns.filter((r) => r.createdAt?.startsWith(today)).length],
-    ["미수금", "0원"],
+    ["오늘 예약일정", `${todayReservationsCount}건`],
   ];
   return (
     <section className="space-y-4">
@@ -2339,6 +2344,14 @@ function formatBoardDateTime(date?: string, time?: string, createdAt?: string) {
     }
   }
   return [datePart, timePart].filter(Boolean).join(" ");
+}
+
+function normalizeReservationDate(value?: string) {
+  const text = clean(value);
+  const match = text.match(/(\d{4})[.\-\s]*?(\d{1,2})[.\-\s]*?(\d{1,2})/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
 function currentTimeKorea() {
