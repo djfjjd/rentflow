@@ -1760,10 +1760,10 @@ function PhotoFolderGalleryModal({
 
   useEffect(() => {
     setLoading(true);
-    fetchJson<UploadedFileV2[]>(`/api/uploads?recordType=${encodeURIComponent(recordType)}&recordId=${encodeURIComponent(recordId)}`, [])
+    fetchJson<UploadedFileV2[]>(`/api/uploads?recordType=${encodeURIComponent(recordType)}&recordId=${encodeURIComponent(recordId)}&vehicleNumber=${encodeURIComponent(vehicleNumber || "")}`, [])
       .then(setFiles)
       .finally(() => setLoading(false));
-  }, [recordId, recordType]);
+  }, [recordId, recordType, vehicleNumber]);
 
   return (
     <OverlayModal onClose={onClose} panelClassName="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-2xl">

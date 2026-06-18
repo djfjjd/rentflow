@@ -101,6 +101,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
   const key = url.searchParams.get("key");
   const recordType = url.searchParams.get("recordType");
   const recordId = url.searchParams.get("recordId");
+  const vehicleNumber = url.searchParams.get("vehicleNumber");
 
   // Handle R2 file download/view
   if (key && env.RENTFLOW_UPLOADS) {
@@ -115,16 +116,41 @@ export async function onRequestGet({ request, env }: UploadContext) {
     return new Response(object.body, { headers });
   }
 
-  if (recordType && recordId && env.DB) {
+  if ((recordType || vehicleNumber) && env.DB) {
     await ensureUploadedFilesSchema(env);
-    const { results } = await env.DB.prepare(
-      `SELECT *
-       FROM uploaded_files
-       WHERE record_type = ? AND record_id = ?
-       ORDER BY uploaded_at DESC, created_at DESC`
-    ).bind(safeText(recordType), safeText(recordId)).all();
+    let results: any[] = [];
 
-    return Response.json((results || []).map(mapUploadedFile), { headers: noStoreHeaders() });
+    if (recordType && recordId) {
+      const response = await env.DB.prepare(
+        `SELECT *
+         FROM uploaded_files
+         WHERE record_type = ? AND record_id = ?
+         ORDER BY uploaded_at DESC, created_at DESC`
+      ).bind(safeText(recordType), safeText(recordId)).all();
+      results = response.results || [];
+    }
+
+    if (!results.length && recordType && vehicleNumber) {
+      const response = await env.DB.prepare(
+        `SELECT *
+         FROM uploaded_files
+         WHERE record_type = ? AND vehicle_number = ?
+         ORDER BY uploaded_at DESC, created_at DESC`
+      ).bind(safeText(recordType), safeText(vehicleNumber)).all();
+      results = response.results || [];
+    }
+
+    if (!results.length && vehicleNumber) {
+      const response = await env.DB.prepare(
+        `SELECT *
+         FROM uploaded_files
+         WHERE vehicle_number = ?
+         ORDER BY uploaded_at DESC, created_at DESC`
+      ).bind(safeText(vehicleNumber)).all();
+      results = response.results || [];
+    }
+
+    return Response.json(dedupeUploadedRows(results).map(mapUploadedFile), { headers: noStoreHeaders() });
   }
 
   // Handle listing (from Drive if configured)
@@ -174,6 +200,18 @@ function mapUploadedFile(row: any) {
     uploaded_at: row.uploaded_at,
     uploadedAt: row.uploaded_at,
   };
+}
+
+function dedupeUploadedRows(rows: any[]) {
+  const seen = new Set<string>();
+  const deduped = [];
+  for (const row of rows) {
+    const key = String(row.id || `${row.r2_key || ""}:${row.file_name || ""}`);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+  }
+  return deduped;
 }
 
 async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
