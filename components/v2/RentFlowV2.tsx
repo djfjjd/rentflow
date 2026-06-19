@@ -1543,14 +1543,16 @@ function CalendarSubscribeBox() {
   }
 
   return (
-    <div className="relative rounded-lg border border-[#d8ded8] bg-white p-3">
-      <button className="small-btn" type="button" onClick={copyUrl}>
+    <div className="relative rounded-lg border border-[#d8ded8] bg-white p-3 text-center">
+      <button className="small-btn mx-auto inline-flex items-center justify-center" type="button" onClick={copyUrl}>
         캘린더 구독 URL 복사
       </button>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
-      <p className="mt-2 text-xs font-bold leading-relaxed text-[#68746d]">
-        아이폰: 설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가 / 구글 캘린더: 다른 캘린더 + &gt; URL로 추가 / 네이버 캘린더: 외부 캘린더 URL 구독
-      </p>
+      <div className="mt-3 grid gap-2 text-xs font-bold leading-relaxed text-[#68746d]">
+        <p><strong>아이폰:</strong><br />설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가</p>
+        <p><strong>구글:</strong><br />구글 캘린더 &gt; 다른 캘린더 + &gt; URL로 추가</p>
+        <p><strong>네이버:</strong><br />외부 캘린더 URL 구독</p>
+      </div>
     </div>
   );
 }
@@ -2469,33 +2471,47 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   }
 
   return (
-    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
+    <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">예약 목록</h2>
-      <table className="w-full min-w-[980px] text-left text-sm">
-        <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
-        <tbody>
-          {paginate(rows, page).map((reservation) => (
-            <tr className="border-b" key={reservation.id}>
-              <td>{reservation.date}</td>
-              <td className="font-black">{reservation.customerName}</td>
-              <td>{reservation.reservationText || reservation.memo}</td>
-              <td>
-                <PhotoGalleryButton
-                  date={reservation.date}
-                  kind="예약"
-                  recordId={reservation.id}
-                  recordType="reservation"
-                  time={reservation.time}
-                  vehicleNumber=""
-                />
-              </td>
-              <td><AdditionalUploadButton recordType="reservation" recordId={reservation.id} vehicleNumber="" /></td>
-              <td><button className="small-btn" type="button" onClick={() => setEditing(reservation)}>수정</button></td>
-              <td><button className="danger-btn" type="button" onClick={() => remove(reservation.id)}><Trash2 size={16} /> 삭제</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[90px]" />
+            <col className="w-[110px]" />
+            <col />
+            <col className="w-[80px]" />
+            <col className="w-[90px]" />
+            <col className="w-[70px]" />
+            <col className="w-[70px]" />
+          </colgroup>
+          <thead><tr className="border-b [&>th]:whitespace-nowrap [&>th]:align-middle"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>사진보기</th><th>사진추가</th><th>수정</th><th>삭제</th></tr></thead>
+          <tbody>
+            {paginate(rows, page).map((reservation) => {
+              const reservationText = reservation.reservationText || reservation.memo || "";
+              return (
+                <tr className="border-b [&>td]:whitespace-nowrap [&>td]:align-middle" key={reservation.id}>
+                  <td>{reservation.date}</td>
+                  <td className="font-black">{reservation.customerName}</td>
+                  <td title={reservationText}><div className="truncate">{reservationText}</div></td>
+                  <td>
+                    <PhotoGalleryButton
+                      date={reservation.date}
+                      kind="예약"
+                      recordId={reservation.id}
+                      recordType="reservation"
+                      time={reservation.time}
+                      vehicleNumber=""
+                    />
+                  </td>
+                  <td><AdditionalUploadButton recordType="reservation" recordId={reservation.id} vehicleNumber="" label="사진추가" /></td>
+                  <td><button className="small-btn" type="button" onClick={() => setEditing(reservation)}>수정</button></td>
+                  <td><button className="danger-btn" type="button" onClick={() => remove(reservation.id)}><Trash2 size={16} /> 삭제</button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={() => onReservations()} /> : null}
     </section>
@@ -2729,14 +2745,14 @@ function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType
   );
 }
 
-function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recordType: "dispatch" | "return" | "reservation"; recordId: string; vehicleNumber: string }) {
+function AdditionalUploadButton({ recordType, recordId, vehicleNumber, label = "추가" }: { recordType: "dispatch" | "return" | "reservation"; recordId: string; vehicleNumber: string; label?: string }) {
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgressState | null>(null);
   return (
     <div className="min-w-0">
       <label className={`small-btn cursor-pointer whitespace-nowrap ${uploading ? "pointer-events-none opacity-70" : ""}`}>
-        {uploading ? "업로드중" : "추가"}
+        {uploading ? "업로드중" : label}
         <input
           className="sr-only"
           type="file"
