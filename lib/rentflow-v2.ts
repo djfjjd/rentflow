@@ -55,6 +55,7 @@ export type UploadedFileV2 = {
   businessDate?: string;
   businessTime?: string;
   businessKind?: string;
+  businessLabel?: string;
   uploadedAt?: string;
   createdAt?: string;
 };

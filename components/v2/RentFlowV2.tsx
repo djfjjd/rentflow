@@ -760,6 +760,10 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
 
 function ReservationForm({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   const [draft, setDraft] = useState("");
+  const [recordId, setRecordId] = useState(() => createId("reservation"));
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
+  const [resetKey, setResetKey] = useState(0);
   const parsed = useMemo(() => parseReservationText(draft), [draft]);
   return (
     <section className="space-y-4">
@@ -768,7 +772,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
         endpoint="/api/reservations"
         buttonLabel="예약일정 추가"
         buildPayload={(data) => ({
-          id: createId("reservation"),
+          id: recordId,
           date: text(data, "date") || parsed.date,
           time: parsed.time || "09:00",
           endTime: "",
@@ -778,9 +782,27 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           route: "예약",
           status: "예약",
         })}
+        afterSave={async () => {
+          if (!pendingFiles.length) return;
+          setUploadProgress({ completed: 0, total: pendingFiles.length, failed: 0, label: uploadProgressLabel(pendingFiles) });
+          const result = await uploadSelectedFiles(pendingFiles, { recordType: "reservation", recordId, vehicleNumber: "" }, setUploadProgress);
+          setUploadProgress({
+            completed: result.success,
+            total: pendingFiles.length,
+            failed: result.failed,
+            label: uploadProgressLabel(pendingFiles),
+            done: true,
+          });
+        }}
         reloadEndpoint="/api/reservations"
         onReloaded={(items) => onReservations(items as ReservationV2[])}
-        afterReset={() => setDraft("")}
+        afterReset={() => {
+          setDraft("");
+          setPendingFiles([]);
+          setRecordId(createId("reservation"));
+          setResetKey((key) => key + 1);
+          setTimeout(() => setUploadProgress(null), 3000);
+        }}
         notify={(payload) => ({
           title: "새 예약 등록",
           body: String(payload.reservationText || payload.customerName || ""),
@@ -795,8 +817,11 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           onChange={(event) => setDraft(event.target.value)}
           required
         />
-        <Input key={parsed.date} name="date" label="날짜 선택" type="date" defaultValue={parsed.date} required />
-        <Input key={parsed.customerName} name="customerName" label="예약자명" defaultValue={parsed.customerName} />
+        <div className="grid grid-cols-2 gap-2 min-[360px]:grid-cols-2">
+          <Input key={parsed.date} name="date" label="날짜 선택" type="date" defaultValue={parsed.date} required />
+          <Input key={parsed.customerName} name="customerName" label="예약자명" defaultValue={parsed.customerName} />
+        </div>
+        <PendingPhotoPicker key={`reservation-upload-${resetKey}`} files={pendingFiles} onFiles={setPendingFiles} progress={uploadProgress} />
       </DataForm>
       <ReservationList reservations={reservations} onReservations={onReservations} />
     </section>
@@ -954,6 +979,14 @@ type PhotoArchiveFolder = {
 
 const thumbnailMemoryCache = new Set<string>();
 
+type UploadProgressState = {
+  completed: number;
+  total: number;
+  failed: number;
+  label: string;
+  done?: boolean;
+};
+
 function PhotosPage({ admin }: { admin: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [query, setQuery] = useState("");
@@ -1028,6 +1061,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
       <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
         파일 보관기간은 업로드 후 60일이며, 이후 자동삭제 됩니다.
       </p>
+      <ThumbnailBackfillButton />
       {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filteredFolders.map((folder) => {
@@ -1109,13 +1143,55 @@ function buildPhotoArchiveFolders(files: UploadedFileV2[]) {
   });
 }
 
+function ThumbnailBackfillButton() {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ processed: number; created: number; skipped: number; remaining: number } | null>(null);
+  const [error, setError] = useState("");
+
+  async function runBackfill() {
+    setRunning(true);
+    setError("");
+    try {
+      const response = await fetch("/api/uploads/backfill-thumbnails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchSize: 20 }),
+      });
+      const data = await response.json() as { processed: number; created: number; skipped: number; remaining: number; error?: string };
+      if (!response.ok) throw new Error(data.error || "thumbnail backfill failed");
+      setResult(data);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3">
+      <button className="small-btn" type="button" disabled={running} onClick={runBackfill}>
+        {running ? "생성 중" : "기존 사진 썸네일 생성"}
+      </button>
+      {result ? (
+        <p className="mt-2 text-sm font-bold text-[#667269]">
+          총 {result.processed}개 중 {result.created}개 생성 완료, {result.skipped}개 제외 · 남은 {result.remaining}개
+        </p>
+      ) : null}
+      {error ? <p className="mt-2 text-sm font-bold text-red-700">{error}</p> : null}
+    </div>
+  );
+}
+
 function addFileToPhotoFolder(folders: Map<string, PhotoArchiveFolder>, key: string, file: UploadedFileV2) {
   const recordType = clean(file.recordType);
   const vehicleNumber = clean(file.vehicleNumber);
   const kind = clean(file.businessKind) || photoRecordKind(recordType);
+  const reservationLabel = recordType === "reservation" ? clean((file as UploadedFileV2 & { businessLabel?: string }).businessLabel || file.customerName || fileName(file)) : "";
   const businessDate = clean(file.businessDate) || undefined;
   const businessTime = clean(file.businessTime) || undefined;
-  const folderName = [kind, vehicleNumber].filter(Boolean).join(" ") || "사진";
+  const folderName = recordType === "reservation"
+    ? [kind, reservationLabel].filter(Boolean).join(" ") || "예약"
+    : [kind, vehicleNumber].filter(Boolean).join(" ") || "사진";
   const uploadedAt = fileUploadedTime(file);
   const existing = folders.get(key);
 
@@ -2227,14 +2303,25 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   return (
     <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">예약 목록</h2>
-      <table className="w-full min-w-[720px] text-left text-sm">
-        <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>수정</th><th>삭제</th></tr></thead>
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead><tr className="border-b"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>
           {paginate(rows, page).map((reservation) => (
             <tr className="border-b" key={reservation.id}>
               <td>{reservation.date}</td>
               <td className="font-black">{reservation.customerName}</td>
               <td>{reservation.reservationText || reservation.memo}</td>
+              <td>
+                <PhotoGalleryButton
+                  date={reservation.date}
+                  kind="예약"
+                  recordId={reservation.id}
+                  recordType="reservation"
+                  time={reservation.time}
+                  vehicleNumber=""
+                />
+              </td>
+              <td><AdditionalUploadButton recordType="reservation" recordId={reservation.id} vehicleNumber="" /></td>
               <td><button className="small-btn" type="button" onClick={() => setEditing(reservation)}>수정</button></td>
               <td><button className="danger-btn" type="button" onClick={() => remove(reservation.id)}><Trash2 size={16} /> 삭제</button></td>
             </tr>
@@ -2433,31 +2520,31 @@ function DateTimeTodayField({
 }
 
 function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType: string; recordId?: string; vehicleNumber: string }) {
-  const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<UploadProgressState | null>(null);
 
   async function handleFiles(files: File[], input: HTMLInputElement) {
     if (!files.length) {
-      setStatus("");
+      setProgress(null);
       setUploading(false);
       return;
     }
 
-    const label = fileCountLabel(files);
-    setStatus(`${label} 선택됨`);
+    const label = uploadProgressLabel(files);
+    setProgress({ completed: 0, total: files.length, failed: 0, label });
     setStatusTone("info");
     setUploading(true);
 
     try {
-      setStatus(`${files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진"} 업로드 중...`);
-      await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber });
-      setStatus(`${label} 업로드 완료`);
-      setStatusTone("success");
-      setTimeout(() => setStatus(""), 3000);
+      const result = await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber }, setProgress);
+      setProgress({ completed: result.success, total: files.length, failed: result.failed, label, done: true });
+      setStatusTone(result.failed ? "error" : "success");
+      setTimeout(() => setProgress(null), 3000);
     } catch (error) {
-      setStatus(`파일 업로드 실패: ${error instanceof Error ? error.message : String(error)}`);
+      setProgress({ completed: 0, total: files.length, failed: files.length, label, done: true });
       setStatusTone("error");
+      console.error("file upload failed", error);
     } finally {
       setUploading(false);
       input.value = "";
@@ -2478,15 +2565,15 @@ function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType
           onChange={(event) => handleFiles(Array.from(event.target.files || []), event.currentTarget)}
         />
       </label>
-      {status ? <p className={`mt-2 text-sm font-bold ${statusTone === "error" ? "text-red-700" : statusTone === "success" ? "text-green-700" : "text-[#116149]"}`}>{status}</p> : null}
+      {progress ? <UploadProgressView progress={progress} tone={statusTone} /> : null}
     </div>
   );
 }
 
-function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recordType: "dispatch" | "return"; recordId: string; vehicleNumber: string }) {
-  const [status, setStatus] = useState("");
+function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recordType: "dispatch" | "return" | "reservation"; recordId: string; vehicleNumber: string }) {
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<UploadProgressState | null>(null);
   return (
     <div className="min-w-0">
       <label className={`small-btn cursor-pointer whitespace-nowrap ${uploading ? "pointer-events-none opacity-70" : ""}`}>
@@ -2500,22 +2587,22 @@ function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recor
           onChange={async (event) => {
             const files = Array.from(event.target.files || []);
             if (!files.length) {
-              setStatus("");
+              setProgress(null);
               return;
             }
-            const label = fileCountLabel(files);
-            setStatus(`${label} 선택됨`);
+            const label = uploadProgressLabel(files);
+            setProgress({ completed: 0, total: files.length, failed: 0, label });
             setStatusTone("info");
             setUploading(true);
             try {
-              setStatus(`${files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진"} 업로드 중...`);
-              await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber });
-              setStatus(`${label} 업로드 완료`);
-              setStatusTone("success");
-              setTimeout(() => setStatus(""), 3000);
+              const result = await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber }, setProgress);
+              setProgress({ completed: result.success, total: files.length, failed: result.failed, label, done: true });
+              setStatusTone(result.failed ? "error" : "success");
+              setTimeout(() => setProgress(null), 2000);
             } catch (error) {
-              setStatus(`파일 업로드 실패: ${error instanceof Error ? error.message : String(error)}`);
+              setProgress({ completed: 0, total: files.length, failed: files.length, label, done: true });
               setStatusTone("error");
+              console.error("file upload failed", error);
             } finally {
               setUploading(false);
               event.currentTarget.value = "";
@@ -2523,31 +2610,107 @@ function AdditionalUploadButton({ recordType, recordId, vehicleNumber }: { recor
           }}
         />
       </label>
-      {status ? <p className={`mt-2 max-w-[160px] truncate text-xs font-bold ${statusTone === "error" ? "text-red-700" : statusTone === "success" ? "text-green-700" : "text-[#116149]"}`} title={status}>{status}</p> : null}
+      {progress ? <MiniUploadProgress progress={progress} tone={statusTone} /> : null}
     </div>
   );
 }
 
-async function uploadSelectedFiles(files: File[], metadata: { recordType: string; recordId?: string; vehicleNumber: string }) {
+function PendingPhotoPicker({ files, onFiles, progress }: { files: File[]; onFiles: (files: File[]) => void; progress: UploadProgressState | null }) {
+  return (
+    <div>
+      <label className="primary-btn w-full cursor-pointer">
+        <Camera size={20} />
+        사진업로드
+        <input
+          className="sr-only"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.mp4,image/jpeg,image/png,image/webp,video/mp4"
+          multiple
+          onChange={(event) => onFiles(Array.from(event.target.files || []))}
+        />
+      </label>
+      {files.length && !progress ? <p className="mt-2 text-sm font-bold text-[#116149]">{fileCountLabel(files)} 선택됨</p> : null}
+      {progress ? <UploadProgressView progress={progress} tone={progress.failed ? "error" : progress.done ? "success" : "info"} /> : null}
+    </div>
+  );
+}
+
+function UploadProgressView({ progress, tone }: { progress: UploadProgressState; tone: "info" | "success" | "error" }) {
+  const percent = uploadProgressPercent(progress);
+  const color = tone === "error" ? "text-red-700" : tone === "success" ? "text-green-700" : "text-[#116149]";
+  return (
+    <div className={`mt-2 text-sm font-bold ${color}`}>
+      <p>{uploadProgressText(progress)}</p>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#dfe5df]">
+        <div className={`h-full ${tone === "error" ? "bg-red-600" : tone === "success" ? "bg-green-600" : "bg-[#116149]"}`} style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MiniUploadProgress({ progress, tone }: { progress: UploadProgressState; tone: "info" | "success" | "error" }) {
+  const text = progress.done && !progress.failed ? "✓ 완료" : progress.total ? `${uploadProgressPercent(progress)}%` : "";
+  const color = tone === "error" ? "text-red-700" : tone === "success" ? "text-green-700" : "text-[#667269]";
+  return <p className={`mt-1 max-w-[90px] truncate text-[11px] font-black ${color}`} title={uploadProgressText(progress)}>{text || `(${progress.completed}/${progress.total})`}</p>;
+}
+
+function uploadProgressLabel(files: File[]) {
+  return files.some((file) => file.type.startsWith("video/")) ? "파일" : "사진";
+}
+
+function uploadProgressPercent(progress: UploadProgressState) {
+  if (!progress.total) return 0;
+  return Math.round(((progress.completed + progress.failed) / progress.total) * 100);
+}
+
+function uploadProgressText(progress: UploadProgressState) {
+  const percent = uploadProgressPercent(progress);
+  if (progress.done && progress.failed) return `성공 ${progress.completed}건 / 실패 ${progress.failed}건`;
+  if (progress.done) return `✅ ${fileCountLabelFromParts(progress.label, progress.total)} 업로드 완료`;
+  return `업로드 중 (${progress.completed + progress.failed}/${progress.total}) ${percent}%`;
+}
+
+function fileCountLabelFromParts(label: string, total: number) {
+  return label === "사진" ? `사진 ${total}장` : `파일 ${total}개`;
+}
+
+async function uploadSelectedFiles(
+  files: File[],
+  metadata: { recordType: string; recordId?: string; vehicleNumber: string },
+  onProgress?: (progress: UploadProgressState) => void
+) {
+  let success = 0;
+  let failed = 0;
+  const label = uploadProgressLabel(files);
   for (const file of files) {
     const fileMetadata = {
       fileName: file.name,
       vehicleNumber: metadata.vehicleNumber,
+      mimeType: file.type || "application/octet-stream",
       recordType: metadata.recordType,
       recordId: metadata.recordId || "",
       intakeType: metadata.recordType,
       fileType: file.type.startsWith("video/") ? "영상" : "사진",
     };
-    const formData = new FormData();
-    formData.append("file", file);
-    const thumbnail = await createImageThumbnail(file);
-    if (thumbnail) formData.append("thumbnail", thumbnail);
-    formData.append("metadata", JSON.stringify(fileMetadata));
-    const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
-    if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
-    const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
-    await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const thumbnail = await createImageThumbnail(file);
+      if (thumbnail) formData.append("thumbnail", thumbnail);
+      formData.append("metadata", JSON.stringify(fileMetadata));
+      const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
+      if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
+      const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
+      await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("single file upload failed", { fileName: file.name, error });
+    }
+    onProgress?.({ completed: success, total: files.length, failed, label });
   }
+  if (failed === files.length && files.length > 0) throw new Error("all uploads failed");
+  return { success, failed };
 }
 
 async function createImageThumbnail(file: File) {

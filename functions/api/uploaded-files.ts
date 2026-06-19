@@ -37,6 +37,10 @@ export async function onRequestGet({ env }: { env: Env }) {
           WHEN 'reservation' THEN '예약'
           ELSE uf.record_type
         END AS business_kind,
+        CASE uf.record_type
+          WHEN 'reservation' THEN COALESCE(res.reserver_name, res.customer_name, res.reservation_text, res.memo)
+          ELSE NULL
+        END AS business_label,
         COALESCE(uf.vehicle_number, d.vehicle_number, r.vehicle_number, ah.vehicle_number, mh.vehicle_number, li.vehicle_number, res.vehicle_number) AS joined_vehicle_number
       FROM uploaded_files uf
       LEFT JOIN dispatches d ON uf.record_type = 'dispatch' AND uf.record_id = d.id
@@ -60,7 +64,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     const result = await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, mime_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(f.fileName),
       safeText(f.r2Url),
@@ -77,6 +81,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(f.customerName),
       safeNullableText(f.intakeType),
       safeNullableText(f.fileType),
+      safeNullableText(f.mimeType || f.mime_type),
       safeNullableText(f.recordType),
       safeNullableText(f.recordId),
       safeNullableText(f.vehicleFolderUrl),
@@ -126,6 +131,7 @@ function mapFile(row: any) {
     businessDate: row.business_date,
     businessTime: row.business_time,
     businessKind: row.business_kind,
+    businessLabel: row.business_label,
     vehicleFolderUrl: row.vehicle_folder_url,
     insuranceFolderUrl: row.insurance_folder_url,
     customerFolderUrl: row.customer_folder_url,
