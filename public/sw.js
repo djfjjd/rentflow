@@ -63,7 +63,12 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "RentFlow 알림", body: event.data ? event.data.text() : "", url: "/app" };
+  }
   const title = data.title || "RentFlow 알림";
   const options = {
     body: data.body || "",
@@ -73,18 +78,6 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener("message", (event) => {
-  const data = event.data || {};
-  if (data.type !== "rentflow-notification") return;
-
-  event.waitUntil(self.registration.showNotification(data.title || "RentFlow 알림", {
-    body: data.body || "",
-    icon: "/icons/icon-192x192.png",
-    badge: "/icons/icon-192x192.png",
-    data: { url: data.url || "/app" },
-  }));
 });
 
 self.addEventListener("notificationclick", (event) => {

@@ -78,6 +78,8 @@ export type PartnerAddressV2 = {
 
 export type DispatchV2 = {
   id: string;
+  dispatchId?: string;
+  dispatch_id?: string;
   date?: string;
   time?: string;
   vehicleNumber?: string;

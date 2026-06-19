@@ -316,8 +316,8 @@ function UnreadMessagesButton({
           <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
           <div data-horizontal-scroll="true" className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
             {unread.length ? (
-              <table className="w-full min-w-[1040px] text-left text-sm">
-                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>정리완료</th></tr></thead>
+              <table className="w-full min-w-[1180px] text-left text-sm">
+                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>정리완료</th></tr></thead>
                 <tbody>{unread.map((row) => {
                   const dispatch = row.kind === "배차" ? row.dispatch : undefined;
                   const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -334,6 +334,7 @@ function UnreadMessagesButton({
                       <td>{clean(linkedDispatch?.customerCarModel)}</td>
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
                       <td>{clean(linkedDispatch?.repairShop)}</td>
+                      <td><PhoneCell phone={dispatchPhone(linkedDispatch)} /></td>
                       <td>{clean(ret?.notes || linkedDispatch?.notes || dispatch?.notes)}</td>
                       <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
                     </tr>
@@ -523,7 +524,7 @@ function PushPermissionButton() {
     try {
       const registration = await navigator.serviceWorker?.ready;
       let subscription = await registration?.pushManager?.getSubscription();
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || await fetchVapidPublicKey();
       if (!subscription && registration?.pushManager && vapidPublicKey) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -532,12 +533,15 @@ function PushPermissionButton() {
       }
       if (subscription) {
         await sendJson("/api/push/subscribe", { subscription, userLabel: "field" });
+      } else {
+        setStatus("VAPID 설정 필요");
+        return;
       }
       setStatus("알림 허용됨");
       setPermission("granted");
-    } catch {
-      setStatus("알림 허용됨");
-      setPermission("granted");
+    } catch (error) {
+      console.error("push subscribe failed", error);
+      setStatus("알림 등록 실패");
     }
   }
 
@@ -547,6 +551,17 @@ function PushPermissionButton() {
       <span className="hidden sm:inline">알림</span>
     </button>
   );
+}
+
+async function fetchVapidPublicKey() {
+  try {
+    const response = await fetch("/api/push/subscribe", { cache: "no-store" });
+    if (!response.ok) return "";
+    const data = await response.json() as { publicKey?: string };
+    return data.publicKey || "";
+  } catch {
+    return "";
+  }
 }
 
 function urlBase64ToUint8Array(value: string) {
@@ -1575,7 +1590,7 @@ function DispatchAdmin({
                 <TruncatedCell value={clean(linkedDispatch?.customerCarModel)} />
                 <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
                 <TruncatedCell value={clean(linkedDispatch?.repairShop)} />
-                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(dispatch)} /></td>
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(linkedDispatch)} /></td>
                 <MemoCell value={ret?.notes || linkedDispatch?.notes || dispatch?.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton
@@ -2443,15 +2458,6 @@ async function notifyWorkflow(message: { title: string; body: string; url: strin
   } catch (error) {
     console.error("push send request failed", error);
   }
-
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-
-  try {
-    const registration = await navigator.serviceWorker?.ready;
-    registration?.active?.postMessage({ type: "rentflow-notification", ...message });
-  } catch (error) {
-    console.error("local notification failed", error);
-  }
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
@@ -3087,8 +3093,22 @@ function dispatchAdminReturnStatus(returnItem: ReturnV2 | undefined, dispatches:
 
 function findLinkedDispatchForReturn(returnItem: ReturnV2 | undefined, dispatches: DispatchV2[]) {
   if (!returnItem) return undefined;
-  const raw = returnItem as ReturnV2 & { dispatchId?: string; dispatch_id?: string };
-  const dispatchId = firstText(raw.dispatchId, raw.dispatch_id);
+  const raw = returnItem as ReturnV2 & {
+    dispatchId?: string;
+    dispatch_id?: string;
+    parentDispatchId?: string;
+    parent_dispatch_id?: string;
+    originalDispatchId?: string;
+    original_dispatch_id?: string;
+  };
+  const dispatchId = firstText(
+    raw.dispatchId,
+    raw.dispatch_id,
+    raw.parentDispatchId,
+    raw.parent_dispatch_id,
+    raw.originalDispatchId,
+    raw.original_dispatch_id
+  );
   if (dispatchId) {
     const byId = dispatches.find((dispatch) => dispatch.id === dispatchId);
     if (byId) return byId;

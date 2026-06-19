@@ -1,5 +1,6 @@
 name = "rentflow"
 compatibility_date = "2026-06-12"
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "out"
 
 [[r2_buckets]]
@@ -10,4 +11,3 @@ bucket_name = "rentflow-uploads"
 binding = "DB"
 database_name = "rentflow_db"
 database_id = "84b87775-99a2-453e-8513-106775886f14" # Placeholder, user will need to update with real ID if needed for production
-

@@ -151,6 +151,8 @@ function mapReturn(row: any) {
   const memo = row.memo || row.notes || "";
   return {
     id: row.id,
+    dispatch_id: row.dispatch_id,
+    dispatchId: row.dispatch_id,
     date: row.date,
     time: row.time,
     vehicle_number: vehicleNumber,
