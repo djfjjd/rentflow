@@ -1548,11 +1548,9 @@ function CalendarSubscribeBox() {
         캘린더 구독 URL 복사
       </button>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
-      <div className="mt-3 grid gap-2 text-xs font-bold leading-relaxed text-[#68746d]">
-        <p><strong>아이폰:</strong><br />설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가</p>
-        <p><strong>구글:</strong><br />구글 캘린더 &gt; 다른 캘린더 + &gt; URL로 추가</p>
-        <p><strong>네이버:</strong><br />외부 캘린더 URL 구독</p>
-      </div>
+      <p className="mt-2 text-xs font-bold leading-relaxed text-[#68746d]">
+        아이폰: 설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가
+      </p>
     </div>
   );
 }
