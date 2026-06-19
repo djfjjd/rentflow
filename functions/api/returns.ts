@@ -32,9 +32,11 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const memo = r.memo ?? r.notes;
     const vehicleNumber = r.vehicleNumber ?? r.rentalCarNumber;
     const parkingZone = r.parkingZone ?? r.arrivalAddress;
-    await env.DB.prepare(
-      "INSERT INTO returns (id, date, time, vehicle_number, rental_car_number, return_address, arrival_address, mileage, fuel_level, fuel_display, fuel_level_text, vehicle_color, parking_zone, notes, memo, status, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-    ).bind(
+    const columns = [
+      "id", "date", "time", "vehicle_number", "rental_car_number", "return_address", "arrival_address", "mileage",
+      "fuel_level", "fuel_display", "fuel_level_text", "vehicle_color", "parking_zone", "notes", "memo", "status", "is_completed", "updated_at"
+    ];
+    const values = [
       safeText(r.id),
       safeNullableText(r.date),
       safeNullableText(r.time),
@@ -51,8 +53,16 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(memo),
       safeText(memo),
       safeText(r.status || "회차등록"),
-      safeBoolInt(r.isCompleted)
-    ).run();
+      safeBoolInt(r.isCompleted),
+      "CURRENT_TIMESTAMP"
+    ];
+    if (await hasColumn(env.DB, "returns", "dispatch_id")) {
+      columns.splice(columns.length - 1, 0, "dispatch_id");
+      values.splice(values.length - 1, 0, safeText(r.dispatchId ?? r.dispatch_id));
+    }
+    const placeholders = values.map((value) => value === "CURRENT_TIMESTAMP" ? "CURRENT_TIMESTAMP" : "?").join(", ");
+    const bindValues = values.filter((value) => value !== "CURRENT_TIMESTAMP");
+    await env.DB.prepare(`INSERT INTO returns (${columns.join(", ")}) VALUES (${placeholders})`).bind(...bindValues).run();
 
     console.log("return saved", r.id);
     return Response.json({ ok: true, success: true, id: safeText(r.id) }, { headers: noStoreHeaders() });
@@ -60,6 +70,11 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     console.error("return save failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
+}
+
+async function hasColumn(db: any, table: string, column: string) {
+  const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+  return (results || []).some((row: any) => String(row.name) === column);
 }
 
 export async function onRequestPatch({ request, env }: { request: Request, env: Env }) {

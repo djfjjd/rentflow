@@ -98,6 +98,7 @@ const dispatchBoardColumns = [
   { label: "고객차종", width: "w-[130px]" },
   { label: "주유량", width: "w-[80px]" },
   { label: "수리처", width: "w-[160px]" },
+  { label: "연락처", width: "w-[130px]" },
   { label: "메모", width: "w-[260px]" },
   { label: "사진링크", width: "w-[80px]" },
   { label: "사진추가업로드", width: "w-[100px]" },
@@ -681,7 +682,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [time, setTime] = useState(currentTimeKorea());
   const [recordId, setRecordId] = useState(() => createId("return"));
   const [resetKey, setResetKey] = useState(0);
-  const latest = dispatches.find((item) => item.rentalCarNumber === vehicle?.plateNumber);
+  const latest = vehicle ? latestByVehicle(dispatches, vehicle.plateNumber) : undefined;
   return (
     <section className="space-y-4">
     <DataForm
@@ -695,6 +696,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
         fuelLevelText: text(data, "fuelDisplay"),
+        dispatchId: latest?.id || "",
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
         memo: text(data, "notes"),
@@ -725,12 +727,25 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
     >
       <FormBlock title="차량 선택">
         <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
-        {latest ? <p className="mt-2 text-sm font-bold text-[#68746d]">최근 배차건: {latest.customerName} · {latest.repairShop}</p> : null}
       </FormBlock>
       <DateTimeTodayField key={`return-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
+      <Input
+        label="배차정보"
+        value={formatLatestDispatchInfo(latest)}
+        readOnly
+        className="field min-h-12 truncate bg-[#f8faf7] text-[#16211d]"
+      />
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
-        <Input name="fuelDisplay" label="회차주유량" placeholder="7/12" />
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            label="배차주유량"
+            value={latest ? firstText(latest.fuelLevelText, latest.fuelDisplay) : ""}
+            readOnly
+            className="field min-h-12 bg-[#f8faf7] text-[#16211d]"
+          />
+          <Input name="fuelDisplay" label="회차시주유량" placeholder="7/12" />
+        </div>
         <Input name="location" label="주차구역" list="parking-locations" />
       </CompactRow>
       <Textarea name="notes" label="특이사항" />
@@ -1440,15 +1455,15 @@ function DispatchAdmin({
         <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
       </div>
       <div data-horizontal-scroll="true" className="w-full overflow-x-auto">
-        <table className="w-full min-w-[1550px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[1680px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
             {dispatchBoardColumns.slice(0, 3).map((column) => <col className={column.width} key={column.label} />)}
             <col className="w-[80px]" />
-            {dispatchBoardColumns.slice(3, 9).map((column) => <col className={column.width} key={column.label} />)}
+            {dispatchBoardColumns.slice(3, 10).map((column) => <col className={column.width} key={column.label} />)}
             <col className="w-[120px]" />
           </colgroup>
-          <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+          <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
           <tbody>{paginate(rows, page).map((row) => {
             const dispatch = row.kind === "배차" ? row.dispatch : undefined;
             const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -1467,6 +1482,7 @@ function DispatchAdmin({
                 <TruncatedCell value={clean(dispatch?.customerCarModel)} />
                 <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
                 <TruncatedCell value={clean(dispatch?.repairShop)} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(dispatch)} /></td>
                 <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton
@@ -1499,23 +1515,24 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
   return (
     <section data-horizontal-scroll="true" className="panel overflow-x-auto">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
-      <table className="w-full min-w-[1510px] table-fixed text-left text-sm">
+      <table className="w-full min-w-[1640px] table-fixed text-left text-sm">
         <colgroup>
           {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
         </colgroup>
-        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
           return (
             <tr className="border-b" key={item.id}>
               <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
               <TruncatedCell className="font-black" value={clean(item.rentalCarNumber)} />
-              <TruncatedCell value={clean(item.businessType || item.status)} />
+              <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
               <TruncatedCell value={vehicleModelColor(vehicle)} />
               <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
               <TruncatedCell value={clean(item.customerCarModel)} />
               <TruncatedCell value={clean(item.fuelDisplay)} />
               <TruncatedCell value={clean(item.repairShop)} />
+              <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
               <TruncatedCell value={clean(item.notes)} />
               <td className="h-11 whitespace-nowrap">
                 <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
@@ -2700,11 +2717,34 @@ function StatusPill({ status }: { status: string }) {
     status === "보험"
       ? "bg-red-100 text-red-700"
       : status === "자차"
-        ? "bg-blue-100 text-blue-700"
+        ? "bg-green-100 text-green-700"
         : status === "셀프"
-          ? "bg-green-100 text-green-700"
+          ? "bg-blue-100 text-blue-700"
           : "bg-gray-100 text-gray-700";
   return <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${className}`}>{label}</span>;
+}
+
+function DispatchTypeBadge({ status }: { status: string }) {
+  const normalized = normalizeDispatchStatus(status);
+  if (normalized === "주차구역표시") return <span>{status || "-"}</span>;
+  return <StatusPill status={normalized} />;
+}
+
+function PhoneCell({ phone }: { phone?: string }) {
+  const value = clean(phone);
+  if (!value) return <span>-</span>;
+  const href = `tel:${value.replace(/[^\d+]/g, "") || value}`;
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="truncate" title={value}>{value}</span>
+      <a className="small-btn shrink-0" href={href}>통화</a>
+    </div>
+  );
+}
+
+function dispatchPhone(dispatch?: DispatchV2) {
+  if (!dispatch) return "";
+  return firstText(dispatch.customerPhone, dispatch.phone, dispatch.customer_contact, dispatch.contact, dispatch.customer_phone);
 }
 
 function DispatchAdminStatusPill({ status }: { status: string }) {
@@ -2833,6 +2873,16 @@ function formatMonthDay(value?: string) {
   const parsed = new Date(`${datePart}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return "";
   return `${String(parsed.getMonth() + 1).padStart(2, "0")}월 ${String(parsed.getDate()).padStart(2, "0")}일`;
+}
+
+function formatLatestDispatchInfo(dispatch?: DispatchV2) {
+  if (!dispatch) return "최근 배차정보 없음";
+  const orderer = firstText(dispatch.orderer, dispatch.orderedBy, dispatch.customerName);
+  const repairShop = clean(dispatch.repairShop).trim();
+  const summary = orderer && repairShop ? `${orderer} / ${repairShop}` : orderer || repairShop;
+  const date = formatMonthDay(dispatch.date || dispatch.createdAt);
+  if (!summary) return "최근 배차정보 없음";
+  return date ? `${summary} · ${date}` : summary;
 }
 
 function firstText(...values: unknown[]) {

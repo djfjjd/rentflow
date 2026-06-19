@@ -151,6 +151,7 @@ function mapDispatch(row: any) {
   const dispatchType = row.dispatch_type || row.business_type || row.status || "";
   const orderer = row.orderer || row.ordered_by || row.customer_name || "";
   const fuelLevelText = row.fuel_level_text || row.fuel_display || "";
+  const customerPhone = row.customer_phone || row.phone || row.customer_contact || row.contact || "";
   const memo = row.memo || row.notes || "";
   return {
     id: row.id,
@@ -162,7 +163,10 @@ function mapDispatch(row: any) {
     repair_shop: row.repair_shop,
     customer_car_model: row.customer_car_model,
     fuel_level_text: fuelLevelText,
-    customer_phone: row.customer_phone,
+    customer_phone: customerPhone,
+    phone: customerPhone,
+    customer_contact: customerPhone,
+    contact: customerPhone,
     memo,
     is_corporate: row.is_corporate ?? row.corporate_vehicle ?? 0,
     is_completed: row.is_completed ?? 0,
@@ -170,7 +174,7 @@ function mapDispatch(row: any) {
     updated_at: row.updated_at,
     claimNumber: row.claim_number,
     customerName: row.customer_name,
-    customerPhone: row.customer_phone,
+    customerPhone,
     customerCarNumber: row.customer_car_number,
     customerCarModel: row.customer_car_model,
     vehicleNumber,

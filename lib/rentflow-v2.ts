@@ -79,6 +79,10 @@ export type DispatchV2 = {
   claimNumber?: string;
   customerName: string;
   customerPhone?: string;
+  customer_phone?: string;
+  phone?: string;
+  customer_contact?: string;
+  contact?: string;
   customerCarNumber?: string;
   customerCarModel?: string;
   rentalCarNumber?: string;
