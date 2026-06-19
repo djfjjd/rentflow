@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "id": "delete-rentflow-uploads-after-31-days",
+      "enabled": true,
+      "conditions": {
+        "prefix": ""
+      },
+      "delete": {
+        "days": 31
+      }
+    }
+  ]
+}

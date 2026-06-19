@@ -1020,10 +1020,17 @@ function PhotosPage({ admin }: { admin: boolean }) {
   const [query, setQuery] = useState("");
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedArchiveIds, setSelectedArchiveIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetchJson<UploadedFileV2[]>("/api/uploaded-files", []).then(setFiles);
   }, []);
+
+  async function reloadUploadedFiles() {
+    const next = await fetchJson<UploadedFileV2[]>("/api/uploaded-files", []);
+    setFiles(next);
+    setSelectedArchiveIds(new Set());
+  }
 
   const folders = useMemo(() => buildPhotoArchiveFolders(files), [files]);
   const queryText = query.toLowerCase();
@@ -1087,29 +1094,59 @@ function PhotosPage({ admin }: { admin: boolean }) {
     <section className="space-y-4">
       <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명, 파일명 검색" />
       <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
-        파일 보관기간은 업로드 후 60일이며, 이후 자동삭제 됩니다.
+        파일 보관기간은 업로드 후 31일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.
       </p>
-      <ThumbnailBackfillButton />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <ThumbnailBackfillButton />
+        <DriveArchiveButton selectedIds={[...selectedArchiveIds]} onArchived={reloadUploadedFiles} />
+      </div>
       {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filteredFolders.map((folder) => {
           const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;
           const videoCount = folder.files.filter(isVideoFile).length;
           const coverUrl = folderCoverThumbnailUrl(folder);
+          const folderFileIds = folder.files.map((file) => Number(file.id)).filter((id) => Number.isFinite(id));
+          const checked = folderFileIds.length > 0 && folderFileIds.every((id) => selectedArchiveIds.has(id));
+          const archivedCount = folder.files.filter(isDriveArchived).length;
+          function toggleFolder(checked: boolean) {
+            setSelectedArchiveIds((current) => {
+              const next = new Set(current);
+              for (const id of folderFileIds) {
+                if (checked) next.add(id);
+                else next.delete(id);
+              }
+              return next;
+            });
+          }
           return (
-            <button className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-lg border border-[#d9dfd8] bg-white p-3 text-left shadow-sm hover:bg-[#f5f7f4]" key={folder.key} type="button" onClick={() => setSelectedFolderKey(folder.key)}>
-              <div className="aspect-square overflow-hidden rounded-lg bg-[#eef1ed]">
-                {coverUrl ? <img alt="" className="h-full w-full object-cover" src={coverUrl} /> : <span className="grid h-full place-items-center text-xl">📁</span>}
+            <article className="rounded-lg border border-[#d9dfd8] bg-white p-3 shadow-sm hover:bg-[#f5f7f4]" key={folder.key}>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-xs font-black text-[#68746d]">
+                  <input
+                    checked={checked}
+                    disabled={!folderFileIds.length}
+                    type="checkbox"
+                    onChange={(event) => toggleFolder(event.target.checked)}
+                  />
+                  Drive 선택
+                </label>
+                {archivedCount > 0 ? <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-black text-green-700">Drive 보관 완료 {archivedCount}</span> : null}
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-base font-black">📁 {folder.folderName}</p>
-                <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
-                  <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
-                  <p>{folderFileSummary(photoCount, videoCount)}</p>
-                  <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
+              <button className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-3 text-left" type="button" onClick={() => setSelectedFolderKey(folder.key)}>
+                <div className="aspect-square overflow-hidden rounded-lg bg-[#eef1ed]">
+                  {coverUrl ? <img alt="" className="h-full w-full object-cover" src={coverUrl} /> : <span className="grid h-full place-items-center text-xl">📁</span>}
                 </div>
-              </div>
-            </button>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-black">📁 {folder.folderName}</p>
+                  <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
+                    <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
+                    <p>{folderFileSummary(photoCount, videoCount)}</p>
+                    <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
+                  </div>
+                </div>
+              </button>
+            </article>
           );
         })}
       </div>
@@ -1203,6 +1240,51 @@ function ThumbnailBackfillButton() {
       {result ? (
         <p className="mt-2 text-sm font-bold text-[#667269]">
           총 {result.processed}개 중 {result.created}개 생성 완료, {result.skipped}개 제외 · 남은 {result.remaining}개
+        </p>
+      ) : null}
+      {error ? <p className="mt-2 text-sm font-bold text-red-700">{error}</p> : null}
+    </div>
+  );
+}
+
+function DriveArchiveButton({ selectedIds, onArchived }: { selectedIds: number[]; onArchived: () => void | Promise<void> }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ total: number; uploaded: number; skipped: number; failed: number } | null>(null);
+  const [error, setError] = useState("");
+
+  async function archiveSelected() {
+    if (!selectedIds.length) {
+      setError("선택된 파일이 없습니다.");
+      return;
+    }
+    setRunning(true);
+    setError("");
+    try {
+      const response = await fetch("/api/drive/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileIds: selectedIds }),
+      });
+      const data = await response.json() as { total: number; uploaded: number; skipped: number; failed: number; error?: string };
+      if (!response.ok) throw new Error(data.error || "Google Drive upload failed");
+      setResult(data);
+      await onArchived();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 sm:text-right">
+      <button className="small-btn" type="button" disabled={running} onClick={archiveSelected}>
+        {running ? "Drive 업로드 중" : "Google Drive 업로드"}
+      </button>
+      <p className="mt-1 text-xs font-bold text-[#667269]">선택 {selectedIds.length}개</p>
+      {result ? (
+        <p className="mt-2 text-sm font-bold text-[#667269]">
+          전체 {result.total}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개
         </p>
       ) : null}
       {error ? <p className="mt-2 text-sm font-bold text-red-700">{error}</p> : null}
@@ -2789,6 +2871,11 @@ function fileUrl(file: UploadedFileV2) {
 function fileThumbnailUrl(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { thumbnail_url?: string };
   return raw.thumbnailUrl || raw.thumbnail_url || fileUrl(file);
+}
+
+function isDriveArchived(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { archive_status?: string; drive_file_id?: string; drive_url?: string };
+  return raw.archiveStatus === "archived" || raw.archive_status === "archived" || Boolean(raw.driveFileId || raw.drive_file_id || raw.driveUrl || raw.drive_url);
 }
 
 function folderCoverThumbnailUrl(folder: PhotoArchiveFolder) {

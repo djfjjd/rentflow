@@ -1,4 +1,4 @@
-export const PHOTO_CAPTURE_RETENTION_DAYS = 60;
+export const PHOTO_CAPTURE_RETENTION_DAYS = 31;
 
 const PHOTO_CAPTURE_WHERE = `
   (
@@ -10,7 +10,10 @@ const PHOTO_CAPTURE_WHERE = `
       OR lower(COALESCE(file_name, '')) LIKE '%.jpeg'
       OR lower(COALESCE(file_name, '')) LIKE '%.png'
       OR lower(COALESCE(file_name, '')) LIKE '%.webp'
+      OR lower(COALESCE(file_name, '')) LIKE '%.pdf'
       OR lower(COALESCE(file_name, '')) LIKE '%.mp4'
+      OR lower(COALESCE(file_name, '')) LIKE '%.mov'
+      OR lower(COALESCE(file_name, '')) LIKE '%.heic'
     )
     AND lower(COALESCE(record_type, '')) NOT IN ('contract', 'contracts', 'billing', 'billings', 'document', 'documents')
     AND COALESCE(file_type, '') NOT LIKE '%계약%'

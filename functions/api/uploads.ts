@@ -219,6 +219,12 @@ function mapUploadedFile(row: any) {
     thumbnailKey: row.thumbnail_key,
     drive_url: row.drive_url,
     driveUrl: row.drive_url,
+    drive_file_id: row.drive_file_id,
+    driveFileId: row.drive_file_id,
+    archived_at: row.archived_at,
+    archivedAt: row.archived_at,
+    archive_status: row.archive_status || "none",
+    archiveStatus: row.archive_status || "none",
     mime_type: row.mime_type || row.file_type,
     mimeType: row.mime_type || row.file_type,
     file_type: row.file_type,
@@ -275,6 +281,10 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
     { name: "created_at", definition: "DATETIME" },
     { name: "thumbnail_url", definition: "TEXT" },
     { name: "thumbnail_key", definition: "TEXT" },
+    { name: "drive_file_id", definition: "TEXT" },
+    { name: "drive_url", definition: "TEXT" },
+    { name: "archived_at", definition: "DATETIME" },
+    { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);
 }
 

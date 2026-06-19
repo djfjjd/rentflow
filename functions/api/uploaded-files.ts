@@ -116,6 +116,10 @@ function mapFile(row: any) {
     drive_url: row.drive_url,
     driveFolderId: row.drive_folder_id,
     driveFolderUrl: row.drive_folder_url,
+    archivedAt: row.archived_at,
+    archived_at: row.archived_at,
+    archiveStatus: row.archive_status || "none",
+    archive_status: row.archive_status || "none",
     mimeType: row.mime_type || row.file_type,
     mime_type: row.mime_type || row.file_type,
     vehicleNumber: row.joined_vehicle_number || row.vehicle_number,
@@ -211,5 +215,9 @@ async function ensureUploadedFilesSchema(env: Env) {
     { name: "created_at", definition: "DATETIME" },
     { name: "thumbnail_url", definition: "TEXT" },
     { name: "thumbnail_key", definition: "TEXT" },
+    { name: "drive_file_id", definition: "TEXT" },
+    { name: "drive_url", definition: "TEXT" },
+    { name: "archived_at", definition: "DATETIME" },
+    { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);
 }

@@ -44,6 +44,11 @@ export type UploadedFileV2 = {
   thumbnail_url?: string;
   thumbnail_key?: string;
   driveUrl?: string;
+  driveFileId?: string;
+  archivedAt?: string;
+  archiveStatus?: string;
+  archived_at?: string;
+  archive_status?: string;
   mimeType?: string;
   vehicleNumber?: string;
   insuranceNumber?: string;
