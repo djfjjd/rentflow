@@ -316,7 +316,7 @@ function UnreadMessagesButton({
           <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
           <div data-horizontal-scroll="true" className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
             {unread.length ? (
-              <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[1050px] table-fixed text-left text-sm">
                 <colgroup>
                   <col className="w-[130px]" />
                   <col className="w-[100px]" />
@@ -328,9 +328,8 @@ function UnreadMessagesButton({
                   <col className="w-[80px]" />
                   <col className="w-[150px]" />
                   <col className="w-[180px]" />
-                  <col className="w-[70px]" />
                 </colgroup>
-                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>상태</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>정리완료</th></tr></thead>
+                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>상태</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th></tr></thead>
                 <tbody>{unread.map((row) => {
                   const dispatch = row.kind === "배차" ? row.dispatch : undefined;
                   const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -349,7 +348,6 @@ function UnreadMessagesButton({
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
                       <td>{clean(linkedDispatch?.repairShop)}</td>
                       <td>{clean(ret?.notes || linkedDispatch?.notes || dispatch?.notes)}</td>
-                      <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
                     </tr>
                   );
                 })}</tbody>
