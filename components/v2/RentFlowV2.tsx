@@ -1329,7 +1329,7 @@ function DriveArchiveButton({
           <img
             alt=""
             className="h-7 w-7 object-contain"
-            src="https://lh3.googleusercontent.com/iUtpcjJMoUoGHlpGCgDUUYHJmhImEmzXpZVGyf79KJnrmN5gCRiPvo1qsUhK12Eqr5E9JkPvjREKhtY4N7bj8oW2jLsRn0ItaULQ=e365-pa-nu-rw-w2499"
+            src="https://www.gstatic.com/images/branding/productlogos/drive_2026/v1/web-48dp/logo_drive_2026_color_2x_web_48dp.png"
           />
           {running ? "Drive 업로드 중" : "Google Drive 업로드"}
           <span className="ml-2 text-xs text-[#667269]">선택 {selectedIds.length}개</span>
