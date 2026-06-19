@@ -39,6 +39,10 @@ export type UploadedFileV2 = {
   fileName: string;
   r2Url: string;
   r2Key: string;
+  thumbnailUrl?: string;
+  thumbnailKey?: string;
+  thumbnail_url?: string;
+  thumbnail_key?: string;
   driveUrl?: string;
   mimeType?: string;
   vehicleNumber?: string;

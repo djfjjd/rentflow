@@ -29,7 +29,7 @@ export function activePhotoRetentionWhere(alias = "") {
 
 export async function cleanupExpiredPhotoCaptures(db: any, bucket?: any) {
   const { results } = await db.prepare(`
-    SELECT id, r2_key
+    SELECT id, r2_key, thumbnail_key
     FROM uploaded_files
     WHERE ${PHOTO_CAPTURE_WHERE}
       AND datetime(COALESCE(uploaded_at, created_at)) < datetime('now', '-${PHOTO_CAPTURE_RETENTION_DAYS} days')
@@ -38,11 +38,19 @@ export async function cleanupExpiredPhotoCaptures(db: any, bucket?: any) {
 
   for (const row of rows) {
     const r2Key = String(row.r2_key || "");
+    const thumbnailKey = String(row.thumbnail_key || "");
     if (r2Key && bucket) {
       try {
         await bucket.delete(r2Key);
       } catch (error) {
         console.error("expired photo R2 delete failed", { r2Key, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (thumbnailKey && bucket) {
+      try {
+        await bucket.delete(thumbnailKey);
+      } catch (error) {
+        console.error("expired photo thumbnail R2 delete failed", { thumbnailKey, error: error instanceof Error ? error.message : String(error) });
       }
     }
     await db.prepare("DELETE FROM uploaded_files WHERE id = ?").bind(row.id).run();
@@ -55,9 +63,9 @@ export async function isActivePhotoCaptureObject(db: any, key: string) {
   const row = await db.prepare(`
     SELECT id
     FROM uploaded_files
-    WHERE r2_key = ?
+    WHERE (r2_key = ? OR thumbnail_key = ?)
       AND ${activePhotoRetentionWhere()}
     LIMIT 1
-  `).bind(key).first();
+  `).bind(key, key).first();
   return !!row;
 }

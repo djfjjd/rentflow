@@ -952,6 +952,8 @@ type PhotoArchiveFolder = {
   files: UploadedFileV2[];
 };
 
+const thumbnailMemoryCache = new Set<string>();
+
 function PhotosPage({ admin }: { admin: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [query, setQuery] = useState("");
@@ -976,8 +978,13 @@ function PhotosPage({ admin }: { admin: boolean }) {
     .filter((folder) => folder.files.length > 0);
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
 
+  useEffect(() => {
+    prefetchThumbnailUrls(filteredFolders.map(folderCoverThumbnailUrl).filter(Boolean));
+  }, [filteredFolders]);
+
   if (selectedFolder) {
     const sortedFiles = [...selectedFolder.files].sort((a, b) => fileUploadedTime(a) - fileUploadedTime(b));
+    prefetchThumbnailUrls(sortedFiles.map(fileThumbnailUrl).filter(Boolean));
     return (
       <section className="space-y-4">
         <div className="panel">
@@ -993,7 +1000,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
               {sortedFiles.map((file, index) => (
                 <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
-                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
+                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
                     <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
                   ) : (
@@ -1026,13 +1033,19 @@ function PhotosPage({ admin }: { admin: boolean }) {
         {filteredFolders.map((folder) => {
           const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;
           const videoCount = folder.files.filter(isVideoFile).length;
+          const coverUrl = folderCoverThumbnailUrl(folder);
           return (
-            <button className="rounded-lg border border-[#d9dfd8] bg-white p-4 text-left shadow-sm hover:bg-[#f5f7f4]" key={folder.key} type="button" onClick={() => setSelectedFolderKey(folder.key)}>
-              <p className="truncate text-base font-black">📁 {folder.folderName}</p>
-              <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
-                <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
-                <p>{folderFileSummary(photoCount, videoCount)}</p>
-                <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
+            <button className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-lg border border-[#d9dfd8] bg-white p-3 text-left shadow-sm hover:bg-[#f5f7f4]" key={folder.key} type="button" onClick={() => setSelectedFolderKey(folder.key)}>
+              <div className="aspect-square overflow-hidden rounded-lg bg-[#eef1ed]">
+                {coverUrl ? <img alt="" className="h-full w-full object-cover" src={coverUrl} /> : <span className="grid h-full place-items-center text-xl">📁</span>}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-base font-black">📁 {folder.folderName}</p>
+                <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
+                  <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
+                  <p>{folderFileSummary(photoCount, videoCount)}</p>
+                  <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
+                </div>
               </div>
             </button>
           );
@@ -1816,6 +1829,10 @@ function PhotoFolderGalleryModal({
       .finally(() => setLoading(false));
   }, [recordId, recordType, vehicleNumber]);
 
+  useEffect(() => {
+    prefetchThumbnailUrls(sortedFiles.map(fileThumbnailUrl).filter(Boolean));
+  }, [sortedFiles]);
+
   return (
     <OverlayModal onClose={onClose} panelClassName="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-2xl">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -1836,7 +1853,7 @@ function PhotoFolderGalleryModal({
               {sortedFiles.map((file, index) => (
                 <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
-                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileUrl(file)} />
+                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
                     <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
                   ) : (
@@ -2523,12 +2540,48 @@ async function uploadSelectedFiles(files: File[], metadata: { recordType: string
     };
     const formData = new FormData();
     formData.append("file", file);
+    const thumbnail = await createImageThumbnail(file);
+    if (thumbnail) formData.append("thumbnail", thumbnail);
     formData.append("metadata", JSON.stringify(fileMetadata));
     const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
     if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
     const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
     await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
   }
+}
+
+async function createImageThumbnail(file: File) {
+  if (!file.type.startsWith("image/")) return null;
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = objectUrl;
+    await image.decode();
+    const maxSize = 300;
+    const ratio = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.78));
+    if (!blob) return null;
+    return new File([blob], thumbnailFileName(file.name), { type: "image/webp" });
+  } catch (error) {
+    console.error("thumbnail create failed", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function thumbnailFileName(fileName: string) {
+  const dotIndex = fileName.lastIndexOf(".");
+  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  return `${baseName}_thumb.webp`;
 }
 
 function fileCountLabel(files: File[]) {
@@ -2544,6 +2597,27 @@ function fileName(file: UploadedFileV2) {
 function fileUrl(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { r2_url?: string; drive_url?: string };
   return raw.r2Url || raw.r2_url || raw.driveUrl || raw.drive_url || "";
+}
+
+function fileThumbnailUrl(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { thumbnail_url?: string };
+  return raw.thumbnailUrl || raw.thumbnail_url || fileUrl(file);
+}
+
+function folderCoverThumbnailUrl(folder: PhotoArchiveFolder) {
+  const image = folder.files.find(isImageFile);
+  return image ? fileThumbnailUrl(image) : "";
+}
+
+function prefetchThumbnailUrls(urls: string[]) {
+  if (typeof window === "undefined") return;
+  for (const url of urls) {
+    if (!url || thumbnailMemoryCache.has(url)) continue;
+    thumbnailMemoryCache.add(url);
+    const image = new Image();
+    image.decoding = "async";
+    image.src = url;
+  }
 }
 
 function fileMime(file: UploadedFileV2) {

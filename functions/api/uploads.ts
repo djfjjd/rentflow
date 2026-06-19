@@ -17,6 +17,8 @@ type FileRecord = {
   fileName: string;
   r2Url: string;
   r2Key: string;
+  thumbnailUrl?: string;
+  thumbnailKey?: string;
   driveBackupStatus: "success" | "failed" | "none";
   driveFileId?: string;
   driveUrl?: string;
@@ -38,6 +40,7 @@ type FileRecord = {
 export async function onRequestPost({ request, env }: UploadContext) {
   const formData = await request.formData();
   const file = formData.get("file");
+  const thumbnail = formData.get("thumbnail");
   const metadata = parseMetadata(formData.get("metadata"));
 
   if (!(file instanceof File)) {
@@ -50,15 +53,25 @@ export async function onRequestPost({ request, env }: UploadContext) {
   // 1. Primary Storage: Cloudflare R2
   let r2Key = "";
   let r2Url = "";
+  let thumbnailKey = "";
+  let thumbnailUrl = "";
   
   if (env.RENTFLOW_UPLOADS) {
     const timestamp = Date.now();
     r2Key = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${fileName}`;
     await env.RENTFLOW_UPLOADS.put(r2Key, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type || "application/octet-stream" },
+      httpMetadata: { contentType: file.type || "application/octet-stream", cacheControl: "public,max-age=31536000,immutable" },
     });
     // In production, this would be a custom domain or a proxy route
     r2Url = `/api/uploads?key=${encodeURIComponent(r2Key)}`;
+
+    if (thumbnail instanceof File) {
+      thumbnailKey = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${thumbnailFileName(fileName)}`;
+      await env.RENTFLOW_UPLOADS.put(thumbnailKey, await thumbnail.arrayBuffer(), {
+        httpMetadata: { contentType: "image/webp", cacheControl: "public,max-age=31536000,immutable" },
+      });
+      thumbnailUrl = `/api/uploads?key=${encodeURIComponent(thumbnailKey)}`;
+    }
   }
 
   // 2. Secondary Storage: Google Drive (Backup)
@@ -79,6 +92,8 @@ export async function onRequestPost({ request, env }: UploadContext) {
           uploadedAt,
           r2Key,
           r2Url,
+          thumbnailKey,
+          thumbnailUrl,
         },
       };
       driveResult = await callAppsScript(env, payload);
@@ -89,7 +104,7 @@ export async function onRequestPost({ request, env }: UploadContext) {
     }
   }
 
-  const record = toFileRecord(r2Key, r2Url, driveBackupStatus, driveResult, metadata);
+  const record = toFileRecord(r2Key, r2Url, thumbnailKey, thumbnailUrl, driveBackupStatus, driveResult, metadata);
 
   return Response.json({
     stored: true,
@@ -122,7 +137,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
-    headers.set("Cache-Control", "no-store");
+    headers.set("Cache-Control", "public,max-age=31536000,immutable");
     
     return new Response(object.body, { headers });
   }
@@ -182,7 +197,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
     const files = Array.isArray(result.files) ? result.files : [];
 
     return Response.json({
-      files: files.map((file) => toFileRecord("", "", "success", file as Record<string, unknown>, {})),
+      files: files.map((file) => toFileRecord("", "", "", "", "success", file as Record<string, unknown>, {})),
     }, { headers: noStoreHeaders() });
   } catch (error) {
     return Response.json({ files: [], error: String(error) }, { headers: noStoreHeaders() });
@@ -198,6 +213,10 @@ function mapUploadedFile(row: any) {
     r2Url: row.r2_url,
     r2_key: row.r2_key,
     r2Key: row.r2_key,
+    thumbnail_url: row.thumbnail_url,
+    thumbnailUrl: row.thumbnail_url,
+    thumbnail_key: row.thumbnail_key,
+    thumbnailKey: row.thumbnail_key,
     drive_url: row.drive_url,
     driveUrl: row.drive_url,
     mime_type: row.mime_type || row.file_type,
@@ -254,6 +273,8 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
     { name: "record_id", definition: "TEXT" },
     { name: "uploaded_at", definition: "DATETIME" },
     { name: "created_at", definition: "DATETIME" },
+    { name: "thumbnail_url", definition: "TEXT" },
+    { name: "thumbnail_key", definition: "TEXT" },
   ]);
 }
 
@@ -300,6 +321,8 @@ async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) 
 function toFileRecord(
   r2Key: string, 
   r2Url: string, 
+  thumbnailKey: string,
+  thumbnailUrl: string,
   driveBackupStatus: "success" | "failed" | "none",
   driveResult: Record<string, unknown>, 
   fallback: Record<string, unknown>
@@ -311,6 +334,8 @@ function toFileRecord(
     fileName: String(driveResult.fileName || fallback.fileName || fallback.storedFileName || ""),
     r2Key: r2Key || String(driveResult.r2Key || ""),
     r2Url: r2Url || String(driveResult.r2Url || ""),
+    thumbnailKey: thumbnailKey || String(driveResult.thumbnailKey || fallback.thumbnailKey || ""),
+    thumbnailUrl: thumbnailUrl || String(driveResult.thumbnailUrl || fallback.thumbnailUrl || ""),
     driveBackupStatus: driveBackupStatus === "success" || driveFileId ? "success" : driveBackupStatus,
     driveFileId,
     driveUrl: String(driveResult.driveUrl || driveResult.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
@@ -328,6 +353,12 @@ function toFileRecord(
     customerFolderUrl: String(driveResult.customerFolderUrl || ""),
     uploadedAt: String(driveResult.uploadedAt || fallback.uploadedAt || new Date().toISOString()),
   };
+}
+
+function thumbnailFileName(fileName: string) {
+  const dotIndex = fileName.lastIndexOf(".");
+  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  return `${baseName}_thumb.webp`;
 }
 
 function parseMetadata(value: FormDataEntryValue | null) {

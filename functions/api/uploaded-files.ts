@@ -60,11 +60,13 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     const result = await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(f.fileName),
       safeText(f.r2Url),
       safeText(f.r2Key),
+      safeNullableText(f.thumbnailUrl),
+      safeNullableText(f.thumbnailKey),
       safeText(f.driveBackupStatus || "none"),
       safeNullableText(f.driveFileId),
       safeNullableText(f.driveUrl),
@@ -99,6 +101,10 @@ function mapFile(row: any) {
     r2_url: row.r2_url,
     r2Key: row.r2_key,
     r2_key: row.r2_key,
+    thumbnailUrl: row.thumbnail_url,
+    thumbnail_url: row.thumbnail_url,
+    thumbnailKey: row.thumbnail_key,
+    thumbnail_key: row.thumbnail_key,
     driveBackupStatus: row.drive_backup_status,
     driveFileId: row.drive_file_id,
     driveUrl: row.drive_url,
@@ -197,5 +203,7 @@ async function ensureUploadedFilesSchema(env: Env) {
     { name: "record_id", definition: "TEXT" },
     { name: "uploaded_at", definition: "DATETIME" },
     { name: "created_at", definition: "DATETIME" },
+    { name: "thumbnail_url", definition: "TEXT" },
+    { name: "thumbnail_key", definition: "TEXT" },
   ]);
 }
