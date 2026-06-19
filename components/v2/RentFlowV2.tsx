@@ -186,7 +186,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#f6f7f4] text-[#16211d]">
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
@@ -323,17 +323,18 @@ function UnreadMessagesButton({
                   const ret = row.kind === "회차" ? row.returnItem : undefined;
                   const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
                   const vehicle = findVehicle(vehicles, plate);
+                  const linkedDispatch = dispatch || findLinkedDispatchForReturn(ret, dispatches);
                   return (
                     <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
                       <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
                       <td className="font-black">{plate}</td>
                       <td>{row.kind}</td>
                       <td>{vehicleModelColor(vehicle)}</td>
-                      <td>{clean(dispatch?.orderedBy)}</td>
-                      <td>{clean(dispatch?.customerCarModel)}</td>
+                      <td>{clean(linkedDispatch?.orderedBy || linkedDispatch?.customerName)}</td>
+                      <td>{clean(linkedDispatch?.customerCarModel)}</td>
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
-                      <td>{clean(dispatch?.repairShop)}</td>
-                      <td>{clean(dispatch?.notes || ret?.notes)}</td>
+                      <td>{clean(linkedDispatch?.repairShop)}</td>
+                      <td>{clean(ret?.notes || linkedDispatch?.notes || dispatch?.notes)}</td>
                       <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
                     </tr>
                   );
@@ -1560,6 +1561,7 @@ function DispatchAdmin({
             const ret = row.kind === "회차" ? row.returnItem : undefined;
             const plate = dispatch?.rentalCarNumber || ret?.rentalCarNumber || "";
             const vehicle = findVehicle(vehicles, plate);
+            const linkedDispatch = dispatch || findLinkedDispatchForReturn(ret, dispatches);
             const status = dispatch ? dispatchAdminDispatchStatus(dispatch) : dispatchAdminReturnStatus(ret, dispatches);
             return (
               <tr className="border-b" key={`${row.kind}-${row.id}`}>
@@ -1569,12 +1571,12 @@ function DispatchAdmin({
                 <TruncatedCell value={row.kind} />
                 <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
-                <TruncatedCell value={clean(dispatch?.orderedBy)} />
-                <TruncatedCell value={clean(dispatch?.customerCarModel)} />
+                <TruncatedCell value={clean(linkedDispatch?.orderedBy || linkedDispatch?.customerName)} />
+                <TruncatedCell value={clean(linkedDispatch?.customerCarModel)} />
                 <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
-                <TruncatedCell value={clean(dispatch?.repairShop)} />
+                <TruncatedCell value={clean(linkedDispatch?.repairShop)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(dispatch)} /></td>
-                <MemoCell value={dispatch?.notes || ret?.notes} onOpen={setMemo} />
+                <MemoCell value={ret?.notes || linkedDispatch?.notes || dispatch?.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton
                     date={dispatch?.date || ret?.date}
@@ -1606,37 +1608,39 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
     console.log("dispatch board items", dispatches.length);
   }, [dispatches.length]);
   return (
-    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
+    <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
-      <table className="w-full min-w-[1640px] table-fixed text-left text-sm">
-        <colgroup>
-          {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
-        </colgroup>
-        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
-        <tbody>{paginate(rows, page).map((item) => {
-          const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
-          return (
-            <tr className="border-b" key={item.id}>
-              <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
-              <TruncatedCell className="font-black" value={clean(item.rentalCarNumber)} />
-              <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
-              <TruncatedCell value={vehicleModelColor(vehicle)} />
-              <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
-              <TruncatedCell value={clean(item.customerCarModel)} />
-              <TruncatedCell value={clean(item.fuelDisplay)} />
-              <TruncatedCell value={clean(item.repairShop)} />
-              <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
-              <MemoCell value={item.notes} onOpen={setMemo} />
-              <td className="h-11 whitespace-nowrap">
-                <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
-              </td>
-              <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
-              <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
-              <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
+      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <table className="w-full min-w-[1640px] table-fixed text-left text-sm">
+          <colgroup>
+            {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
+          </colgroup>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+          <tbody>{paginate(rows, page).map((item) => {
+            const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+            return (
+              <tr className="border-b" key={item.id}>
+                <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
+                <TruncatedCell className="font-black" value={clean(item.rentalCarNumber)} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
+                <TruncatedCell value={vehicleModelColor(vehicle)} />
+                <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
+                <TruncatedCell value={clean(item.customerCarModel)} />
+                <TruncatedCell value={clean(item.fuelDisplay)} />
+                <TruncatedCell value={clean(item.repairShop)} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
+                <MemoCell value={item.notes} onOpen={setMemo} />
+                <td className="h-11 whitespace-nowrap">
+                  <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
+                </td>
+                <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
+                <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
+                <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onDispatches()} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 배차`} onCancel={() => setDeleting(null)} onDelete={async () => {
@@ -1658,30 +1662,32 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
     console.log("return board items", returns.length);
   }, [returns.length]);
   return (
-    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
+    <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
-      <table className="w-full min-w-[1080px] text-left text-sm">
-        <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
-        <tbody>{paginate(rows, page).map((item) => {
-          const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
-          return (
-            <tr className="border-b" key={item.id}>
-              <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
-              <td className="font-black">{clean(item.rentalCarNumber)}</td>
-              <td>회차</td>
-              <td>{vehicleModelColor(vehicle)}</td>
-              <td>{clean(String(item.mileage || ""))}</td>
-              <td>{clean(item.fuelDisplay)}</td>
-              <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
-              <td>{clean(item.notes)}</td>
-              <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
-              <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
-              <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
-              <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
+      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <table className="w-full min-w-[1080px] text-left text-sm">
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+          <tbody>{paginate(rows, page).map((item) => {
+            const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+            return (
+              <tr className="border-b" key={item.id}>
+                <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
+                <td className="font-black">{clean(item.rentalCarNumber)}</td>
+                <td>회차</td>
+                <td>{vehicleModelColor(vehicle)}</td>
+                <td>{clean(String(item.mileage || ""))}</td>
+                <td>{clean(item.fuelDisplay)}</td>
+                <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
+                <td>{clean(item.notes)}</td>
+                <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
+                <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
+                <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
+                <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onReturns()} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 회차`} onCancel={() => setDeleting(null)} onDelete={async () => {
@@ -3018,9 +3024,10 @@ function PhoneCell({ phone }: { phone?: string }) {
   const value = clean(phone);
   if (!value) return <span>-</span>;
   const href = `tel:${value.replace(/[^\d+]/g, "") || value}`;
+  const display = formatPhoneNumber(value);
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      <span className="whitespace-nowrap" title={value}>{value}</span>
+      <span className="whitespace-nowrap" title={value}>{display}</span>
       <a className="small-btn shrink-0" href={href}>통화</a>
     </div>
   );
@@ -3029,6 +3036,26 @@ function PhoneCell({ phone }: { phone?: string }) {
 function dispatchPhone(dispatch?: DispatchV2) {
   if (!dispatch) return "";
   return firstText(dispatch.customerPhone, dispatch.phone, dispatch.customer_contact, dispatch.contact, dispatch.customer_phone);
+}
+
+function formatPhoneNumber(value: unknown) {
+  if (!value) return "";
+  const original = String(value);
+  const digits = original.replace(/\D/g, "");
+
+  if (digits.length === 11 && digits.startsWith("010")) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  if (digits.length === 10 && digits.startsWith("02")) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  return original;
 }
 
 function DispatchAdminStatusPill({ status }: { status: string }) {
@@ -3056,6 +3083,17 @@ function dispatchAdminReturnStatus(returnItem: ReturnV2 | undefined, dispatches:
   if (rawReturn) return normalizeDispatchStatus(rawReturn);
   const latestDispatch = latestByVehicle(dispatches, returnItem.rentalCarNumber || returnItem.vehicleNumber || "");
   return latestDispatch ? dispatchAdminDispatchStatus(latestDispatch) : "";
+}
+
+function findLinkedDispatchForReturn(returnItem: ReturnV2 | undefined, dispatches: DispatchV2[]) {
+  if (!returnItem) return undefined;
+  const raw = returnItem as ReturnV2 & { dispatchId?: string; dispatch_id?: string };
+  const dispatchId = firstText(raw.dispatchId, raw.dispatch_id);
+  if (dispatchId) {
+    const byId = dispatches.find((dispatch) => dispatch.id === dispatchId);
+    if (byId) return byId;
+  }
+  return latestByVehicle(dispatches, returnItem.rentalCarNumber || returnItem.vehicleNumber || "");
 }
 
 function returnStatusValue(returnItem: ReturnV2) {
