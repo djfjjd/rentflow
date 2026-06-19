@@ -316,8 +316,21 @@ function UnreadMessagesButton({
           <h2 className="mb-3 text-xl font-black">안 읽은 메시지</h2>
           <div data-horizontal-scroll="true" className="max-h-[70vh] overflow-x-auto overflow-y-auto whitespace-nowrap">
             {unread.length ? (
-              <table className="w-full min-w-[1180px] text-left text-sm">
-                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>정리완료</th></tr></thead>
+              <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[130px]" />
+                  <col className="w-[100px]" />
+                  <col className="w-[80px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[60px]" />
+                  <col className="w-[160px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[80px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[70px]" />
+                </colgroup>
+                <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>배차/회차</th><th>차종/색상</th><th>상태</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>정리완료</th></tr></thead>
                 <tbody>{unread.map((row) => {
                   const dispatch = row.kind === "배차" ? row.dispatch : undefined;
                   const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -330,11 +343,11 @@ function UnreadMessagesButton({
                       <td className="font-black">{plate}</td>
                       <td>{row.kind}</td>
                       <td>{vehicleModelColor(vehicle)}</td>
+                      <td><UnreadStatusBadge status={firstText(linkedDispatch?.dispatchType, linkedDispatch?.businessType, linkedDispatch?.status)} /></td>
                       <td>{clean(linkedDispatch?.orderedBy || linkedDispatch?.customerName)}</td>
                       <td>{clean(linkedDispatch?.customerCarModel)}</td>
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
                       <td>{clean(linkedDispatch?.repairShop)}</td>
-                      <td><PhoneCell phone={dispatchPhone(linkedDispatch)} /></td>
                       <td>{clean(ret?.notes || linkedDispatch?.notes || dispatch?.notes)}</td>
                       <td><input className="h-5 w-5" type="checkbox" onChange={() => complete(row.kind, dispatch?.id || ret?.id || "")} /></td>
                     </tr>
@@ -3024,6 +3037,22 @@ function DispatchTypeBadge({ status }: { status: string }) {
   const normalized = normalizeDispatchStatus(status);
   if (normalized === "주차구역표시") return <span>{status || "-"}</span>;
   return <StatusPill status={normalized} />;
+}
+
+function UnreadStatusBadge({ status }: { status: string }) {
+  const normalized = normalizeDispatchStatus(status);
+  if (normalized === "주차구역표시") return <span className="inline-block w-[60px] text-center">-</span>;
+  const className =
+    normalized === "보험"
+      ? "bg-[#DC2626]"
+      : normalized === "자차"
+        ? "bg-[#16A34A]"
+        : "bg-[#2563EB]";
+  return (
+    <span className={`inline-flex h-7 w-[60px] items-center justify-center rounded-full text-xs font-black text-white ${className}`}>
+      {normalized}
+    </span>
+  );
 }
 
 function PhoneCell({ phone }: { phone?: string }) {
