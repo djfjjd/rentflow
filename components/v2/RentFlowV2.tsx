@@ -16,6 +16,7 @@ import {
   FileText,
   GripVertical,
   Home,
+  Info,
   MapPin,
   PackageSearch,
   Plus,
@@ -98,8 +99,8 @@ const dispatchBoardColumns = [
   { label: "고객차종", width: "w-[130px]" },
   { label: "주유량", width: "w-[80px]" },
   { label: "수리처", width: "w-[160px]" },
-  { label: "연락처", width: "w-[130px]" },
-  { label: "메모", width: "w-[260px]" },
+  { label: "연락처", width: "w-[170px]" },
+  { label: "메모", width: "w-[220px]" },
   { label: "사진링크", width: "w-[80px]" },
   { label: "사진추가업로드", width: "w-[100px]" },
   { label: "수정", width: "w-[70px]" },
@@ -1433,6 +1434,7 @@ function DispatchAdmin({
 }) {
   const [filter, setFilter] = useState("전체");
   const [page, setPage] = useState(1);
+  const [memo, setMemo] = useState("");
   const rows = [
     ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
     ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
@@ -1483,7 +1485,7 @@ function DispatchAdmin({
                 <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
                 <TruncatedCell value={clean(dispatch?.repairShop)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(dispatch)} /></td>
-                <TruncatedCell value={clean(dispatch?.notes || ret?.notes)} />
+                <MemoCell value={dispatch?.notes || ret?.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton
                     date={dispatch?.date || ret?.date}
@@ -1500,6 +1502,7 @@ function DispatchAdmin({
         </table>
       </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
+      {memo ? <MemoModal memo={memo} onClose={() => setMemo("")} /> : null}
     </section>
   );
 }
@@ -1507,6 +1510,7 @@ function DispatchAdmin({
 function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
+  const [memo, setMemo] = useState("");
   const [page, setPage] = useState(1);
   const rows = [...dispatches].sort(sortDateCreatedDesc);
   useEffect(() => {
@@ -1533,7 +1537,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
               <TruncatedCell value={clean(item.fuelDisplay)} />
               <TruncatedCell value={clean(item.repairShop)} />
               <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
-              <TruncatedCell value={clean(item.notes)} />
+              <MemoCell value={item.notes} onOpen={setMemo} />
               <td className="h-11 whitespace-nowrap">
                 <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
               </td>
@@ -1551,6 +1555,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
         await onDispatches();
         setDeleting(null);
       }} /> : null}
+      {memo ? <MemoModal memo={memo} onClose={() => setMemo("")} /> : null}
     </section>
   );
 }
@@ -2622,6 +2627,48 @@ function TruncatedCell({ value, className = "" }: { value: unknown; className?: 
   );
 }
 
+function MemoCell({ value, onOpen }: { value: unknown; onOpen: (memo: string) => void }) {
+  const textValue = clean(value);
+  if (!textValue) return <td className="h-11 whitespace-nowrap px-1 align-middle">-</td>;
+  return (
+    <td className="h-11 whitespace-nowrap px-1 align-middle" title={textValue}>
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="min-w-0 flex-1 truncate">{textValue}</span>
+        <button
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#cfd8d1] bg-white text-[#116149]"
+          title="메모 보기"
+          type="button"
+          onClick={() => onOpen(textValue)}
+        >
+          <Info size={15} />
+        </button>
+      </div>
+    </td>
+  );
+}
+
+function MemoModal({ memo, onClose }: { memo: string; onClose: () => void }) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-lg overflow-auto rounded-lg bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">메모</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        <p className="whitespace-pre-wrap break-words leading-relaxed">{memo}</p>
+      </div>
+    </div>
+  );
+}
+
 function groupBy<T>(items: T[], key: (item: T) => string) {
   return items.reduce<Record<string, T[]>>((acc, item) => {
     const name = key(item) || "기타";
@@ -2735,8 +2782,8 @@ function PhoneCell({ phone }: { phone?: string }) {
   if (!value) return <span>-</span>;
   const href = `tel:${value.replace(/[^\d+]/g, "") || value}`;
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="truncate" title={value}>{value}</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <span className="whitespace-nowrap" title={value}>{value}</span>
       <a className="small-btn shrink-0" href={href}>통화</a>
     </div>
   );
