@@ -1529,10 +1529,11 @@ function CalendarPage({ reservations }: { reservations: ReservationV2[] }) {
 }
 
 function CalendarSubscribeBox() {
-  const url = "https://rentflow-9yg.pages.dev/api/calendar.ics";
+  const iphoneUrl = "https://rentflow-9yg.pages.dev/api/calendar.ics";
+  const webcalUrl = "webcal://rentflow-9yg.pages.dev/api/calendar.ics";
   const [toast, setToast] = useState("");
 
-  async function copyUrl() {
+  async function copyUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
       setToast("클립보드에 복사되었습니다.");
@@ -1543,14 +1544,36 @@ function CalendarSubscribeBox() {
   }
 
   return (
-    <div className="relative rounded-lg border border-[#d8ded8] bg-white p-3 text-center">
-      <button className="small-btn mx-auto inline-flex items-center justify-center" type="button" onClick={copyUrl}>
-        캘린더 구독 URL 복사
-      </button>
+    <div className="relative overflow-hidden rounded-lg border border-[#d8ded8] bg-white p-3 text-center">
+      <div className="mx-auto flex max-w-3xl flex-col items-stretch justify-center gap-2 sm:flex-row">
+        <button className="small-btn inline-flex w-full items-center justify-center sm:w-auto" type="button" onClick={() => copyUrl(iphoneUrl)}>
+          아이폰 캘린더 URL 복사
+        </button>
+        <button className="small-btn inline-flex w-full items-center justify-center sm:w-auto" type="button" onClick={() => copyUrl(webcalUrl)}>
+          구글·갤럭시·MS Outlook URL 복사
+        </button>
+      </div>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
-      <p className="mt-2 text-xs font-bold leading-relaxed text-[#68746d]">
-        아이폰: 설정 &gt; 캘린더 &gt; 계정 &gt; 계정 추가 &gt; 기타 &gt; 구독 캘린더 추가
-      </p>
+      <div data-horizontal-scroll="true" className="mt-3 w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <div className="grid min-w-[760px] grid-cols-[repeat(4,minmax(180px,1fr))] gap-2">
+          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+            <strong className="mb-1 block text-[13px] text-[#16211d]">아이폰</strong>
+            설정<br />→ 캘린더<br />→ 계정<br />→ 계정 추가<br />→ 기타<br />→ 구독 캘린더 추가
+          </div>
+          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+            <strong className="mb-1 block text-[13px] text-[#16211d]">갤럭시 + 구글</strong>
+            ICSx 설치<br />→ URL 등록<br /><br />Google Calendar(PC)<br />→ 다른 캘린더 +<br />→ URL로 추가
+          </div>
+          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+            <strong className="mb-1 block text-[13px] text-[#16211d]">MS Outlook</strong>
+            Outlook(PC)<br />→ 일정 추가<br />→ 웹에서 구독
+          </div>
+          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+            <strong className="mb-1 block text-[13px] text-[#16211d]">네이버</strong>
+            실시간 연동 미지원
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
