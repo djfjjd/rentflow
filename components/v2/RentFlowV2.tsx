@@ -594,9 +594,10 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 
 function AdminNav() {
   const pathname = usePathname();
+  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
   return (
-    <nav data-horizontal-scroll="true" className="flex gap-2 overflow-x-auto pb-2">
-      {adminItems.map((item) => {
+    <nav className="flex w-full items-center justify-between gap-2 pb-2">
+      {visibleItems.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
