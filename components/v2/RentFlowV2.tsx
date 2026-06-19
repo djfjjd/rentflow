@@ -1558,15 +1558,15 @@ function CalendarSubscribeBox() {
         <div className="grid min-w-[760px] grid-cols-[repeat(4,minmax(180px,1fr))] gap-2">
           <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">아이폰</strong>
-            설정<br />→ 캘린더<br />→ 계정<br />→ 계정 추가<br />→ 기타<br />→ 구독 캘린더 추가
+            설정 &gt; 캘린더<br />구독 캘린더 추가
           </div>
           <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">갤럭시 + 구글</strong>
-            ICSx 설치<br />→ URL 등록<br /><br />Google Calendar(PC)<br />→ 다른 캘린더 +<br />→ URL로 추가
+            ICSx 또는 Google Calendar<br />URL로 추가
           </div>
           <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">MS Outlook</strong>
-            Outlook(PC)<br />→ 일정 추가<br />→ 웹에서 구독
+            일정 추가<br />웹에서 구독
           </div>
           <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">네이버</strong>
