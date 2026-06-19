@@ -1045,10 +1045,27 @@ function PhotosPage({ admin }: { admin: boolean }) {
     }))
     .filter((folder) => folder.files.length > 0);
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
+  const visibleArchiveIds = useMemo(
+    () => filteredFolders.flatMap((folder) => folder.files.map((file) => Number(file.id)).filter((id) => Number.isFinite(id))),
+    [filteredFolders]
+  );
+  const allVisibleSelected = visibleArchiveIds.length > 0 && visibleArchiveIds.every((id) => selectedArchiveIds.has(id));
 
   useEffect(() => {
     prefetchThumbnailUrls(filteredFolders.map(folderCoverThumbnailUrl).filter(Boolean));
   }, [filteredFolders]);
+
+  function toggleAllVisibleArchiveIds() {
+    setSelectedArchiveIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        for (const id of visibleArchiveIds) next.delete(id);
+      } else {
+        for (const id of visibleArchiveIds) next.add(id);
+      }
+      return next;
+    });
+  }
 
   if (selectedFolder) {
     const sortedFiles = [...selectedFolder.files].sort((a, b) => fileUploadedTime(a) - fileUploadedTime(b));
@@ -1096,10 +1113,14 @@ function PhotosPage({ admin }: { admin: boolean }) {
       <p className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
         파일 보관기간은 업로드 후 31일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.
       </p>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <ThumbnailBackfillButton />
-        <DriveArchiveButton selectedIds={[...selectedArchiveIds]} onArchived={reloadUploadedFiles} />
-      </div>
+      <div className="hidden"><ThumbnailBackfillButton /></div>
+      <DriveArchiveButton
+        allSelected={allVisibleSelected}
+        onArchived={reloadUploadedFiles}
+        onToggleAll={toggleAllVisibleArchiveIds}
+        selectedIds={[...selectedArchiveIds]}
+        totalVisible={visibleArchiveIds.length}
+      />
       {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filteredFolders.map((folder) => {
@@ -1247,7 +1268,19 @@ function ThumbnailBackfillButton() {
   );
 }
 
-function DriveArchiveButton({ selectedIds, onArchived }: { selectedIds: number[]; onArchived: () => void | Promise<void> }) {
+function DriveArchiveButton({
+  selectedIds,
+  totalVisible,
+  allSelected,
+  onToggleAll,
+  onArchived,
+}: {
+  selectedIds: number[];
+  totalVisible: number;
+  allSelected: boolean;
+  onToggleAll: () => void;
+  onArchived: () => void | Promise<void>;
+}) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ total: number; uploaded: number; skipped: number; failed: number } | null>(null);
   const [error, setError] = useState("");
@@ -1277,17 +1310,37 @@ function DriveArchiveButton({ selectedIds, onArchived }: { selectedIds: number[]
   }
 
   return (
-    <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 sm:text-right">
-      <button className="small-btn" type="button" disabled={running} onClick={archiveSelected}>
-        {running ? "Drive 업로드 중" : "Google Drive 업로드"}
-      </button>
-      <p className="mt-1 text-xs font-bold text-[#667269]">선택 {selectedIds.length}개</p>
+    <div className="rounded-lg border border-[#d8ded8] bg-white p-3">
+      <div className="flex w-full flex-col gap-3 md:flex-row md:items-center">
+        <button
+          className="h-[52px] w-full rounded-lg border border-[#cfd8d1] bg-white px-4 text-sm font-black text-[#16211d] md:w-[160px] md:shrink-0"
+          type="button"
+          disabled={!totalVisible}
+          onClick={onToggleAll}
+        >
+          {allSelected ? "전체선택 해제" : "사진 전체선택"}
+        </button>
+        <button
+          className="flex h-[52px] w-full flex-1 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-4 text-sm font-black text-[#16211d] disabled:opacity-60"
+          type="button"
+          disabled={running}
+          onClick={archiveSelected}
+        >
+          <img
+            alt=""
+            className="h-7 w-7 object-contain"
+            src="https://lh3.googleusercontent.com/iUtpcjJMoUoGHlpGCgDUUYHJmhImEmzXpZVGyf79KJnrmN5gCRiPvo1qsUhK12Eqr5E9JkPvjREKhtY4N7bj8oW2jLsRn0ItaULQ=e365-pa-nu-rw-w2499"
+          />
+          {running ? "Drive 업로드 중" : "Google Drive 업로드"}
+          <span className="ml-2 text-xs text-[#667269]">선택 {selectedIds.length}개</span>
+        </button>
+      </div>
       {result ? (
         <p className="mt-2 text-sm font-bold text-[#667269]">
           전체 {result.total}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개
         </p>
       ) : null}
-      {error ? <p className="mt-2 text-sm font-bold text-red-700">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs font-bold text-red-700">{error}</p> : null}
     </div>
   );
 }
