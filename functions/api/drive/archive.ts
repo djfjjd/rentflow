@@ -3,9 +3,8 @@ import { ensureColumns, noStoreHeaders, safeText } from "../_d1-utils";
 type Env = {
   DB: any;
   RENTFLOW_UPLOADS?: any;
-  GOOGLE_CLIENT_EMAIL?: string;
-  GOOGLE_PRIVATE_KEY?: string;
-  GOOGLE_DRIVE_ROOT_FOLDER_ID?: string;
+  GOOGLE_DRIVE_FOLDER_ID?: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
 };
 
 type UploadRow = {
@@ -27,7 +26,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     if (!env.DB || !env.RENTFLOW_UPLOADS) {
       return Response.json({ error: "DB or R2 is not configured" }, { status: 500, headers: noStoreHeaders() });
     }
-    if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY) {
+    const serviceAccount = parseServiceAccount(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    if (!serviceAccount) {
       return Response.json({ error: "Google Drive credentials are not configured" }, { status: 500, headers: noStoreHeaders() });
     }
 
@@ -47,8 +47,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       WHERE id IN (${placeholders})
     `).bind(...fileIds).all();
     const rows = (results || []) as UploadRow[];
-    const token = await getGoogleAccessToken(env);
-    const rootFolderId = await resolveRootFolder(token, env.GOOGLE_DRIVE_ROOT_FOLDER_ID);
+    const token = await getGoogleAccessToken(serviceAccount);
+    const rootFolderId = await resolveRootFolder(token, env.GOOGLE_DRIVE_FOLDER_ID);
 
     let uploaded = 0;
     let skipped = 0;
@@ -128,16 +128,35 @@ async function updateArchiveRow(env: Env, id: number, driveFileId: string, drive
   `).bind(driveFileId, driveUrl, status, id).run();
 }
 
-async function getGoogleAccessToken(env: Env) {
+type GoogleServiceAccount = {
+  client_email: string;
+  private_key: string;
+};
+
+function parseServiceAccount(value?: string): GoogleServiceAccount | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<GoogleServiceAccount>;
+    if (!parsed.client_email || !parsed.private_key) return null;
+    return {
+      client_email: parsed.client_email,
+      private_key: parsed.private_key,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getGoogleAccessToken(serviceAccount: GoogleServiceAccount) {
   const now = Math.floor(Date.now() / 1000);
   const claim = {
-    iss: env.GOOGLE_CLIENT_EMAIL,
+    iss: serviceAccount.client_email,
     scope: DRIVE_SCOPE,
     aud: "https://oauth2.googleapis.com/token",
     exp: now + 3600,
     iat: now,
   };
-  const assertion = await signJwt(claim, env.GOOGLE_PRIVATE_KEY || "");
+  const assertion = await signJwt(claim, serviceAccount.private_key);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
