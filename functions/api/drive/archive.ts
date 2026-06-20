@@ -30,6 +30,10 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     if (!serviceAccount) {
       return Response.json({ error: "Google Drive credentials are not configured" }, { status: 500, headers: noStoreHeaders() });
     }
+    const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
+    if (!rootFolderId) {
+      return Response.json({ error: "GOOGLE_DRIVE_FOLDER_ID is not configured" }, { status: 500, headers: noStoreHeaders() });
+    }
 
     await ensureArchiveSchema(env);
     const body = await request.json() as { fileIds?: unknown[] };
@@ -48,7 +52,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     `).bind(...fileIds).all();
     const rows = (results || []) as UploadRow[];
     const token = await getGoogleAccessToken(serviceAccount);
-    const rootFolderId = await resolveRootFolder(token, env.GOOGLE_DRIVE_FOLDER_ID);
 
     let uploaded = 0;
     let skipped = 0;
@@ -62,14 +65,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         const object = r2Key ? await env.RENTFLOW_UPLOADS.get(r2Key) : null;
         if (!object) throw new Error("R2 object not found");
 
-        const uploadedAt = parseDate(row.uploaded_at || row.created_at);
-        const month = `${uploadedAt.getUTCFullYear()}-${String(uploadedAt.getUTCMonth() + 1).padStart(2, "0")}`;
-        const vehicleNumber = safePathSegment(row.vehicle_number || "차량번호없음");
-        const archiveRoot = await ensureDriveFolder(token, rootFolderId, "장기보관");
-        const monthFolder = await ensureDriveFolder(token, archiveRoot, month);
-        const vehicleFolder = await ensureDriveFolder(token, monthFolder, vehicleNumber);
         const fileName = safeText(row.file_name) || `file-${row.id}`;
-        const existing = await findDriveFile(token, vehicleFolder, fileName);
+        const existing = await findDriveFile(token, rootFolderId, fileName);
 
         if (existing) {
           await updateArchiveRow(env, row.id, existing.id, driveViewUrl(existing.id), "archived");
@@ -79,7 +76,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         }
 
         const bytes = await object.arrayBuffer();
-        const driveFile = await uploadDriveFile(token, vehicleFolder, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
+        const driveFile = await uploadDriveFile(token, rootFolderId, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
         await updateArchiveRow(env, row.id, driveFile.id, driveViewUrl(driveFile.id), "archived");
         uploaded += 1;
         itemResults.push({ id: row.id, fileName, status: "uploaded", driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
@@ -174,35 +171,6 @@ async function getGoogleAccessToken(serviceAccount: GoogleServiceAccount) {
   return data.access_token;
 }
 
-async function resolveRootFolder(token: string, configuredRoot?: string) {
-  if (configuredRoot) return configuredRoot;
-  return ensureDriveFolder(token, "root", "RentFlow");
-}
-
-async function ensureDriveFolder(token: string, parentId: string, name: string) {
-  const existing = await findDriveFolder(token, parentId, name);
-  if (existing) return existing.id;
-  const response = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name,
-      mimeType: FOLDER_MIME,
-      parents: [parentId],
-    }),
-  });
-  const data = await response.json() as { id?: string; error?: { message?: string } };
-  if (!response.ok || !data.id) throw new Error(data.error?.message || `Drive folder create failed: ${response.status}`);
-  return data.id;
-}
-
-async function findDriveFolder(token: string, parentId: string, name: string) {
-  return findDriveItem(token, parentId, name, `mimeType='${FOLDER_MIME}'`);
-}
-
 async function findDriveFile(token: string, parentId: string, name: string) {
   return findDriveItem(token, parentId, name, `mimeType!='${FOLDER_MIME}'`);
 }
@@ -218,6 +186,8 @@ async function findDriveItem(token: string, parentId: string, name: string, mime
   url.searchParams.set("q", query);
   url.searchParams.set("fields", "files(id,name,webViewLink)");
   url.searchParams.set("pageSize", "1");
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("includeItemsFromAllDrives", "true");
   const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
   const data = await response.json() as { files?: { id: string; name: string; webViewLink?: string }[]; error?: { message?: string } };
   if (!response.ok) throw new Error(data.error?.message || `Drive search failed: ${response.status}`);
@@ -228,7 +198,11 @@ async function uploadDriveFile(token: string, parentId: string, name: string, by
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify({ name, parents: [parentId] })], { type: "application/json" }));
   form.append("file", new Blob([bytes], { type: mimeType || "application/octet-stream" }), name);
-  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+  const url = new URL("https://www.googleapis.com/upload/drive/v3/files");
+  url.searchParams.set("uploadType", "multipart");
+  url.searchParams.set("fields", "id,webViewLink");
+  url.searchParams.set("supportsAllDrives", "true");
+  const response = await fetch(url.toString(), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -273,17 +247,8 @@ function base64UrlEncode(value: string | ArrayBuffer) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function parseDate(value?: string) {
-  const parsed = value ? new Date(value) : new Date();
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-}
-
 function driveViewUrl(fileId: string) {
   return `https://drive.google.com/file/d/${fileId}/view`;
-}
-
-function safePathSegment(value: string) {
-  return safeText(value).replace(/[\\/:*?"<>|]/g, "-") || "미지정";
 }
 
 function escapeDriveQuery(value: string) {
