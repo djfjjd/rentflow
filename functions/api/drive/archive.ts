@@ -14,6 +14,8 @@ type UploadRow = {
   vehicle_number?: string;
   mime_type?: string;
   file_type?: string;
+  record_type?: string;
+  record_id?: string;
   uploaded_at?: string;
   created_at?: string;
 };
@@ -46,12 +48,13 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
     const placeholders = fileIds.map(() => "?").join(", ");
     const { results } = await env.DB.prepare(`
-      SELECT id, file_name, r2_key, vehicle_number, mime_type, file_type, uploaded_at, created_at
+      SELECT id, file_name, r2_key, vehicle_number, mime_type, file_type, record_type, record_id, uploaded_at, created_at
       FROM uploaded_files
       WHERE id IN (${placeholders})
     `).bind(...fileIds).all();
     const rows = (results || []) as UploadRow[];
     const token = await getGoogleAccessToken(serviceAccount);
+    const archiveFolderId = await ensureDriveFolder(token, rootFolderId, "장기보관");
 
     let uploaded = 0;
     let skipped = 0;
@@ -60,32 +63,34 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
     for (const row of rows) {
       await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("archiving", row.id).run();
+      let targetFolderId = "";
       try {
         const r2Key = safeText(row.r2_key);
         const object = r2Key ? await env.RENTFLOW_UPLOADS.get(r2Key) : null;
         if (!object) throw new Error("R2 object not found");
 
+        targetFolderId = await ensureDriveFolder(token, archiveFolderId, buildTargetFolderName(row));
         const fileName = safeText(row.file_name) || `file-${row.id}`;
-        const existing = await findDriveFile(token, rootFolderId, fileName);
+        const existing = await findDriveFile(token, targetFolderId, fileName);
 
         if (existing) {
           await updateArchiveRow(env, row.id, existing.id, driveViewUrl(existing.id), "archived");
           skipped += 1;
-          itemResults.push({ id: row.id, fileName, status: "skipped", driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
+          itemResults.push({ id: row.id, fileName, status: "skipped", folderId: targetFolderId, driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
           continue;
         }
 
         const bytes = await object.arrayBuffer();
-        const driveFile = await uploadDriveFile(token, rootFolderId, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
+        const driveFile = await uploadDriveFile(token, targetFolderId, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
         await updateArchiveRow(env, row.id, driveFile.id, driveViewUrl(driveFile.id), "archived");
         uploaded += 1;
-        itemResults.push({ id: row.id, fileName, status: "uploaded", driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
+        itemResults.push({ id: row.id, fileName, status: "uploaded", folderId: targetFolderId, driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failed += 1;
         await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("failed", row.id).run();
-        console.error("drive archive item failed", { id: row.id, fileName: row.file_name, error: message });
-        itemResults.push({ id: row.id, fileName: row.file_name, status: "failed", error: message });
+        console.error("drive archive item failed", { id: row.id, fileName: row.file_name, folderId: targetFolderId || null, error: message });
+        itemResults.push({ id: row.id, fileName: row.file_name, status: "failed", folderId: targetFolderId || null, error: message });
       }
     }
 
@@ -171,6 +176,33 @@ async function getGoogleAccessToken(serviceAccount: GoogleServiceAccount) {
   return data.access_token;
 }
 
+async function ensureDriveFolder(token: string, parentId: string, name: string) {
+  const existing = await findDriveFolder(token, parentId, name);
+  if (existing) return existing.id;
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  url.searchParams.set("fields", "id,name,webViewLink");
+  url.searchParams.set("supportsAllDrives", "true");
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      mimeType: FOLDER_MIME,
+      parents: [parentId],
+    }),
+  });
+  const data = await response.json() as { id?: string; error?: { message?: string } };
+  if (!response.ok || !data.id) throw new Error(data.error?.message || `Drive folder create failed: ${response.status}`);
+  return data.id;
+}
+
+async function findDriveFolder(token: string, parentId: string, name: string) {
+  return findDriveItem(token, parentId, name, `mimeType='${FOLDER_MIME}'`);
+}
+
 async function findDriveFile(token: string, parentId: string, name: string) {
   return findDriveItem(token, parentId, name, `mimeType!='${FOLDER_MIME}'`);
 }
@@ -249,6 +281,28 @@ function base64UrlEncode(value: string | ArrayBuffer) {
 
 function driveViewUrl(fileId: string) {
   return `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+function buildTargetFolderName(row: UploadRow) {
+  const vehicleNumber = safePathSegment(row.vehicle_number || "차량번호없음");
+  const typeLabel = safePathSegment(recordTypeLabel(row.record_type) || "기타");
+  const recordId = safePathSegment(row.record_id || "");
+  return recordId ? `${vehicleNumber}_${typeLabel}_${recordId}` : `${vehicleNumber}_${typeLabel}`;
+}
+
+function recordTypeLabel(value?: string) {
+  const normalized = safeText(value).toLowerCase();
+  if (normalized === "dispatch") return "배차";
+  if (normalized === "return") return "회차";
+  if (normalized === "reservation") return "예약";
+  if (normalized === "accident") return "사고";
+  if (normalized === "maintenance") return "정비";
+  if (normalized === "lost_item") return "분실물";
+  return safeText(value);
+}
+
+function safePathSegment(value: string) {
+  return safeText(value).replace(/[\\/:*?"<>|]/g, "-").trim() || "미지정";
 }
 
 function escapeDriveQuery(value: string) {
