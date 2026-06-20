@@ -92,6 +92,37 @@ export async function onRequestDelete({ request, env }: { request: Request; env:
   }
 }
 
+export async function onRequestPut({ request, env }: { request: Request; env: Env }) {
+  try {
+    const db = getDb(env);
+    await ensureRepairShopSchema(db);
+    const url = new URL(request.url);
+    const id = safeText(url.searchParams.get("id")).trim();
+    if (!id) return Response.json({ error: "id is required" }, { status: 400, headers: noStoreHeaders() });
+
+    const body = await request.json() as RepairShopPayload;
+    const name = safeText(body.name).trim();
+    const address = safeText(body.address).trim();
+    if (!name || !address) return Response.json({ error: "name and address are required" }, { status: 400, headers: noStoreHeaders() });
+
+    const current = await db.prepare("SELECT address, lat, lng FROM repair_shops WHERE id = ?").bind(id).first();
+    if (!current) return Response.json({ error: "repair shop not found" }, { status: 404, headers: noStoreHeaders() });
+    const addressChanged = safeText(current.address).trim() !== address;
+
+    await db.prepare(
+      `UPDATE repair_shops
+       SET name = ?, address = ?, lat = ?, lng = ?
+       WHERE id = ?`
+    ).bind(name, address, addressChanged ? null : current.lat ?? null, addressChanged ? null : current.lng ?? null, id).run();
+
+    return Response.json({ ok: true, id, name, address }, { headers: noStoreHeaders() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("repair shop update failed", { message });
+    return Response.json({ error: message }, { status: 500, headers: noStoreHeaders() });
+  }
+}
+
 function mapRepairShop(row: any) {
   return {
     id: row.id,

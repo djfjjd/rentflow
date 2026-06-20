@@ -2388,18 +2388,20 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
     : rows;
 
   return (
-    <section className="panel w-full overflow-hidden">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <section className="panel vehicle-board-page w-full">
+      <div className="vehicle-board-header mb-3">
         <h2 className="text-xl font-black">차량현황</h2>
-        <input
-          className="field min-h-10 w-full sm:max-w-sm"
-          placeholder="차량번호 4자리, 오더자, 수리처 검색"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className="vehicle-board-search">
+          <input
+            className="field min-h-10"
+            placeholder="차량번호 4자리, 오더자, 수리처 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
       </div>
-      <div data-horizontal-scroll="true" className="table-scroll">
-        <table className="board-table w-full min-w-[960px] text-left text-sm">
+      <div data-horizontal-scroll="true" className="vehicle-status-table-wrapper">
+        <table className="vehicle-status-table text-left text-sm">
           <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>

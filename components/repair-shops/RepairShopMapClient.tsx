@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 type RepairShop = {
   id: number;
@@ -38,7 +38,9 @@ export default function RepairShopMapClient({
   const [shops, setShops] = useState<RepairShop[]>([]);
   const [query, setQuery] = useState("");
   const [adding, setAdding] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingShop, setEditingShop] = useState<RepairShop | null>(null);
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
@@ -84,6 +86,40 @@ export default function RepairShopMapClient({
       setMessage(`저장 실패: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function refreshShops() {
+    const refreshed = await loadShops().then((result) => result.json());
+    setShops(Array.isArray(refreshed) ? refreshed.map(normalizeRepairShop) : []);
+  }
+
+  async function updateShop(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingShop) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get("name") || "").trim();
+    const address = String(data.get("address") || "").trim();
+    if (!name || !address) return;
+
+    setSavingEdit(true);
+    try {
+      const response = await fetch(`/api/repair-shops?id=${encodeURIComponent(String(editingShop.id))}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, address }),
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(await response.text());
+      await refreshShops();
+      setEditingShop(null);
+      if (selectedShopId === editingShop.id) setSelectedShopId(null);
+      showToast("수정 완료");
+    } catch {
+      showToast("수정에 실패했습니다.");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -164,8 +200,8 @@ export default function RepairShopMapClient({
           {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
         </section>
 
-        <section className="grid min-h-[640px] grid-cols-[45vw_55vw] gap-2 overflow-hidden lg:grid-cols-[minmax(420px,420px)_minmax(0,1fr)] lg:gap-4">
-          <aside className="grid max-h-[calc(100vh-260px)] min-h-[420px] w-[45vw] max-w-[45vw] gap-2 overflow-auto lg:max-h-[70vh] lg:w-auto lg:max-w-none">
+        <section className="partners-content-grid">
+          <aside className="grid max-h-[520px] min-h-[420px] min-w-0 gap-2 overflow-auto">
             {filtered.map((shop) => (
               <article
                 className={`rounded-lg border bg-white p-2 text-left shadow-sm lg:p-4 ${selectedShopId === shop.id ? "border-[#116149] ring-2 ring-[#116149]/20" : "border-[#d8ded8]"}`}
@@ -174,7 +210,21 @@ export default function RepairShopMapClient({
                   if (hasCoordinates(shop)) setSelectedShopId(shop.id);
                 }}
               >
-                <h2 className="text-sm font-black lg:text-base">{shop.name}</h2>
+                <div className="partner-card-header">
+                  <h2 className="partner-card-title text-sm lg:text-base">{shop.name}</h2>
+                  <button
+                    aria-label="거래처 수정"
+                    className="partner-edit-button"
+                    title="수정"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEditingShop(shop);
+                    }}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                </div>
                 <p className="mt-1 text-xs font-bold text-[#667269] lg:text-sm">{shop.address}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 lg:flex-nowrap lg:gap-2 lg:overflow-x-auto">
                   <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
@@ -198,8 +248,8 @@ export default function RepairShopMapClient({
             {!filtered.length ? <div className="panel text-center font-black text-[#667269]">검색 결과가 없습니다.</div> : null}
           </aside>
 
-          <div className="w-[55vw] max-w-[55vw] overflow-hidden rounded-lg border border-[#d8ded8] bg-white shadow-sm lg:w-auto lg:max-w-none">
-            <MapContainer center={center} zoom={12} scrollWheelZoom className="h-[calc(100vh-260px)] min-h-[420px] w-full lg:h-[70vh]">
+          <div className="partner-map-wrapper rounded-lg border border-[#d8ded8] bg-white shadow-sm">
+            <MapContainer center={center} zoom={12} scrollWheelZoom className="partner-map min-h-[420px] w-full">
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -232,11 +282,12 @@ export default function RepairShopMapClient({
   );
 
   const modal = showAddModal ? <RepairShopModal adding={adding} onClose={() => setShowAddModal(false)} onSubmit={addShop} /> : null;
+  const editModal = editingShop ? <RepairShopEditModal saving={savingEdit} shop={editingShop} onClose={() => setEditingShop(null)} onSubmit={updateShop} /> : null;
   if (embedded) {
-    return <section className="text-[#16211d]">{content}{modal}<Toast message={toast} /></section>;
+    return <section className="text-[#16211d]">{content}{modal}{editModal}<Toast message={toast} /></section>;
   }
 
-  return <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">{content}{modal}<Toast message={toast} /></main>;
+  return <main className="min-h-screen bg-[#f6f7f4] p-4 text-[#16211d]">{content}{modal}{editModal}<Toast message={toast} /></main>;
 }
 
 function Toast({ message }: { message: string }) {
@@ -291,6 +342,49 @@ function RepairShopModal({
           <button className="primary-btn w-full" disabled={adding} type="submit">
             {adding ? "저장 중" : "저장"}
           </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function RepairShopEditModal({
+  saving,
+  shop,
+  onClose,
+  onSubmit,
+}: {
+  saving: boolean;
+  shop: RepairShop;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4" onClick={onClose}>
+      <form
+        className="w-full rounded-t-lg bg-white p-4 shadow-2xl sm:max-w-md sm:rounded-lg"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={onSubmit}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">거래처 수정</h2>
+          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+        </div>
+        <div className="grid gap-3">
+          <label className="label">
+            상호명
+            <input className="field" name="name" defaultValue={shop.name} required />
+          </label>
+          <label className="label">
+            주소
+            <input className="field" name="address" defaultValue={shop.address} required />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="small-btn" type="button" onClick={onClose}>취소</button>
+            <button className="primary-btn" disabled={saving} type="submit">
+              {saving ? "저장 중" : "저장"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
