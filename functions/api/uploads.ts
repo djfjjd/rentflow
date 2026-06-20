@@ -3,8 +3,6 @@ import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures, isActivePhotoCa
 
 type UploadEnv = {
   DB?: any;
-  GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
-  GOOGLE_APPS_SCRIPT_TOKEN?: string;
   RENTFLOW_UPLOADS?: any; // R2Bucket
 };
 
@@ -74,35 +72,8 @@ export async function onRequestPost({ request, env }: UploadContext) {
     }
   }
 
-  // 2. Secondary Storage: Google Drive (Backup)
   let driveBackupStatus: "success" | "failed" | "none" = "none";
   let driveResult: Record<string, unknown> = {};
-
-  if (env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    try {
-      const payload = {
-        action: "upload",
-        fileName,
-        mimeType: file.type || "application/octet-stream",
-        base64: arrayBufferToBase64(await file.arrayBuffer()),
-        metadata: {
-          ...metadata,
-          fileName,
-          originalFileName: file.name,
-          uploadedAt,
-          r2Key,
-          r2Url,
-          thumbnailKey,
-          thumbnailUrl,
-        },
-      };
-      driveResult = await callAppsScript(env, payload);
-      driveBackupStatus = "success";
-    } catch (error) {
-      console.error("Google Drive Backup Failed:", error);
-      driveBackupStatus = "failed";
-    }
-  }
 
   const record = toFileRecord(r2Key, r2Url, thumbnailKey, thumbnailUrl, driveBackupStatus, driveResult, metadata);
 
@@ -183,25 +154,7 @@ export async function onRequestGet({ request, env }: UploadContext) {
     return Response.json(dedupeUploadedRows(results).map(mapUploadedFile), { headers: noStoreHeaders() });
   }
 
-  // Handle listing (from Drive if configured)
-  if (!env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    return Response.json({ files: [], fallback: true, message: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured." }, { headers: noStoreHeaders() });
-  }
-
-  const query = url.searchParams.get("query") || "";
-  try {
-    const result = await callAppsScript(env, {
-      action: "list",
-      query,
-    });
-    const files = Array.isArray(result.files) ? result.files : [];
-
-    return Response.json({
-      files: files.map((file) => toFileRecord("", "", "", "", "success", file as Record<string, unknown>, {})),
-    }, { headers: noStoreHeaders() });
-  } catch (error) {
-    return Response.json({ files: [], error: String(error) }, { headers: noStoreHeaders() });
-  }
+  return Response.json({ files: [], fallback: true, message: "Drive listing is handled by uploaded_files." }, { headers: noStoreHeaders() });
 }
 
 function mapUploadedFile(row: any) {
@@ -291,41 +244,12 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
 export async function onRequestDelete({ request, env }: UploadContext) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
-  const driveFileId = url.searchParams.get("driveFileId");
 
   if (key && env.RENTFLOW_UPLOADS) {
     await env.RENTFLOW_UPLOADS.delete(key);
   }
 
-  if (driveFileId && env.GOOGLE_APPS_SCRIPT_UPLOAD_URL) {
-    try {
-      await callAppsScript(env, {
-        action: "delete",
-        driveFileId,
-      });
-    } catch (error) {
-      console.error("Google Drive Delete Failed:", error);
-    }
-  }
-
   return Response.json({ deleted: true }, { headers: noStoreHeaders() });
-}
-
-async function callAppsScript(env: UploadEnv, payload: Record<string, unknown>) {
-  const response = await fetch(env.GOOGLE_APPS_SCRIPT_UPLOAD_URL || "", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(env.GOOGLE_APPS_SCRIPT_TOKEN ? { authorization: `Bearer ${env.GOOGLE_APPS_SCRIPT_TOKEN}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Google Apps Script request failed: ${response.status}`);
-  }
-
-  return (await response.json()) as Record<string, unknown>;
 }
 
 function toFileRecord(
@@ -379,17 +303,4 @@ function parseMetadata(value: FormDataEntryValue | null) {
   } catch {
     return {};
   }
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunkSize = 0x8000;
-
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
 }

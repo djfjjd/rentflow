@@ -3,7 +3,10 @@ import { ensureColumns, noStoreHeaders, safeText } from "../_d1-utils";
 type Env = {
   DB: any;
   RENTFLOW_UPLOADS?: any;
-  GOOGLE_APPS_SCRIPT_UPLOAD_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_DRIVE_FOLDER_ID?: string;
 };
 
 type UploadRow = {
@@ -20,26 +23,16 @@ type UploadRow = {
   created_at?: string;
 };
 
-type AppsScriptUploadResult = {
-  status?: string;
-  driveFileId?: string;
-  fileId?: string;
-  id?: string;
-  driveUrl?: string;
-  url?: string;
-  webViewLink?: string;
-  error?: string;
-  message?: string;
-};
+const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
     if (!env.DB || !env.RENTFLOW_UPLOADS) {
       return Response.json({ error: "DB or R2 is not configured" }, { status: 500, headers: noStoreHeaders() });
     }
-    const uploadUrl = safeText(env.GOOGLE_APPS_SCRIPT_UPLOAD_URL).trim();
-    if (!uploadUrl) {
-      return Response.json({ error: "GOOGLE_APPS_SCRIPT_UPLOAD_URL is not configured" }, { status: 500, headers: noStoreHeaders() });
+    const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
+    if (!rootFolderId) {
+      return Response.json({ error: "GOOGLE_DRIVE_FOLDER_ID is not configured" }, { status: 500, headers: noStoreHeaders() });
     }
 
     await ensureArchiveSchema(env);
@@ -52,6 +45,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     }
 
     const rows = await fetchUploadRowsByIds(env, fileIds);
+    const accessToken = await getGoogleAccessToken(env);
+    const archiveFolderId = await getOrCreateFolder(accessToken, rootFolderId, "장기보관");
     let uploaded = 0;
     let skipped = 0;
     let r2Missing = 0;
@@ -64,7 +59,9 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       const folderPath = `장기보관/${buildTargetFolderName(row)}`;
       const r2Keys = resolveR2Keys(row);
       let r2ObjectFound = false;
+      let caseFolderId = "";
       try {
+        caseFolderId = await getOrCreateFolder(accessToken, archiveFolderId, buildTargetFolderName(row));
         const object = await getR2Object(env, r2Keys);
         r2ObjectFound = Boolean(object);
         if (!object) {
@@ -72,32 +69,21 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           throw new Error("R2 file not found");
         }
 
-        const bytes = await object.arrayBuffer();
-        const mimeType = row.mime_type || object.httpMetadata?.contentType || "application/octet-stream";
-        const result = await uploadToAppsScript(uploadUrl, {
-          folderPath,
-          fileName,
-          mimeType,
-          base64: arrayBufferToBase64(bytes),
-        });
-        const status = safeText(result.status).toLowerCase();
-        const driveFileId = safeText(result.driveFileId || result.fileId || result.id);
-        const driveUrl = safeText(result.driveUrl || result.url || result.webViewLink);
-
-        if (status === "skipped") {
-          await updateArchiveRow(env, row.id, driveFileId, driveUrl, "archived");
+        const existing = await findDriveFile(accessToken, caseFolderId, fileName);
+        if (existing) {
+          const driveUrl = driveViewUrl(existing.id);
+          await updateArchiveRow(env, row.id, existing.id, driveUrl, "archived");
           skipped += 1;
-          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "skipped"), driveFileId, driveUrl });
+          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "skipped"), driveFileId: existing.id, driveUrl });
           continue;
         }
 
-        if (status !== "uploaded") {
-          throw new Error(result.error || result.message || `Unexpected Apps Script status: ${result.status || "empty"}`);
-        }
-
-        await updateArchiveRow(env, row.id, driveFileId, driveUrl, "archived");
+        const mimeType = row.mime_type || object.httpMetadata?.contentType || "application/octet-stream";
+        const driveFile = await uploadDriveFile(accessToken, caseFolderId, fileName, object, mimeType);
+        const driveUrl = driveViewUrl(driveFile.id);
+        await updateArchiveRow(env, row.id, driveFile.id, driveUrl, "archived");
         uploaded += 1;
-        itemResults.push({ id: row.id, fileName, status: "uploaded", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "uploaded"), driveFileId, driveUrl });
+        itemResults.push({ id: row.id, fileName, status: "uploaded", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "uploaded"), driveFileId: driveFile.id, driveUrl });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failed += 1;
@@ -183,30 +169,143 @@ async function getR2Object(env: Env, keys: string[]) {
   return null;
 }
 
-async function uploadToAppsScript(uploadUrl: string, body: { folderPath: string; fileName: string; mimeType: string; base64: string }) {
-  const response = await fetch(uploadUrl, {
+async function getGoogleAccessToken(env: Env) {
+  const clientId = safeText(env.GOOGLE_CLIENT_ID).trim();
+  const clientSecret = safeText(env.GOOGLE_CLIENT_SECRET).trim();
+  const refreshToken = safeText(env.GOOGLE_REFRESH_TOKEN).trim();
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("Google OAuth credentials are not configured");
+  }
+  const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
   });
-  const text = await response.text();
-  let data: AppsScriptUploadResult = {};
-  try {
-    data = text ? JSON.parse(text) as AppsScriptUploadResult : {};
-  } catch {
-    data = { error: text };
+  const data = await response.json() as { access_token?: string; error?: string; error_description?: string };
+  if (!response.ok || !data.access_token) {
+    throw new Error(data.error_description || data.error || `Google token failed: ${response.status}`);
   }
-  if (!response.ok) {
-    throw new Error(data.error || data.message || `Apps Script upload failed: ${response.status}`);
-  }
-  return data;
+  return data.access_token;
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+async function getOrCreateFolder(token: string, parentFolderId: string, folderName: string) {
+  const existing = await findDriveFolder(token, parentFolderId, folderName);
+  if (existing) return existing.id;
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  url.searchParams.set("fields", "id,name,webViewLink");
+  url.searchParams.set("supportsAllDrives", "true");
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: folderName,
+      mimeType: FOLDER_MIME,
+      parents: [parentFolderId],
+    }),
+  });
+  const data = await response.json() as { id?: string; error?: { message?: string } };
+  if (!response.ok || !data.id) throw new Error(data.error?.message || `Drive folder create failed: ${response.status}`);
+  return data.id;
+}
+
+async function findDriveFolder(token: string, parentId: string, name: string) {
+  return findDriveItem(token, parentId, name, `mimeType='${FOLDER_MIME}'`);
+}
+
+async function findDriveFile(token: string, parentId: string, name: string) {
+  return findDriveItem(token, parentId, name, `mimeType!='${FOLDER_MIME}'`);
+}
+
+async function findDriveItem(token: string, parentId: string, name: string, mimeQuery: string) {
+  const query = [
+    `'${escapeDriveQuery(parentId)}' in parents`,
+    `name='${escapeDriveQuery(name)}'`,
+    "trashed=false",
+    mimeQuery,
+  ].join(" and ");
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  url.searchParams.set("q", query);
+  url.searchParams.set("fields", "files(id,name,webViewLink)");
+  url.searchParams.set("pageSize", "1");
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("includeItemsFromAllDrives", "true");
+  const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  const data = await response.json() as { files?: { id: string; name: string; webViewLink?: string }[]; error?: { message?: string } };
+  if (!response.ok) throw new Error(data.error?.message || `Drive search failed: ${response.status}`);
+  return data.files?.[0] || null;
+}
+
+async function uploadDriveFile(token: string, caseFolderId: string, fileName: string, object: any, mimeType: string) {
+  if (!caseFolderId) throw new Error("Google Drive upload target folder is missing");
+  const fileSize = Number(object.size);
+  const bytes = Number.isFinite(fileSize) && fileSize >= 0 ? null : await object.arrayBuffer();
+  const contentLength = bytes ? bytes.byteLength : fileSize;
+  const safeMimeType = mimeType || "application/octet-stream";
+  const metadata = { name: fileName, parents: [caseFolderId] };
+  const initUrl = new URL("https://www.googleapis.com/upload/drive/v3/files");
+  initUrl.searchParams.set("uploadType", "resumable");
+  initUrl.searchParams.set("fields", "id,name,webViewLink");
+  initUrl.searchParams.set("supportsAllDrives", "true");
+  const initResponse = await fetch(initUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": safeMimeType,
+      "X-Upload-Content-Length": String(contentLength),
+    },
+    body: JSON.stringify(metadata),
+  });
+  if (!initResponse.ok) {
+    const reason = await readGoogleError(initResponse, `Drive upload session failed: ${initResponse.status}`);
+    throw new Error(formatDriveUploadError(fileName, caseFolderId, true, reason));
+  }
+  const uploadUrl = initResponse.headers.get("Location");
+  if (!uploadUrl) {
+    throw new Error(formatDriveUploadError(fileName, caseFolderId, true, "Drive upload session location is missing"));
+  }
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": safeMimeType,
+      "Content-Length": String(contentLength),
+    },
+    body: bytes || object.body,
+  });
+  const data = await uploadResponse.json() as { id?: string; name?: string; webViewLink?: string; error?: { message?: string } };
+  if (!uploadResponse.ok || !data.id) {
+    const reason = data.error?.message || `Drive upload failed: ${uploadResponse.status}`;
+    throw new Error(formatDriveUploadError(fileName, caseFolderId, true, reason));
+  }
+  return { id: data.id, webViewLink: data.webViewLink };
+}
+
+async function readGoogleError(response: Response, fallback: string) {
+  const text = await response.text();
+  if (!text) return fallback;
+  try {
+    const data = JSON.parse(text) as { error?: { message?: string } | string };
+    if (typeof data.error === "string") return data.error;
+    return data.error?.message || fallback;
+  } catch {
+    return text;
+  }
+}
+
+function formatDriveUploadError(fileName: string, caseFolderId: string, parentsIncluded: boolean, googleApiError: string) {
+  return `fileName=${fileName}; caseFolderIdExists=${Boolean(caseFolderId)}; parentsIncluded=${parentsIncluded}; googleApiError=${googleApiError}`;
+}
+
+function driveViewUrl(fileId: string) {
+  return `https://drive.google.com/file/d/${fileId}/view`;
 }
 
 function buildDiagnostics(folderPath: string, r2Keys: string[], r2ObjectFound: boolean, googleDriveUploadResult: string) {
@@ -254,4 +353,8 @@ function recordTypeLabel(value?: string) {
 
 function safePathSegment(value: string) {
   return safeText(value).replace(/[\\/:*?"<>|]/g, "-").trim() || "미지정";
+}
+
+function escapeDriveQuery(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
