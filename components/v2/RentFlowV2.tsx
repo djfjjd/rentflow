@@ -1302,6 +1302,8 @@ function DriveArchiveButton({
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<DriveArchiveProgress | null>(null);
   const [logs, setLogs] = useState<DriveArchiveLog[]>([]);
+  const [uploadCancelled, setUploadCancelled] = useState(false);
+  const cancelRef = useRef(false);
 
   async function archiveSelected() {
     if (!selectedIds.length) {
@@ -1310,14 +1312,17 @@ function DriveArchiveButton({
     }
     const batches = selectedBatches.map((batch) => ({ ...batch, fileIds: [...batch.fileIds] }));
     const total = batches.reduce((sum, batch) => sum + batch.fileIds.length, 0);
+    cancelRef.current = false;
     setRunning(true);
+    setUploadCancelled(false);
     setError("");
     setResult(null);
     setLogs([]);
-    setProgress({ total, processed: 0, uploaded: 0, skipped: 0, failed: 0 });
+    setProgress({ total, processed: 0, uploaded: 0, skipped: 0, failed: 0, cancelled: 0 });
     try {
-      const aggregate: DriveArchiveResult = { total, foldersReady: 0, uploaded: 0, skipped: 0, r2Missing: 0, failed: 0, results: [] };
+      const aggregate: DriveArchiveResult = { total, foldersReady: 0, uploaded: 0, skipped: 0, r2Missing: 0, failed: 0, cancelled: 0, results: [] };
       for (const batch of batches) {
+        if (cancelRef.current) break;
         const response = await fetch("/api/drive/archive", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1340,8 +1345,23 @@ function DriveArchiveButton({
           uploaded: aggregate.uploaded,
           skipped: aggregate.skipped,
           failed: aggregate.failed,
+          cancelled: cancelRef.current ? Math.max(0, total - Math.min(total, (current?.processed || 0) + (data.total || batch.fileIds.length))) : 0,
         }));
         setLogs((current) => [...batchArchiveLogs(batch.label, batchResults, data), ...current].slice(0, 5));
+      }
+      if (cancelRef.current) {
+        const processed = aggregate.uploaded + aggregate.skipped + aggregate.failed;
+        aggregate.cancelled = Math.max(0, total - processed);
+        aggregate.message = "업로드가 중지되었습니다.";
+        setUploadCancelled(true);
+        setProgress({
+          total,
+          processed,
+          uploaded: aggregate.uploaded,
+          skipped: aggregate.skipped,
+          failed: aggregate.failed,
+          cancelled: aggregate.cancelled,
+        });
       }
       setResult(aggregate);
       await onArchived();
@@ -1352,6 +1372,11 @@ function DriveArchiveButton({
     } finally {
       setRunning(false);
     }
+  }
+
+  function cancelUpload() {
+    cancelRef.current = true;
+    setUploadCancelled(true);
   }
 
   return (
@@ -1379,14 +1404,23 @@ function DriveArchiveButton({
           {running ? "Google Drive 업로드 중..." : "Google Drive 업로드"}
           <span className="ml-2 text-xs text-[#667269]">선택 {selectedIds.length}개</span>
         </button>
+        {running ? (
+          <button
+            className="h-[52px] w-full rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-black text-red-700 md:w-[140px] md:shrink-0"
+            type="button"
+            onClick={cancelUpload}
+          >
+            업로드 중지
+          </button>
+        ) : null}
       </div>
-      {progress ? <DriveArchiveProgressView progress={progress} running={running} /> : null}
+      {progress ? <DriveArchiveProgressView progress={progress} running={running} cancelled={uploadCancelled} /> : null}
       {logs.length ? <DriveArchiveLogList logs={logs} /> : null}
       {result ? (
         <div className="mt-2 grid gap-2 text-sm font-bold text-[#667269]">
-          <p className="text-green-700">Google Drive 업로드 완료</p>
+          <p className={result.cancelled ? "text-red-700" : "text-green-700"}>{result.cancelled ? "업로드가 중지되었습니다." : "Google Drive 업로드 완료"}</p>
           <p>
-            전체 {result.total}개 · 폴더 생성 완료 {result.foldersReady || 0}개 · 파일 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · R2 파일 없음 {result.r2Missing || 0}개 · 실패 {result.failed}개
+            전체 {result.total}개 · 처리 {result.total - (result.cancelled || 0)}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개 · 중지 {result.cancelled || 0}개
           </p>
           {result.message ? <p className="text-red-700">{result.message}</p> : null}
           <DriveArchiveFailureList results={result.results || []} />
@@ -1409,6 +1443,7 @@ type DriveArchiveProgress = {
   uploaded: number;
   skipped: number;
   failed: number;
+  cancelled?: number;
 };
 
 type DriveArchiveLog = {
@@ -1432,21 +1467,22 @@ type DriveArchiveResult = {
   skipped: number;
   r2Missing?: number;
   failed: number;
+  cancelled?: number;
   message?: string;
   results?: DriveArchiveResultItem[];
 };
 
-function DriveArchiveProgressView({ progress, running }: { progress: DriveArchiveProgress; running: boolean }) {
+function DriveArchiveProgressView({ progress, running, cancelled }: { progress: DriveArchiveProgress; running: boolean; cancelled: boolean }) {
   const percent = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
   return (
     <div className="mt-3 rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-3 text-sm font-bold text-[#667269]">
-      <p className="text-[#16211d]">{running ? "업로드 진행 중..." : "업로드 처리 완료"}</p>
+      <p className="text-[#16211d]">{cancelled ? "업로드가 중지되었습니다." : running ? "업로드 진행 중..." : "업로드 처리 완료"}</p>
       <p className="mt-1">{progress.processed} / {progress.total}개 처리 완료</p>
       <div className="mt-2 h-3 overflow-hidden rounded-full bg-[#e5ebe4]">
         <div className="h-full bg-[#2563eb] transition-all" style={{ width: `${percent}%` }} />
       </div>
       <p className="mt-2">
-        전체 {progress.total}개 · 처리 {progress.processed}개 · 업로드 완료 {progress.uploaded}개 · 이미 존재 {progress.skipped}개 · 실패 {progress.failed}개 · {percent}%
+        전체 {progress.total}개 · 처리 {progress.processed}개 · 업로드 완료 {progress.uploaded}개 · 이미 존재 {progress.skipped}개 · 실패 {progress.failed}개 · 중지 {progress.cancelled || 0}개 · {percent}%
       </p>
     </div>
   );
