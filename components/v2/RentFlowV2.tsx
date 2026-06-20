@@ -1285,7 +1285,7 @@ function DriveArchiveButton({
   onArchived: () => void | Promise<void>;
 }) {
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<{ total: number; uploaded: number; skipped: number; failed: number } | null>(null);
+  const [result, setResult] = useState<DriveArchiveResult | null>(null);
   const [error, setError] = useState("");
 
   async function archiveSelected() {
@@ -1301,12 +1301,16 @@ function DriveArchiveButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileIds: selectedIds }),
       });
-      const data = await response.json() as { total: number; uploaded: number; skipped: number; failed: number; error?: string };
+      const data = await response.json() as DriveArchiveResult & { error?: string };
       if (!response.ok) throw new Error(data.error || "Google Drive upload failed");
+      const failures = (data.results || []).filter((item) => item.status === "failed");
+      if (failures.length) console.error("Google Drive archive failures", failures);
       setResult(data);
       await onArchived();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      const message = caught instanceof Error ? caught.message : String(caught);
+      console.error("Google Drive archive failed", caught);
+      setError(message);
     } finally {
       setRunning(false);
     }
@@ -1339,11 +1343,46 @@ function DriveArchiveButton({
         </button>
       </div>
       {result ? (
-        <p className="mt-2 text-sm font-bold text-[#667269]">
-          전체 {result.total}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개
-        </p>
+        <div className="mt-2 grid gap-2 text-sm font-bold text-[#667269]">
+          <p>
+            전체 {result.total}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개
+          </p>
+          <DriveArchiveFailureList results={result.results || []} />
+        </div>
       ) : null}
       {error ? <p className="mt-2 text-xs font-bold text-red-700">{error}</p> : null}
+    </div>
+  );
+}
+
+type DriveArchiveResultItem = {
+  id: number;
+  fileName?: string;
+  status: "uploaded" | "skipped" | "failed" | string;
+  error?: string;
+};
+
+type DriveArchiveResult = {
+  total: number;
+  uploaded: number;
+  skipped: number;
+  failed: number;
+  results?: DriveArchiveResultItem[];
+};
+
+function DriveArchiveFailureList({ results }: { results: DriveArchiveResultItem[] }) {
+  const failures = results.filter((item) => item.status === "failed");
+  if (!failures.length) return null;
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
+      <p className="mb-1 text-sm font-black">실패 이유</p>
+      <ul className="grid gap-1">
+        {failures.map((item) => (
+          <li className="break-words" key={`${item.id}-${item.fileName || ""}`}>
+            {item.fileName ? `${item.fileName}: ` : null}{item.error || "알 수 없는 오류"}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

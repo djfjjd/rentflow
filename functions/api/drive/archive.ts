@@ -74,7 +74,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         if (existing) {
           await updateArchiveRow(env, row.id, existing.id, driveViewUrl(existing.id), "archived");
           skipped += 1;
-          itemResults.push({ id: row.id, status: "skipped", driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
+          itemResults.push({ id: row.id, fileName, status: "skipped", driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
           continue;
         }
 
@@ -82,11 +82,13 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         const driveFile = await uploadDriveFile(token, vehicleFolder, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
         await updateArchiveRow(env, row.id, driveFile.id, driveViewUrl(driveFile.id), "archived");
         uploaded += 1;
-        itemResults.push({ id: row.id, status: "uploaded", driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
+        itemResults.push({ id: row.id, fileName, status: "uploaded", driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         failed += 1;
         await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("failed", row.id).run();
-        itemResults.push({ id: row.id, status: "failed", error: error instanceof Error ? error.message : String(error) });
+        console.error("drive archive item failed", { id: row.id, fileName: row.file_name, error: message });
+        itemResults.push({ id: row.id, fileName: row.file_name, status: "failed", error: message });
       }
     }
 
