@@ -1316,7 +1316,7 @@ function DriveArchiveButton({
     setLogs([]);
     setProgress({ total, processed: 0, uploaded: 0, skipped: 0, failed: 0 });
     try {
-      const aggregate: DriveArchiveResult = { total, uploaded: 0, skipped: 0, failed: 0, results: [] };
+      const aggregate: DriveArchiveResult = { total, foldersReady: 0, uploaded: 0, skipped: 0, r2Missing: 0, failed: 0, results: [] };
       for (const batch of batches) {
         const response = await fetch("/api/drive/archive", {
           method: "POST",
@@ -1328,8 +1328,10 @@ function DriveArchiveButton({
         const batchResults = data.results || [];
         const failures = batchResults.filter((item) => item.status === "failed");
         if (failures.length) console.error("Google Drive archive failures", failures);
+        aggregate.foldersReady = (aggregate.foldersReady || 0) + (data.foldersReady || 0);
         aggregate.uploaded += data.uploaded || 0;
         aggregate.skipped += data.skipped || 0;
+        aggregate.r2Missing = (aggregate.r2Missing || 0) + (data.r2Missing || 0);
         aggregate.failed += data.failed || 0;
         aggregate.results = [...(aggregate.results || []), ...batchResults];
         setProgress((current) => ({
@@ -1384,8 +1386,9 @@ function DriveArchiveButton({
         <div className="mt-2 grid gap-2 text-sm font-bold text-[#667269]">
           <p className="text-green-700">Google Drive 업로드 완료</p>
           <p>
-            전체 {result.total}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개
+            전체 {result.total}개 · 폴더 생성 완료 {result.foldersReady || 0}개 · 파일 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · R2 파일 없음 {result.r2Missing || 0}개 · 실패 {result.failed}개
           </p>
+          {result.message ? <p className="text-red-700">{result.message}</p> : null}
           <DriveArchiveFailureList results={result.results || []} />
         </div>
       ) : null}
@@ -1424,9 +1427,12 @@ type DriveArchiveResultItem = {
 
 type DriveArchiveResult = {
   total: number;
+  foldersReady?: number;
   uploaded: number;
   skipped: number;
+  r2Missing?: number;
   failed: number;
+  message?: string;
   results?: DriveArchiveResultItem[];
 };
 

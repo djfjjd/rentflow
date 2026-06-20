@@ -10,6 +10,7 @@ type Env = {
 type UploadRow = {
   id: number;
   file_name: string;
+  r2_url?: string;
   r2_key: string;
   vehicle_number?: string;
   mime_type?: string;
@@ -50,27 +51,35 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const token = await getGoogleAccessToken(serviceAccount);
     const archiveFolderId = await getOrCreateFolder(token, rootFolderId, "장기보관");
 
+    let foldersReady = 0;
     let uploaded = 0;
     let skipped = 0;
+    let r2Missing = 0;
     let failed = 0;
     const itemResults = [];
 
     for (const row of rows) {
       await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("archiving", row.id).run();
       let caseFolderId = "";
+      const fileName = safeText(row.file_name) || `file-${row.id}`;
+      const r2Keys = resolveR2Keys(row);
+      let r2ObjectFound = false;
       try {
-        const r2Key = safeText(row.r2_key);
-        const object = r2Key ? await env.RENTFLOW_UPLOADS.get(r2Key) : null;
-        if (!object) throw new Error("R2 object not found");
-
         caseFolderId = await getOrCreateFolder(token, archiveFolderId, buildTargetFolderName(row));
-        const fileName = safeText(row.file_name) || `file-${row.id}`;
+        foldersReady += 1;
+        const object = await getR2Object(env, r2Keys);
+        r2ObjectFound = Boolean(object);
+        if (!object) {
+          r2Missing += 1;
+          throw new Error("R2 file not found");
+        }
+
         const existing = await findDriveFile(token, caseFolderId, fileName);
 
         if (existing) {
           await updateArchiveRow(env, row.id, existing.id, driveViewUrl(existing.id), "archived");
           skipped += 1;
-          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDriveDiagnostics(caseFolderId, true), driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
+          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDriveDiagnostics(caseFolderId, true, r2Keys, r2ObjectFound, "already_exists"), driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
           continue;
         }
 
@@ -78,21 +87,25 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         const driveFile = await uploadDriveFile(token, caseFolderId, fileName, bytes, row.mime_type || object.httpMetadata?.contentType || "application/octet-stream");
         await updateArchiveRow(env, row.id, driveFile.id, driveViewUrl(driveFile.id), "archived");
         uploaded += 1;
-        itemResults.push({ id: row.id, fileName, status: "uploaded", diagnostics: buildDriveDiagnostics(caseFolderId, true), driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
+        itemResults.push({ id: row.id, fileName, status: "uploaded", diagnostics: buildDriveDiagnostics(caseFolderId, true, r2Keys, r2ObjectFound, "uploaded"), driveFileId: driveFile.id, driveUrl: driveViewUrl(driveFile.id) });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failed += 1;
         await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("failed", row.id).run();
-        const fileName = safeText(row.file_name) || `file-${row.id}`;
-        const diagnostics = buildDriveDiagnostics(caseFolderId, Boolean(caseFolderId));
-        console.error("drive archive item failed", { fileName, caseFolderIdExists: diagnostics.caseFolderIdCreated, parentsIncluded: diagnostics.parentsIncluded, googleApiError: message });
-        itemResults.push({ id: row.id, fileName, status: "failed", diagnostics, error: message });
+        const reason = message === "R2 file not found" ? "r2_not_found" : "upload_failed";
+        const diagnostics = buildDriveDiagnostics(caseFolderId, Boolean(caseFolderId), r2Keys, r2ObjectFound, message);
+        console.error("drive archive item failed", { fileName, r2KeyExists: diagnostics.r2KeyExists, r2ObjectFound: diagnostics.r2ObjectFound, caseFolderIdExists: diagnostics.caseFolderIdCreated, googleDriveUploadResult: diagnostics.googleDriveUploadResult });
+        itemResults.push({ id: row.id, fileName, status: "failed", reason, diagnostics, error: message });
       }
     }
 
     const missing = fileIds.length - rows.length;
     failed += missing;
-    return Response.json({ total: fileIds.length, uploaded, skipped, failed, results: itemResults }, { headers: noStoreHeaders() });
+    for (const id of fileIds.filter((id) => !rows.some((row) => row.id === id))) {
+      itemResults.push({ id, fileName: `file-${id}`, status: "failed", reason: "db_row_not_found", error: "폴더는 생성됐지만 업로드할 파일을 찾지 못했습니다." });
+    }
+    const message = uploaded === 0 && skipped === 0 && failed > 0 ? "폴더는 생성됐지만 업로드할 파일을 찾지 못했습니다." : undefined;
+    return Response.json({ total: fileIds.length, foldersReady, uploaded, skipped, r2Missing, failed, message, results: itemResults }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("drive archive failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500, headers: noStoreHeaders() });
@@ -125,7 +138,7 @@ async function fetchUploadRowsByIds(env: Env, fileIds: number[]) {
   for (const chunk of chunkArray(fileIds, 50)) {
     const placeholders = chunk.map(() => "?").join(", ");
     const { results } = await env.DB.prepare(`
-      SELECT id, file_name, r2_key, vehicle_number, mime_type, file_type, record_type, record_id, uploaded_at, created_at
+      SELECT id, file_name, r2_url, r2_key, vehicle_number, mime_type, file_type, record_type, record_id, uploaded_at, created_at
       FROM uploaded_files
       WHERE id IN (${placeholders})
     `).bind(...chunk).all();
@@ -149,6 +162,14 @@ async function updateArchiveRow(env: Env, id: number, driveFileId: string, drive
     SET drive_file_id = ?, drive_url = ?, archived_at = CURRENT_TIMESTAMP, archive_status = ?
     WHERE id = ?
   `).bind(driveFileId, driveUrl, status, id).run();
+}
+
+async function getR2Object(env: Env, keys: string[]) {
+  for (const key of keys) {
+    const object = await env.RENTFLOW_UPLOADS?.get(key);
+    if (object) return object;
+  }
+  return null;
 }
 
 type GoogleServiceAccount = {
@@ -349,11 +370,30 @@ function driveViewUrl(fileId: string) {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
 
-function buildDriveDiagnostics(caseFolderId: string, parentsIncluded: boolean) {
+function buildDriveDiagnostics(caseFolderId: string, parentsIncluded: boolean, r2Keys: string[], r2ObjectFound: boolean, googleDriveUploadResult: string) {
   return {
+    r2KeyExists: r2Keys.length > 0,
+    r2ObjectFound,
     caseFolderIdCreated: Boolean(caseFolderId),
     parentsIncluded,
+    googleDriveUploadResult,
   };
+}
+
+function resolveR2Keys(row: UploadRow) {
+  const keys = [safeText(row.r2_key), parseR2KeyFromUrl(row.r2_url)].filter(Boolean);
+  return [...new Set(keys)];
+}
+
+function parseR2KeyFromUrl(value?: string) {
+  const text = safeText(value);
+  if (!text) return "";
+  try {
+    const url = new URL(text, "https://rentflow.local");
+    return safeText(url.searchParams.get("key"));
+  } catch {
+    return "";
+  }
 }
 
 function buildTargetFolderName(row: UploadRow) {
