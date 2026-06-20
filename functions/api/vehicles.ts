@@ -42,7 +42,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
     
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, company_type, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(vehicle.id),
       safeText(vehicle.plateNumber),
@@ -53,6 +53,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(vehicle.fuelDisplay),
       safeNumber(vehicle.mileage) || 0,
       safeNullableText(vehicle.purchaseDate),
+      safeNullableText(vehicle.companyType ?? vehicle.company_type),
       safeText(vehicle.location || "본사 주차장"),
       safeText(vehicle.status || "대기중"),
       safeNumber(vehicle.sortOrder) ?? (Number(maxSortOrder) + 1),
@@ -88,6 +89,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.fuelDisplay !== undefined) { fields.push("fuel_display = ?"); values.push(safeNullableText(updates.fuelDisplay)); }
     if (updates.mileage !== undefined) { fields.push("mileage = ?"); values.push(safeNumber(updates.mileage) || 0); }
     if (updates.purchaseDate !== undefined) { fields.push("purchase_date = ?"); values.push(safeNullableText(updates.purchaseDate)); }
+    if (updates.companyType !== undefined || updates.company_type !== undefined) { fields.push("company_type = ?"); values.push(safeNullableText(updates.companyType ?? updates.company_type)); }
     if (updates.location !== undefined) { fields.push("location = ?"); values.push(safeText(updates.location)); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (updates.damageVehicle !== undefined) { fields.push("damage_vehicle = ?"); values.push(safeText(updates.damageVehicle)); }
@@ -137,6 +139,8 @@ function mapVehicle(row: any) {
     fuelDisplay: row.fuel_display,
     mileage: row.mileage,
     purchaseDate: row.purchase_date,
+    companyType: row.company_type,
+    company_type: row.company_type,
     location: row.location,
     status: row.status,
     damageVehicle: row.damage_vehicle,
@@ -153,6 +157,7 @@ async function ensureVehicleSchema(env: Env) {
     { name: "color", definition: "TEXT" },
     { name: "fuel_display", definition: "TEXT" },
     { name: "purchase_date", definition: "TEXT" },
+    { name: "company_type", definition: "TEXT" },
     { name: "damage_vehicle", definition: "TEXT" },
     { name: "active_summary", definition: "TEXT" },
   ]);

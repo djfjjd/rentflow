@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
   fuel_display TEXT,
   mileage INTEGER NOT NULL DEFAULT 0,
   purchase_date TEXT,
+  company_type TEXT,
   location TEXT DEFAULT '본사 주차장',
   status TEXT NOT NULL DEFAULT '대기중',
   damage_vehicle TEXT,

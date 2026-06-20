@@ -6,6 +6,7 @@ export type VehicleV2 = {
   fuelType?: string;
   mileage?: number;
   purchaseDate?: string;
+  companyType?: string;
   location?: string;
   status?: string;
   fuelDisplay?: string;

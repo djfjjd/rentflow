@@ -339,7 +339,7 @@ function UnreadMessagesButton({
                   return (
                     <tr className="border-b" key={`${row.kind}-${dispatch?.id || ret?.id}`}>
                       <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
-                      <td className="font-black">{plate}</td>
+                      <td><VehicleNumberText vehicle={vehicle} value={plate} /></td>
                       <td>{row.kind}</td>
                       <td>{vehicleModelColor(vehicle)}</td>
                       <td><UnreadStatusBadge status={firstText(linkedDispatch?.dispatchType, linkedDispatch?.businessType, linkedDispatch?.status)} /></td>
@@ -477,7 +477,7 @@ export function VehicleSearchCombobox({
                   setOpen(false);
                 }}
               >
-                <span className="font-black">{vehicle.plateNumber}</span>
+                <span className={getVehicleNumberClass(vehicle.companyType)}>{vehicle.plateNumber}</span>
                 <span className="truncate text-sm text-[#68746d]">{vehicle.model}</span>
               </button>
             ))
@@ -924,7 +924,7 @@ function IncidentForm({
         <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
         <PhotoUploadButton key={`incident-upload-${resetKey}`} recordId={recordId} recordType={type === "사고" ? "accident" : "maintenance"} vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
-      <IncidentBoard accidents={accidents} maintenance={maintenance} onAccidents={onAccidents} onMaintenance={onMaintenance} />
+      <IncidentBoard accidents={accidents} maintenance={maintenance} vehicles={vehicles} onAccidents={onAccidents} onMaintenance={onMaintenance} />
     </section>
   );
 }
@@ -988,7 +988,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         </CompactRow>
         <PhotoUploadButton key={`lost-upload-${resetKey}`} recordId={recordId} recordType="lost_item" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
-      <LostItemBoard items={lostItems} onLostItems={onLostItems} />
+      <LostItemBoard items={lostItems} vehicles={vehicles} onLostItems={onLostItems} />
     </section>
   );
 }
@@ -1017,6 +1017,7 @@ type UploadProgressState = {
 
 function PhotosPage({ admin }: { admin: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleV2[]>([]);
   const [query, setQuery] = useState("");
   const [selectedFolderKey, setSelectedFolderKey] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -1024,6 +1025,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
 
   useEffect(() => {
     fetchJson<UploadedFileV2[]>("/api/uploaded-files", []).then(setFiles);
+    fetchJson<VehicleV2[]>("/api/vehicles", []).then(setVehicles);
   }, []);
 
   async function reloadUploadedFiles() {
@@ -1077,6 +1079,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
             <button className="small-btn" type="button" onClick={() => { setSelectedIndex(null); setSelectedFolderKey(null); }}>뒤로가기</button>
             <div className="min-w-0 text-right">
               <h2 className="truncate text-lg font-black">{selectedFolder.folderName}</h2>
+              {selectedFolder.vehicleNumber ? <p className="text-sm"><VehicleNumberText vehicle={findVehicle(vehicles, selectedFolder.vehicleNumber)} value={selectedFolder.vehicleNumber} /></p> : null}
               <p className="text-sm font-bold text-[#68746d]">총 {sortedFiles.length}개</p>
             </div>
           </div>
@@ -1161,7 +1164,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
                 <div className="min-w-0">
                   <p className="truncate text-base font-black">📁 {folder.folderName}</p>
                   <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
-                    <p>{folder.vehicleNumber || "차량번호 없음"} · {folder.kind}</p>
+                    <p><VehicleNumberText vehicle={findVehicle(vehicles, folder.vehicleNumber)} value={folder.vehicleNumber || "차량번호 없음"} /> · {folder.kind}</p>
                     <p>{folderFileSummary(photoCount, videoCount)}</p>
                     <p>최근 업로드 {formatDateTime(new Date(folder.newestUpload).toISOString())}</p>
                   </div>
@@ -1623,7 +1626,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           color: text(data, "color"),
           fuelType: text(data, "fuelType"),
           mileage: Number(text(data, "mileage") || 0),
-          purchaseDate: text(data, "purchaseDate"),
+          companyType: text(data, "companyType"),
           location: "",
           status: "주차구역표시",
           memo: text(data, "memo"),
@@ -1636,7 +1639,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           <Input name="color" label="색상" />
           <FuelTypeSelect />
           <Input name="mileage" label="총 키로수" type="number" />
-          <Input name="purchaseDate" label="매입일" type="date" />
+          <VehicleCompanySelect />
         </div>
         <Textarea name="memo" label="메모" />
       </DataForm>
@@ -1645,7 +1648,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b">
-              <th>드래그</th><th>차량번호</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>매입일</th><th>수정</th><th>삭제</th>
+              <th>드래그</th><th>차량번호</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>차량소속</th><th>수정</th><th>삭제</th>
             </tr>
           </thead>
           <tbody>
@@ -1668,12 +1671,12 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
                 }}
               >
                 <td><GripVertical className="cursor-grab text-[#6b756f]" size={20} /></td>
-                <td className="font-black">{vehicle.plateNumber}</td>
+                <td><VehicleNumberText vehicle={vehicle} value={vehicle.plateNumber} /></td>
                 <td>{vehicle.model}</td>
                 <td>{vehicle.color}</td>
                 <td>{vehicle.fuelType}</td>
                 <td>{vehicle.mileage?.toLocaleString()}</td>
-                <td>{vehicle.purchaseDate || "-"}</td>
+                <td>{formatVehicleCompany(vehicle.companyType)}</td>
                 <td><button className="small-btn" type="button" onClick={() => setEditing(vehicle)}>수정</button></td>
                 <td><button className="danger-btn" type="button" onClick={() => setDeleting(vehicle)}><Trash2 size={16} /> 삭제</button></td>
               </tr>
@@ -1752,7 +1755,7 @@ function DispatchAdmin({
               <tr className="border-b" key={`${row.kind}-${row.id}`}>
                 <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
                 <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
-                <TruncatedCell className="font-black" value={plate} />
+                <TruncatedCell className={getVehicleNumberClass(vehicle?.companyType)} value={plate} />
                 <TruncatedCell value={row.kind} />
                 <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
@@ -1806,7 +1809,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
             return (
               <tr className="border-b" key={item.id}>
                 <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
-                <TruncatedCell className="font-black" value={clean(item.rentalCarNumber)} />
+                <TruncatedCell className={getVehicleNumberClass(vehicle?.companyType)} value={clean(item.rentalCarNumber)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
                 <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
@@ -1857,7 +1860,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
             return (
               <tr className="border-b" key={item.id}>
                 <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
-                <td className="font-black">{clean(item.rentalCarNumber)}</td>
+                <td><VehicleNumberText vehicle={vehicle} value={clean(item.rentalCarNumber)} /></td>
                 <td>회차</td>
                 <td>{vehicleModelColor(vehicle)}</td>
                 <td>{clean(String(item.mileage || ""))}</td>
@@ -1973,11 +1976,13 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
 function IncidentBoard({
   accidents,
   maintenance,
+  vehicles,
   onAccidents,
   onMaintenance,
 }: {
   accidents: IncidentRecordV2[];
   maintenance: IncidentRecordV2[];
+  vehicles: VehicleV2[];
   onAccidents: ReloadHandler<IncidentRecordV2>;
   onMaintenance: ReloadHandler<IncidentRecordV2>;
 }) {
@@ -1999,7 +2004,8 @@ function IncidentBoard({
         <tbody>{paginate(rows, page).map((row) => {
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
-          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td className="font-black">{clean(row.item.plateNumber)}</td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType={row.type === "사고" ? "accident" : "maintenance"} vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
+          const plate = clean(row.item.plateNumber);
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={!!row.item.isCompleted} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType={row.type === "사고" ? "accident" : "maintenance"} vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -2007,7 +2013,7 @@ function IncidentBoard({
   );
 }
 
-function LostItemBoard({ items, onLostItems }: { items: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
+function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; vehicles: VehicleV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
   const [page, setPage] = useState(1);
   const rows = [...items].sort((a, b) => new Date(b.foundDate || b.createdAt || 0).getTime() - new Date(a.foundDate || a.createdAt || 0).getTime());
   async function toggle(id: string, checked: boolean) {
@@ -2019,7 +2025,10 @@ function LostItemBoard({ items, onLostItems }: { items: LostItemV2[]; onLostItem
       <h2 className="mb-3 text-xl font-black">분실물 현황판</h2>
       <table className="w-full min-w-[720px] text-left text-sm">
         <thead><tr className="border-b"><th>해결</th><th>차량번호</th><th>고객명</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
-        <tbody>{paginate(rows, page).map((item) => <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td className="font-black">{clean(item.vehicleNumber)}</td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lost_item" vehicleNumber={item.vehicleNumber || ""} /></td></tr>)}</tbody>
+        <tbody>{paginate(rows, page).map((item) => {
+          const plate = clean(item.vehicleNumber);
+          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={!!item.isCompleted} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(item.customerName)}</td><td>{clean(item.memo)}</td><td>{clean(item.foundDate)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lost_item" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
+        })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
     </section>
@@ -2357,6 +2366,7 @@ function StatusBoard({ labels }: { labels: string[] }) {
 type VehicleDashboardRow = {
   key: string;
   vehicleNumber: string;
+  companyType?: string;
   model: string;
   statusLabel: string;
   dispatchDate: string;
@@ -2367,24 +2377,44 @@ type VehicleDashboardRow = {
 };
 
 function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredRows = normalizedQuery
+    ? rows.filter((row) => {
+      const vehicleNumber = row.vehicleNumber || "";
+      const haystack = `${vehicleNumber} ${vehicleNumber.slice(-4)} ${row.ordererRepairShop}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    })
+    : rows;
+
   return (
-    <section data-horizontal-scroll="true" className="panel overflow-x-auto">
-      <h2 className="mb-3 text-xl font-black">차량현황</h2>
-      <table className="w-full min-w-[960px] text-left text-sm">
-        <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
-        <tbody>{rows.map((row) => (
-          <tr className="border-b" key={row.key}>
-            <td className="font-black">{row.vehicleNumber}</td>
-            <td>{row.model}</td>
-            <td><StatusPill status={row.statusLabel} /></td>
-            <td className="whitespace-nowrap">{row.dispatchDate}</td>
-            <td>{row.fuelLevelText || "-"}</td>
-            <td>{row.customerCarModel || "-"}</td>
-            <td>{row.ordererRepairShop || "-"}</td>
-            <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
-          </tr>
-        ))}</tbody>
-      </table>
+    <section className="panel w-full overflow-hidden">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-black">차량현황</h2>
+        <input
+          className="field min-h-10 w-full sm:max-w-sm"
+          placeholder="차량번호 4자리, 오더자, 수리처 검색"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+      <div data-horizontal-scroll="true" className="table-scroll">
+        <table className="board-table w-full min-w-[960px] text-left text-sm">
+          <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
+          <tbody>{filteredRows.map((row) => (
+            <tr className="border-b" key={row.key}>
+              <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
+              <td>{row.model}</td>
+              <td><StatusPill status={row.statusLabel} /></td>
+              <td className="whitespace-nowrap">{row.dispatchDate}</td>
+              <td>{row.fuelLevelText || "-"}</td>
+              <td>{row.customerCarModel || "-"}</td>
+              <td>{row.ordererRepairShop || "-"}</td>
+              <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -2409,7 +2439,7 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
             color: text(data, "color"),
             fuelType: text(data, "fuelType"),
             mileage: Number(text(data, "mileage") || 0),
-            purchaseDate: text(data, "purchaseDate"),
+            companyType: text(data, "companyType"),
             memo: text(data, "memo"),
           };
           try {
@@ -2435,7 +2465,7 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
           <Input name="color" label="색상" defaultValue={vehicle.color} />
           <FuelTypeSelect defaultValue={vehicle.fuelType} />
           <Input name="mileage" label="총 키로수" type="number" defaultValue={vehicle.mileage} />
-          <Input name="purchaseDate" label="매입일" type="date" defaultValue={vehicle.purchaseDate} />
+          <VehicleCompanySelect defaultValue={vehicle.companyType} />
         </div>
         <Textarea name="memo" label="메모" defaultValue={vehicle.memo} />
         {error ? <p className="my-2 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p> : null}
@@ -2450,7 +2480,7 @@ function ConfirmDelete({ vehicle, onCancel, onDeleted }: { vehicle: VehicleV2; o
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
       <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-2xl">
         <h2 className="text-xl font-black">정말 삭제하시겠습니까?</h2>
-        <p className="mt-2 text-sm font-bold text-[#68746d]">{vehicle.plateNumber} · {vehicle.model}</p>
+        <p className="mt-2 text-sm font-bold text-[#68746d]"><VehicleNumberText vehicle={vehicle} value={vehicle.plateNumber} /> · {vehicle.model}</p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button className="small-btn" type="button" onClick={onCancel}>취소</button>
           <button
@@ -2475,6 +2505,19 @@ function FuelTypeSelect({ defaultValue }: { defaultValue?: string }) {
       유종
       <select className="field min-h-12" name="fuelType" defaultValue={defaultValue || fuelTypes[0]}>
         {fuelTypes.map((type) => <option key={type}>{type}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function VehicleCompanySelect({ defaultValue }: { defaultValue?: string }) {
+  return (
+    <label className="label">
+      차량소속
+      <select className="field min-h-12" name="companyType" defaultValue={normalizeVehicleCompany(defaultValue)}>
+        <option value="">선택</option>
+        <option value="lotte">롯데</option>
+        <option value="lime">라임</option>
       </select>
     </label>
   );
@@ -3344,6 +3387,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       return {
         key: vehicle.id,
         vehicleNumber,
+        companyType: vehicle.companyType,
         model: vehicle.model,
         statusLabel: "주차구역표시",
         dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
@@ -3359,6 +3403,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       return {
         key: vehicle.id,
         vehicleNumber,
+        companyType: vehicle.companyType,
         model: vehicle.model,
         statusLabel,
         dispatchDate: formatMonthDay(latestDispatch.date || latestDispatch.createdAt),
@@ -3374,6 +3419,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
     return {
       key: vehicle.id,
       vehicleNumber,
+      companyType: vehicle.companyType,
       model: vehicle.model,
       statusLabel: "주차구역표시",
       dispatchDate: "",
@@ -3457,6 +3503,31 @@ function clean(value: unknown) {
 
 function findVehicle(vehicles: VehicleV2[], plate: string) {
   return vehicles.find((vehicle) => vehicle.plateNumber === plate);
+}
+
+function VehicleNumberText({ value, vehicle, companyType }: { value: string; vehicle?: VehicleV2; companyType?: string }) {
+  return <span className={getVehicleNumberClass(companyType || vehicle?.companyType)}>{value || "-"}</span>;
+}
+
+function getVehicleNumberClass(companyType?: string) {
+  const normalized = normalizeVehicleCompany(companyType);
+  if (normalized === "lotte") return "text-red-600 font-bold";
+  if (normalized === "lime") return "text-green-700 font-bold";
+  return "font-bold";
+}
+
+function normalizeVehicleCompany(value?: string) {
+  const normalized = clean(value).trim().toLowerCase();
+  if (normalized === "lotte" || normalized === "롯데") return "lotte";
+  if (normalized === "lime" || normalized === "라임") return "lime";
+  return "";
+}
+
+function formatVehicleCompany(value?: string) {
+  const normalized = normalizeVehicleCompany(value);
+  if (normalized === "lotte") return "롯데";
+  if (normalized === "lime") return "라임";
+  return "-";
 }
 
 function vehicleModelColor(vehicle?: VehicleV2) {
