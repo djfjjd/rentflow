@@ -70,7 +70,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         if (existing) {
           await updateArchiveRow(env, row.id, existing.id, driveViewUrl(existing.id), "archived");
           skipped += 1;
-          itemResults.push({ id: row.id, fileName, status: "skipped", diagnostics: buildDriveDiagnostics(caseFolderId, true), driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
+          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDriveDiagnostics(caseFolderId, true), driveFileId: existing.id, driveUrl: driveViewUrl(existing.id) });
           continue;
         }
 
