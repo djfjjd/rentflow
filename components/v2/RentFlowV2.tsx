@@ -1312,21 +1312,55 @@ function DriveArchiveButton({
   const [progress, setProgress] = useState<DriveArchiveProgress | null>(null);
   const [logs, setLogs] = useState<DriveArchiveLog[]>([]);
   const [uploadCancelled, setUploadCancelled] = useState(false);
+  const [uploadingDots, setUploadingDots] = useState(".");
+  const [failureListOpen, setFailureListOpen] = useState(false);
   const cancelRef = useRef(false);
+
+  useEffect(() => {
+    if (!running) {
+      setUploadingDots(".");
+      return;
+    }
+    const dots = [".", "..", "..."];
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index = (index + 1) % dots.length;
+      setUploadingDots(dots[index]);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [running]);
 
   async function archiveSelected() {
     if (!selectedIds.length) {
       setError("선택된 파일이 없습니다.");
       return;
     }
-    const batches = selectedBatches.map((batch) => ({ ...batch, fileIds: [...batch.fileIds] }));
-    const total = batches.reduce((sum, batch) => sum + batch.fileIds.length, 0);
+    const batches = buildDriveArchiveRequestBatches(selectedBatches);
+    await runArchiveBatches(batches, selectedIds.length);
+  }
+
+  async function retryFailures() {
+    const failedIds = (result?.results || [])
+      .filter((item) => item.status === "failed")
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!failedIds.length) return;
+    const batches = chunkArray(failedIds, DRIVE_ARCHIVE_BATCH_SIZE).map((fileIds, index) => ({
+      key: `retry-${index}`,
+      label: `실패 파일 재시도 ${index + 1}`,
+      fileIds,
+    }));
+    await runArchiveBatches(batches, failedIds.length);
+  }
+
+  async function runArchiveBatches(batches: DriveArchiveBatch[], total: number) {
     cancelRef.current = false;
     setRunning(true);
     setUploadCancelled(false);
     setError("");
     setResult(null);
     setLogs([]);
+    setFailureListOpen(false);
     setProgress({ total, processed: 0, uploaded: 0, skipped: 0, failed: 0, cancelled: 0 });
     try {
       const aggregate: DriveArchiveResult = { total, foldersReady: 0, uploaded: 0, skipped: 0, r2Missing: 0, failed: 0, cancelled: 0, results: [] };
@@ -1337,7 +1371,7 @@ function DriveArchiveButton({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileIds: batch.fileIds }),
         });
-        const data = await response.json() as DriveArchiveResult & { error?: string };
+        const data = await readJsonResponse<DriveArchiveResult & { error?: string }>(response);
         if (!response.ok) throw new Error(data.error || "Google Drive upload failed");
         const batchResults = data.results || [];
         const failures = batchResults.filter((item) => item.status === "failed");
@@ -1357,6 +1391,7 @@ function DriveArchiveButton({
           cancelled: cancelRef.current ? Math.max(0, total - Math.min(total, (current?.processed || 0) + (data.total || batch.fileIds.length))) : 0,
         }));
         setLogs((current) => [...batchArchiveLogs(batch.label, batchResults, data), ...current].slice(0, 5));
+        await wait(500);
       }
       if (cancelRef.current) {
         const processed = aggregate.uploaded + aggregate.skipped + aggregate.failed;
@@ -1400,7 +1435,7 @@ function DriveArchiveButton({
           {allSelected ? "전체선택 해제" : "사진 전체선택"}
         </button>
         <button
-          className="flex h-[52px] w-full flex-1 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-4 text-sm font-black text-[#16211d] disabled:opacity-60"
+          className="flex h-[52px] w-full flex-1 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-4 text-sm font-black text-[#16211d] disabled:opacity-70"
           type="button"
           disabled={running}
           onClick={archiveSelected}
@@ -1410,7 +1445,7 @@ function DriveArchiveButton({
             className="h-7 w-7 object-contain"
             src="https://www.gstatic.com/images/branding/productlogos/drive_2026/v1/web-48dp/logo_drive_2026_color_2x_web_48dp.png"
           />
-          {running ? "Google Drive 업로드 중..." : "Google Drive 업로드"}
+          {running ? `Google Drive 업로드 중${uploadingDots}` : "Google Drive 업로드"}
           <span className="ml-2 text-xs text-[#667269]">선택 {selectedIds.length}개</span>
         </button>
         {running ? (
@@ -1431,8 +1466,20 @@ function DriveArchiveButton({
           <p>
             전체 {result.total}개 · 처리 {result.total - (result.cancelled || 0)}개 · 업로드 완료 {result.uploaded}개 · 이미 존재 {result.skipped}개 · 실패 {result.failed}개 · 중지 {result.cancelled || 0}개
           </p>
+          <p>성공률 {archiveSuccessRate(result)}%</p>
+          <div className="flex flex-wrap gap-2">
+            {result.failed > 0 ? (
+              <>
+                <button className="small-btn" type="button" onClick={() => setFailureListOpen(true)}>실패 파일 보기</button>
+                <button className="small-btn" type="button" disabled={running} onClick={retryFailures}>실패 파일만 재시도</button>
+              </>
+            ) : null}
+            {firstDriveUrl(result) ? (
+              <a className="small-btn" href={firstDriveUrl(result)} rel="noreferrer" target="_blank">Drive 열기</a>
+            ) : null}
+          </div>
           {result.message ? <p className="text-red-700">{result.message}</p> : null}
-          <DriveArchiveFailureList results={result.results || []} />
+          <DriveArchiveFailureList expanded={failureListOpen} onExpandedChange={setFailureListOpen} results={result.results || []} />
         </div>
       ) : null}
       {error ? <p className="mt-2 text-xs font-bold text-red-700">{error}</p> : null}
@@ -1467,6 +1514,7 @@ type DriveArchiveResultItem = {
   status: "uploaded" | "skipped" | "failed" | string;
   reason?: string;
   error?: string;
+  driveUrl?: string;
 };
 
 type DriveArchiveResult = {
@@ -1481,14 +1529,16 @@ type DriveArchiveResult = {
   results?: DriveArchiveResultItem[];
 };
 
+const DRIVE_ARCHIVE_BATCH_SIZE = 5;
+
 function DriveArchiveProgressView({ progress, running, cancelled }: { progress: DriveArchiveProgress; running: boolean; cancelled: boolean }) {
   const percent = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
   return (
     <div className="mt-3 rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-3 text-sm font-bold text-[#667269]">
-      <p className="text-[#16211d]">{cancelled ? "업로드가 중지되었습니다." : running ? "업로드 진행 중..." : "업로드 처리 완료"}</p>
+      <p className="text-[#16211d]">{cancelled ? "업로드가 중지되었습니다." : running ? "처리 중..." : "업로드 처리 완료"}</p>
       <p className="mt-1">{progress.processed} / {progress.total}개 처리 완료</p>
       <div className="mt-2 h-3 overflow-hidden rounded-full bg-[#e5ebe4]">
-        <div className="h-full bg-[#2563eb] transition-all" style={{ width: `${percent}%` }} />
+        <div className={`upload-progress-bar-fill h-full bg-[#2563eb] ${running && !cancelled ? "is-running" : ""}`} style={{ width: `${percent}%` }} />
       </div>
       <p className="mt-2">
         전체 {progress.total}개 · 처리 {progress.processed}개 · 업로드 완료 {progress.uploaded}개 · 이미 존재 {progress.skipped}개 · 실패 {progress.failed}개 · 중지 {progress.cancelled || 0}개 · {percent}%
@@ -1498,16 +1548,25 @@ function DriveArchiveProgressView({ progress, running, cancelled }: { progress: 
 }
 
 function DriveArchiveLogList({ logs }: { logs: DriveArchiveLog[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleLogs = expanded ? logs : logs.slice(0, 3);
   return (
-    <div className="mt-3 rounded-lg border border-[#e1e6df] bg-white p-3 text-xs font-bold text-[#667269]">
+    <div className="log-card mt-3 rounded-lg border border-[#e1e6df] bg-white p-3 text-xs font-bold text-[#667269]">
       <p className="mb-2 text-sm font-black text-[#16211d]">최근 처리 로그</p>
-      <ul className="grid gap-1">
-        {logs.map((log) => (
+      <ul className={`log-content grid gap-1 ${expanded ? "expanded" : "collapsed"}`}>
+        {visibleLogs.map((log) => (
           <li className={log.status === "failed" ? "text-red-700" : log.status === "skipped" ? "text-[#667269]" : "text-green-700"} key={log.key}>
             {log.text}
           </li>
         ))}
       </ul>
+      {logs.length > 3 ? (
+        <div className="log-toggle-wrap">
+          <button className="log-toggle-button" type="button" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? "로그 접기" : "로그 펼치기"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1530,21 +1589,86 @@ function batchArchiveLogs(label: string, results: DriveArchiveResultItem[], data
   return [{ key: `${label}-skipped-${Date.now()}`, status: "skipped" as const, text: `${label} 이미 존재, 건너뜀 ${data.skipped}개` }];
 }
 
-function DriveArchiveFailureList({ results }: { results: DriveArchiveResultItem[] }) {
+function DriveArchiveFailureList({
+  results,
+  expanded,
+  onExpandedChange,
+}: {
+  results: DriveArchiveResultItem[];
+  expanded: boolean;
+  onExpandedChange: (value: boolean) => void;
+}) {
   const failures = results.filter((item) => item.status === "failed");
   if (!failures.length) return null;
+  const visibleFailures = expanded ? failures : failures.slice(0, 3);
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
+    <div className="log-card rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
       <p className="mb-1 text-sm font-black">실패 이유</p>
-      <ul className="grid gap-1">
-        {failures.map((item) => (
+      <ul className={`log-content grid gap-1 ${expanded ? "expanded" : "collapsed"}`}>
+        {visibleFailures.map((item) => (
           <li className="break-words" key={`${item.id}-${item.fileName || ""}`}>
             {item.fileName ? `${item.fileName}: ` : null}{item.error || "알 수 없는 오류"}
           </li>
         ))}
       </ul>
+      {failures.length > 3 ? (
+        <div className="log-toggle-wrap">
+          <button className="log-toggle-button" type="button" onClick={() => onExpandedChange(!expanded)}>
+            {expanded ? "실패 이유 접기" : "실패 이유 펼치기"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function buildDriveArchiveRequestBatches(selectedBatches: DriveArchiveBatch[]) {
+  const batches: DriveArchiveBatch[] = [];
+  for (const batch of selectedBatches) {
+    for (const [index, fileIds] of chunkArray(batch.fileIds, DRIVE_ARCHIVE_BATCH_SIZE).entries()) {
+      batches.push({
+        key: `${batch.key}-${index}`,
+        label: index ? `${batch.label} ${index + 1}` : batch.label,
+        fileIds,
+      });
+    }
+  }
+  return batches;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function readJsonResponse<T>(response: Response): Promise<T & { error?: string }> {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (!contentType.includes("application/json")) {
+    return { error: `서버가 JSON이 아닌 응답을 반환했습니다: ${text.slice(0, 120) || response.status}` } as T & { error?: string };
+  }
+  try {
+    return JSON.parse(text) as T & { error?: string };
+  } catch {
+    return { error: `서버 응답 JSON 파싱에 실패했습니다: ${text.slice(0, 120) || response.status}` } as T & { error?: string };
+  }
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function archiveSuccessRate(result: DriveArchiveResult) {
+  const processed = result.uploaded + result.skipped + result.failed;
+  if (!processed) return 0;
+  return Math.round(((result.uploaded + result.skipped) / processed) * 100);
+}
+
+function firstDriveUrl(result: DriveArchiveResult) {
+  return (result.results || []).find((item) => item.driveUrl)?.driveUrl || "";
 }
 
 function addFileToPhotoFolder(folders: Map<string, PhotoArchiveFolder>, key: string, file: UploadedFileV2) {

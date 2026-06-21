@@ -25,6 +25,7 @@ type UploadRow = {
 };
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
+const MAX_FILES_PER_REQUEST = 5;
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
@@ -43,6 +44,9 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       : [];
     if (!fileIds.length) {
       return Response.json({ total: 0, uploaded: 0, skipped: 0, failed: 0, results: [] }, { headers: noStoreHeaders() });
+    }
+    if (fileIds.length > MAX_FILES_PER_REQUEST) {
+      return Response.json({ error: "한 번에 최대 5개까지만 업로드 가능합니다." }, { status: 400, headers: noStoreHeaders() });
     }
 
     const rows = await fetchUploadRowsByIds(env, fileIds);
@@ -210,7 +214,7 @@ async function getGoogleAccessToken(env: Env) {
       grant_type: "refresh_token",
     }),
   });
-  const data = await response.json() as { access_token?: string; error?: string; error_description?: string };
+  const data = await readGoogleJson(response, "Google token failed") as { access_token?: string; error?: string; error_description?: string };
   if (!response.ok || !data.access_token) {
     throw new Error(data.error_description || data.error || `Google token failed: ${response.status}`);
   }
@@ -235,7 +239,7 @@ async function getOrCreateFolder(token: string, parentFolderId: string, folderNa
       parents: [parentFolderId],
     }),
   });
-  const data = await response.json() as { id?: string; error?: { message?: string } };
+  const data = await readGoogleJson(response, "Drive folder create failed") as { id?: string; error?: { message?: string } };
   if (!response.ok || !data.id) throw new Error(data.error?.message || `Drive folder create failed: ${response.status}`);
   return data.id;
 }
@@ -262,7 +266,7 @@ async function findDriveItem(token: string, parentId: string, name: string, mime
   url.searchParams.set("supportsAllDrives", "true");
   url.searchParams.set("includeItemsFromAllDrives", "true");
   const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
-  const data = await response.json() as { files?: { id: string; name: string; webViewLink?: string }[]; error?: { message?: string } };
+  const data = await readGoogleJson(response, "Drive search failed") as { files?: { id: string; name: string; webViewLink?: string }[]; error?: { message?: string } };
   if (!response.ok) throw new Error(data.error?.message || `Drive search failed: ${response.status}`);
   return data.files?.[0] || null;
 }
@@ -304,12 +308,25 @@ async function uploadDriveFile(token: string, caseFolderId: string, fileName: st
     },
     body: bytes || object.body,
   });
-  const data = await uploadResponse.json() as { id?: string; name?: string; webViewLink?: string; error?: { message?: string } };
+  const data = await readGoogleJson(uploadResponse, "Drive upload failed") as { id?: string; name?: string; webViewLink?: string; error?: { message?: string } };
   if (!uploadResponse.ok || !data.id) {
     const reason = data.error?.message || `Drive upload failed: ${uploadResponse.status}`;
     throw new Error(formatDriveUploadError(fileName, caseFolderId, true, reason));
   }
   return { id: data.id, webViewLink: data.webViewLink };
+}
+
+async function readGoogleJson(response: Response, label: string) {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (!contentType.includes("application/json")) {
+    throw new Error(`${label}: Drive API returned non-JSON response: ${text.slice(0, 120) || response.status}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${label}: Drive API JSON parse failed: ${text.slice(0, 120) || response.status}`);
+  }
 }
 
 async function readGoogleError(response: Response, fallback: string) {

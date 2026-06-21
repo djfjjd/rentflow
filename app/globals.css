@@ -212,6 +212,59 @@ select {
   transform: scale(0.95);
 }
 
+.upload-progress-bar-fill {
+  transition: width 0.3s ease;
+}
+
+.upload-progress-bar-fill.is-running {
+  animation: uploadPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes uploadPulse {
+  0% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.65;
+  }
+}
+
+.log-card {
+  position: relative;
+}
+
+.log-content {
+  transition: max-height 0.2s ease;
+}
+
+.log-content.collapsed {
+  max-height: 96px;
+  overflow: hidden;
+}
+
+.log-content.expanded {
+  max-height: none;
+}
+
+.log-toggle-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.log-toggle-button {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 @media (max-width: 768px) {
   .dispatch-page,
   .return-page,
