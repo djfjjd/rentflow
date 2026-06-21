@@ -196,18 +196,12 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
   return (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
-      <div className={`mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 ${pageClassName}`}>
-        <header className="rentflow-header sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="header-top">
-            <Link href={isAdmin ? "/admin" : "/app"} className="header-left flex min-h-12 items-center gap-2 font-black">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
-                <Home size={20} />
-              </span>
-              <span className="block leading-tight">
-                <span className="block text-base font-black sm:inline sm:text-lg">{isAdmin ? "사무실용 관리자" : "배회차톡"}</span>
-                {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
-              </span>
-            </Link>
+      <header className="app-header sticky top-0 z-30 bg-[#f6f7f4]/95 py-3 backdrop-blur">
+        <div className="app-header-inner">
+          <div className="header-top-row">
+            <div className="header-left">
+              <HeaderLogo isAdmin={isAdmin} />
+            </div>
             <div className="header-center">
               <UnreadMessagesButton
                 dispatches={dispatches}
@@ -219,9 +213,28 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
               />
             </div>
-            <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
+            <div className="header-right">
+              <QuickMenu />
+              <div className="desktop-calendar-button">
+                <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
+              </div>
+            </div>
           </div>
-        </header>
+          <div className="mobile-header-second-row">
+            <UnreadMessagesButton
+              dispatches={dispatches}
+              returns={returns}
+              vehicles={vehicles}
+              onDispatches={reloadDispatches}
+              onReturns={reloadReturns}
+              open={activeOverlay === "unread"}
+              onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
+            />
+            <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
+          </div>
+        </div>
+      </header>
+      <div className={`app-main-inner flex flex-col gap-4 py-4 ${pageClassName}`}>
 
         {isAdmin ? <AdminNav /> : null}
 
@@ -250,31 +263,32 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   );
 }
 
-function QuickMenu({
-  reservations,
-  calendarOpen,
-  onCalendarOpenChange,
-}: {
-  reservations: ReservationV2[];
-  calendarOpen: boolean;
-  onCalendarOpenChange: (open: boolean) => void;
-}) {
+function HeaderLogo({ isAdmin }: { isAdmin: boolean }) {
   return (
-    <nav className="header-actions relative z-20 flex flex-col items-end gap-2">
-      <div className="flex max-w-full flex-nowrap items-center justify-end gap-2">
-        <PushPermissionButton />
-        <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
-          <Camera size={17} />
-          <span className="hidden sm:inline">사진촬영본</span>
-        </Link>
-        <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
-          <MapPin size={17} />
-          <span className="hidden sm:inline">거래처주소</span>
-        </Link>
-      </div>
-      <div className="mobile-message-row header-calendar-row">
-        <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
-      </div>
+    <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 min-w-0 items-center gap-2 font-black">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#116149] text-white">
+        <Home size={20} />
+      </span>
+      <span className="block min-w-0 leading-tight">
+        <span className="block text-base font-black sm:inline sm:text-lg">{isAdmin ? "사무실용 관리자" : "배회차톡"}</span>
+        {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
+      </span>
+    </Link>
+  );
+}
+
+function QuickMenu() {
+  return (
+    <nav className="flex max-w-full flex-nowrap items-center justify-end gap-2">
+      <PushPermissionButton />
+      <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
+        <Camera size={17} />
+        <span className="hidden sm:inline">사진촬영본</span>
+      </Link>
+      <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
+        <MapPin size={17} />
+        <span className="hidden sm:inline">거래처주소</span>
+      </Link>
     </nav>
   );
 }
@@ -503,7 +517,7 @@ export function VehicleSearchCombobox({
 
 function HomeScreen() {
   return (
-    <section className="mx-auto w-full max-w-2xl space-y-3">
+    <section className="home-container space-y-3">
       <div className="grid grid-cols-2 gap-3">
         {appActions.slice(0, 2).map((item) => (
           <ActionButton item={item} key={item.href} />

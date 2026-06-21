@@ -61,49 +61,53 @@ select {
   font-size: 16px;
 }
 
-.rentflow-header,
-.header-top,
-.header-actions,
-.mobile-message-row {
+.app-header {
   width: 100%;
-  max-width: 100%;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.app-header-inner,
+.app-main-inner,
+.home-container {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 
-.header-top {
+.header-top-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
+  width: 100%;
+  gap: 12px;
 }
 
 .header-left {
   justify-self: start;
-  min-width: 0;
 }
 
 .header-center {
   justify-self: center;
 }
 
-.header-actions {
+.header-right {
   justify-self: end;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
-  min-width: 0;
 }
 
-.mobile-message-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+.mobile-header-second-row {
+  display: none;
 }
 
-.rentflow-header button,
-.rentflow-header a {
+.desktop-calendar-button {
+  display: block;
+}
+
+.app-header button,
+.app-header a {
   white-space: nowrap;
 }
 
@@ -354,48 +358,38 @@ select {
 }
 
 @media (max-width: 768px) {
-  .rentflow-header {
-    padding: 16px;
+  .app-header-inner,
+  .app-main-inner,
+  .home-container {
+    max-width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
-  .header-top {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 12px;
-  }
-
-  .header-left {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .header-actions {
-    display: contents;
-  }
-
-  .header-actions > div:first-child {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-    display: flex;
-    gap: 6px;
+  .header-top-row {
+    grid-template-columns: 1fr auto;
   }
 
   .header-center {
-    grid-column: 1;
-    grid-row: 2;
+    display: none;
+  }
+
+  .header-right {
     justify-self: end;
-    align-self: center;
+    gap: 6px;
   }
 
-  .header-calendar-row {
-    grid-column: 2;
-    grid-row: 2;
-    justify-self: start;
-    align-self: center;
-  }
-
-  .mobile-message-row {
+  .mobile-header-second-row {
+    display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    width: 100%;
+  }
+
+  .desktop-calendar-button {
+    display: none;
   }
 
   .header-icon-button {
