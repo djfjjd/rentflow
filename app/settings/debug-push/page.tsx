@@ -7,8 +7,10 @@ type PushDebugState = {
   serviceWorker: string;
   subscription: string;
   vapid: string;
+  dbSubscriptionCount: string;
   lastSubscribedAt: string;
   lastPushResult: string;
+  lastError: string;
 };
 
 const initialState: PushDebugState = {
@@ -16,8 +18,10 @@ const initialState: PushDebugState = {
   serviceWorker: "확인 중",
   subscription: "확인 중",
   vapid: "확인 중",
+  dbSubscriptionCount: "확인 중",
   lastSubscribedAt: "-",
   lastPushResult: "-",
+  lastError: "-",
 };
 
 export default function DebugPushPage() {
@@ -34,16 +38,20 @@ export default function DebugPushPage() {
       serviceWorker: "serviceWorker" in navigator ? "지원" : "미지원",
       subscription: "확인 중",
       vapid: "확인 중",
+      dbSubscriptionCount: "확인 중",
       lastSubscribedAt: window.localStorage.getItem("rentflow:lastPushSubscribedAt") || "-",
       lastPushResult: window.localStorage.getItem("rentflow:lastPushResult") || "-",
+      lastError: window.localStorage.getItem("rentflow:lastPushError") || "-",
     };
 
     try {
       const response = await fetch("/api/push/subscribe", { cache: "no-store" });
-      const data = await response.json() as { publicKey?: string };
+      const data = await response.json() as { publicKey?: string; subscriptionCount?: number; vapidConfigured?: boolean };
       next.vapid = data.publicKey ? "설정됨" : "VAPID_PUBLIC_KEY 없음";
+      next.dbSubscriptionCount = `${data.subscriptionCount || 0}개`;
     } catch {
       next.vapid = "확인 실패";
+      next.dbSubscriptionCount = "확인 실패";
     }
 
     try {
@@ -51,6 +59,11 @@ export default function DebugPushPage() {
       next.serviceWorker = registration ? "등록됨" : next.serviceWorker;
       const subscription = await registration?.pushManager?.getSubscription();
       next.subscription = subscription ? "구독됨" : "구독 없음";
+      if (next.permission === "granted" && !subscription) {
+        setState(next);
+        await resubscribe({ silent: true });
+        return;
+      }
     } catch {
       next.serviceWorker = "등록 실패";
       next.subscription = "확인 실패";
@@ -69,8 +82,8 @@ export default function DebugPushPage() {
     await refreshState();
   }
 
-  async function resubscribe() {
-    setStatus("푸시 재구독 중");
+  async function resubscribe(options?: { silent?: boolean; deleteExisting?: boolean }) {
+    setStatus(options?.silent ? "구독 없음 감지, 자동 재구독 중" : "푸시 재구독 중");
     try {
       const permission = "Notification" in window ? Notification.permission : "denied";
       if (permission !== "granted") {
@@ -84,6 +97,13 @@ export default function DebugPushPage() {
       }
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
+      if (existing && options?.deleteExisting) {
+        await fetch("/api/push/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        });
+      }
       if (existing) await existing.unsubscribe();
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -99,9 +119,12 @@ export default function DebugPushPage() {
       const now = new Date().toLocaleString("ko-KR");
       window.localStorage.setItem("rentflow:lastPushSubscribedAt", now);
       setStatus("푸시 재구독 완료");
+      window.localStorage.removeItem("rentflow:lastPushError");
       await refreshState();
     } catch (error) {
-      setStatus(`푸시 재구독 실패: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      window.localStorage.setItem("rentflow:lastPushError", message);
+      setStatus(`푸시 재구독 실패: ${message}`);
     }
   }
 
@@ -126,6 +149,7 @@ export default function DebugPushPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       window.localStorage.setItem("rentflow:lastPushResult", message);
+      window.localStorage.setItem("rentflow:lastPushError", message);
       setStatus(`테스트 알림 실패: ${message}`);
       await refreshState();
     }
@@ -144,16 +168,19 @@ export default function DebugPushPage() {
         <div className="panel grid gap-2 text-sm font-bold text-[#25342e]">
           <DebugRow label="알림 권한 상태" value={state.permission} />
           <DebugRow label="서비스워커 등록 여부" value={state.serviceWorker} />
-          <DebugRow label="푸시 구독 여부" value={state.subscription} />
-          <DebugRow label="VAPID_PUBLIC_KEY" value={state.vapid} />
+          <DebugRow label="현재 Push Subscription 존재 여부" value={state.subscription} />
+          <DebugRow label="DB 저장된 Subscription 수" value={state.dbSubscriptionCount} />
+          <DebugRow label="VAPID 설정 여부" value={state.vapid} />
           <DebugRow label="마지막 구독 시간" value={state.lastSubscribedAt} />
           <DebugRow label="마지막 푸시 결과" value={state.lastPushResult} />
+          <DebugRow label="마지막 오류 메시지" value={state.lastError} />
         </div>
 
-        <div className="panel grid gap-2 sm:grid-cols-3">
+        <div className="panel grid gap-2 sm:grid-cols-4">
           <button className="small-btn" type="button" onClick={requestPermission}>알림 권한 요청</button>
-          <button className="small-btn" type="button" onClick={resubscribe}>푸시 재구독</button>
+          <button className="small-btn" type="button" onClick={() => resubscribe()}>푸시 재구독</button>
           <button className="small-btn" type="button" onClick={sendTestPush}>테스트 알림 보내기</button>
+          <button className="small-btn" type="button" onClick={() => resubscribe({ deleteExisting: true })}>기존 구독 삭제 후 재등록</button>
         </div>
 
         {status ? <p className="rounded-lg border border-[#d8ded8] bg-white p-3 text-sm font-black text-[#116149]">{status}</p> : null}

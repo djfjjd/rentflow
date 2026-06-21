@@ -184,10 +184,13 @@ async function sendJobPushIfTerminal(env: Env & PushEnv, summary: Awaited<Return
       ? "일부 파일 업로드 실패"
       : "Google Drive 업로드 완료";
   const body = summary.status === "cancelled"
-    ? "사용자가 업로드를 중지했습니다."
-    : `전체 ${summary.totalCount}개 · 완료 ${summary.uploadedCount}개 · 이미 존재 ${summary.skippedCount}개 · 실패 ${summary.failedCount}개`;
+    ? "업로드 작업이 사용자에 의해 중지되었습니다."
+    : summary.failedCount > 0
+      ? "실패 파일이 존재합니다. 실패 로그를 확인해주세요."
+      : `전체 ${summary.totalCount}개 중 업로드 완료 ${summary.uploadedCount}개, 이미 존재 ${summary.skippedCount}개, 실패 ${summary.failedCount}개`;
   try {
-    await sendPushNotification(env, { title, body, url: "/photos", tag: summary.failedCount > 0 ? "drive-upload-failed" : "drive-upload-complete" });
+    const tag = summary.status === "cancelled" ? "drive-upload-cancelled" : summary.failedCount > 0 ? "drive-upload-failed" : "drive-upload-complete";
+    await sendPushNotification(env, { title, body, url: "/photos", tag });
   } catch (error) {
     console.error("drive upload job push failed", { jobId: summary.id, error: error instanceof Error ? error.message : String(error) });
   }

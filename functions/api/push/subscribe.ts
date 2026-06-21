@@ -7,8 +7,18 @@ type Env = {
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
+  let subscriptionCount = 0;
+  try {
+    await ensurePushSchema(env);
+    const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM push_subscriptions").first() as { count?: number } | null;
+    subscriptionCount = Number(row?.count || 0);
+  } catch (error) {
+    console.error("push subscription count failed", { error: error instanceof Error ? error.message : String(error) });
+  }
   return Response.json({
     publicKey: env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
+    vapidConfigured: Boolean(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+    subscriptionCount,
   });
 }
 
@@ -40,6 +50,20 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     return Response.json({ ok: true, id });
   } catch (error) {
     console.error("push subscribe failed", { error: error instanceof Error ? error.message : String(error) });
+    return Response.json({ error: String(error) }, { status: 500 });
+  }
+}
+
+export async function onRequestDelete({ request, env }: { request: Request; env: Env }) {
+  try {
+    await ensurePushSchema(env);
+    const body = await request.json().catch(() => ({})) as { endpoint?: string };
+    const endpoint = safeText(body.endpoint);
+    if (!endpoint) return Response.json({ error: "endpoint is required" }, { status: 400 });
+    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(endpoint).run();
+    return Response.json({ ok: true });
+  } catch (error) {
+    console.error("push unsubscribe failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }

@@ -452,7 +452,7 @@ function parseR2KeyFromUrl(value?: string) {
 function buildTargetFolderName(row: UploadRow) {
   const vehicleNumber = safePathSegment(row.vehicle_number || "차량번호없음");
   const typeLabel = safePathSegment(recordTypeLabel(row.record_type) || "기타");
-  return `${vehicleNumber}_${typeLabel}_${driveDateString(row)}`;
+  return `${driveDateString(row)}_${vehicleNumber}_${typeLabel}`;
 }
 
 function driveMonthFolderName(row: UploadRow) {

@@ -1610,8 +1610,10 @@ function DriveArchiveProgressView({ progress, running, cancelled, dots }: { prog
     <div className="mt-3 rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-3 text-sm font-bold text-[#667269]">
       <h3 className="text-sm font-black text-[#16211d]">{cancelled ? "업로드 중지됨" : running ? `처리 중${dots}` : "업로드 처리 완료"}</h3>
       {running ? (
-        <p className="mt-1 text-xs font-bold text-[#6b7280]">
-          업로드 중에는 이 화면을 닫거나 다른 앱으로 이동하지 마세요. 현재 업로드는 브라우저에서 실행되며 백그라운드 업로드는 추후 지원 예정입니다.
+        <p className="notice-text font-bold">
+          안전한 업로드를 위해 가능한 현재 화면을 유지해주세요.<br />
+          다른 화면으로 이동해도 일부 업로드는 계속 진행될 수 있지만, 브라우저 또는 기기 환경에 따라 업로드가 일시 중단될 수 있습니다.<br />
+          대량 업로드 시에는 현재 화면을 유지하는 것을 권장합니다.
         </p>
       ) : null}
       <p className="mt-1">{progress.processed} / {progress.total}개 처리 완료</p>
@@ -2314,8 +2316,8 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
   return (
     <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
-      <div data-horizontal-scroll="true" className="return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[1080px] text-left text-sm">
+      <div data-horizontal-scroll="true" className="return-board-wrapper return-table-wrapper return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <table className="return-table w-full min-w-[1200px] text-left text-sm">
           <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
@@ -2330,9 +2332,9 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
                 <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
                 <td>{clean(item.notes)}</td>
                 <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
-                <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
-                <td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
-                <td><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+                <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} label="사진추가" /></td>
+                <td><button className="small-btn edit-button" type="button" onClick={() => setEditing(item)}>수정</button></td>
+                <td><button className="danger-btn delete-button" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
               </tr>
             );
           })}</tbody>

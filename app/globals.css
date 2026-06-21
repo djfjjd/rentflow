@@ -183,6 +183,8 @@ select {
 
 .dispatch-table-wrap,
 .return-table-wrap,
+.return-table-wrapper,
+.return-board-wrapper,
 .schedule-table-wrap,
 .reservation-table-wrap {
   width: 100%;
@@ -190,6 +192,39 @@ select {
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+}
+
+.return-table {
+  min-width: 1200px;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+.return-table th,
+.return-table td {
+  white-space: nowrap;
+  word-break: keep-all;
+  vertical-align: middle;
+}
+
+.return-table button,
+.return-table a {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.return-table .action-button,
+.return-table .photo-button,
+.return-table .edit-button,
+.return-table .delete-button,
+.return-table .small-btn,
+.return-table .danger-btn {
+  min-width: 64px;
+  white-space: nowrap;
+  word-break: keep-all;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .call-button {
@@ -265,6 +300,13 @@ select {
   cursor: pointer;
 }
 
+.notice-text {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
 @media (max-width: 768px) {
   .dispatch-page,
   .return-page,
@@ -300,7 +342,9 @@ select {
   .schedule-table-wrap,
   .reservation-table-wrap,
   .dispatch-table-wrap,
-  .return-table-wrap {
+  .return-table-wrap,
+  .return-table-wrapper,
+  .return-board-wrapper {
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
@@ -312,6 +356,14 @@ select {
   .dispatch-table-wrap table,
   .return-table-wrap table {
     min-width: 680px;
+  }
+
+  .return-table {
+    min-width: 1200px;
+  }
+
+  .notice-text {
+    font-size: 11px;
   }
 
   .partners-content-grid {

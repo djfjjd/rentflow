@@ -86,13 +86,13 @@ self.addEventListener("push", (event) => {
 function defaultNotificationUrl(tag) {
   if (String(tag).startsWith("drive-upload")) return "/photos";
   if (String(tag).startsWith("reservation")) return "/app/reservation";
-  if (String(tag).includes("dispatch")) return "/app/dispatch";
+  if (String(tag).includes("dispatch") || String(tag).startsWith("return")) return "/app/dispatch";
   return "/app";
 }
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/app";
+  const url = event.notification.data?.url || "/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
