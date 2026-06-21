@@ -1314,6 +1314,7 @@ function DriveArchiveButton({
   const [uploadCancelled, setUploadCancelled] = useState(false);
   const [uploadingDots, setUploadingDots] = useState(".");
   const [failureListOpen, setFailureListOpen] = useState(false);
+  const [pushNotice, setPushNotice] = useState("");
   const cancelRef = useRef(false);
 
   useEffect(() => {
@@ -1358,6 +1359,7 @@ function DriveArchiveButton({
     setRunning(true);
     setUploadCancelled(false);
     setError("");
+    setPushNotice("");
     setResult(null);
     setLogs([]);
     setFailureListOpen(false);
@@ -1408,6 +1410,7 @@ function DriveArchiveButton({
         });
       }
       setResult(aggregate);
+      await notifyDriveArchiveResult(aggregate, setPushNotice);
       await onArchived();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
@@ -1445,7 +1448,7 @@ function DriveArchiveButton({
             className="h-7 w-7 object-contain"
             src="https://www.gstatic.com/images/branding/productlogos/drive_2026/v1/web-48dp/logo_drive_2026_color_2x_web_48dp.png"
           />
-          {running ? `Google Drive 업로드 중${uploadingDots}` : "Google Drive 업로드"}
+          {running ? "Google Drive 업로드 중..." : "Google Drive 업로드"}
           <span className="ml-2 text-xs text-[#667269]">선택 {selectedIds.length}개</span>
         </button>
         {running ? (
@@ -1458,7 +1461,7 @@ function DriveArchiveButton({
           </button>
         ) : null}
       </div>
-      {progress ? <DriveArchiveProgressView progress={progress} running={running} cancelled={uploadCancelled} /> : null}
+      {progress ? <DriveArchiveProgressView dots={uploadingDots} progress={progress} running={running} cancelled={uploadCancelled} /> : null}
       {logs.length ? <DriveArchiveLogList logs={logs} /> : null}
       {result ? (
         <div className="mt-2 grid gap-2 text-sm font-bold text-[#667269]">
@@ -1482,6 +1485,7 @@ function DriveArchiveButton({
           <DriveArchiveFailureList expanded={failureListOpen} onExpandedChange={setFailureListOpen} results={result.results || []} />
         </div>
       ) : null}
+      {pushNotice ? <p className="mt-2 text-xs font-bold text-amber-700">{pushNotice}</p> : null}
       {error ? <p className="mt-2 text-xs font-bold text-red-700">{error}</p> : null}
     </div>
   );
@@ -1531,11 +1535,16 @@ type DriveArchiveResult = {
 
 const DRIVE_ARCHIVE_BATCH_SIZE = 5;
 
-function DriveArchiveProgressView({ progress, running, cancelled }: { progress: DriveArchiveProgress; running: boolean; cancelled: boolean }) {
+function DriveArchiveProgressView({ progress, running, cancelled, dots }: { progress: DriveArchiveProgress; running: boolean; cancelled: boolean; dots: string }) {
   const percent = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
   return (
     <div className="mt-3 rounded-lg border border-[#e1e6df] bg-[#f8faf7] p-3 text-sm font-bold text-[#667269]">
-      <p className="text-[#16211d]">{cancelled ? "업로드가 중지되었습니다." : running ? "처리 중..." : "업로드 처리 완료"}</p>
+      <h3 className="text-sm font-black text-[#16211d]">{cancelled ? "업로드 중지됨" : running ? `처리 중${dots}` : "업로드 처리 완료"}</h3>
+      {running ? (
+        <p className="mt-1 text-xs font-bold text-[#6b7280]">
+          업로드 중에는 이 화면을 닫거나 다른 앱으로 이동하지 마세요. 현재 업로드는 브라우저에서 실행되며 백그라운드 업로드는 추후 지원 예정입니다.
+        </p>
+      ) : null}
       <p className="mt-1">{progress.processed} / {progress.total}개 처리 완료</p>
       <div className="mt-2 h-3 overflow-hidden rounded-full bg-[#e5ebe4]">
         <div className={`upload-progress-bar-fill h-full bg-[#2563eb] ${running && !cancelled ? "is-running" : ""}`} style={{ width: `${percent}%` }} />
@@ -3014,9 +3023,54 @@ function DataForm({
 
 async function notifyWorkflow(message: { title: string; body: string; url: string }) {
   try {
+    await sendPushNotification(message);
+  } catch {
+    // 저장 자체는 성공한 상태이므로 푸시 실패는 화면 흐름을 막지 않는다.
+  }
+}
+
+async function sendPushNotification(message: { title: string; body: string; url?: string; tag?: string; data?: Record<string, unknown> }) {
+  try {
     await sendJson("/api/push/send", message);
   } catch (error) {
     console.error("push send request failed", error);
+    throw error;
+  }
+}
+
+async function notifyDriveArchiveResult(result: DriveArchiveResult, setPushNotice: (message: string) => void) {
+  const processed = result.total - (result.cancelled || 0);
+  const body = result.cancelled
+    ? `처리 ${processed}개 / 전체 ${result.total}개\n업로드 완료 ${result.uploaded}개\n이미 존재 ${result.skipped}개\n실패 ${result.failed}개`
+    : result.failed > 0
+      ? `전체 ${result.total}개 중\n실패 ${result.failed}개 발생`
+      : `전체 ${result.total}개\n완료 ${result.uploaded}개\n이미 존재 ${result.skipped}개\n실패 ${result.failed}개`;
+  const title = result.cancelled
+    ? "Google Drive 업로드 중지"
+    : result.failed > 0
+      ? "일부 파일 업로드 실패"
+      : "Google Drive 업로드 완료";
+  const tag = result.cancelled
+    ? "drive-upload-cancelled"
+    : result.failed > 0
+      ? "drive-upload-failed"
+      : "drive-upload-complete";
+  try {
+    await sendPushNotification({
+      title,
+      body: result.cancelled ? "사용자가 업로드를 중지했습니다." : body,
+      url: "/photos",
+      tag,
+      data: {
+        total: result.total,
+        uploaded: result.uploaded,
+        skipped: result.skipped,
+        failed: result.failed,
+        cancelled: result.cancelled || 0,
+      },
+    });
+  } catch {
+    setPushNotice("Google Drive 업로드는 완료됐지만 푸시알림 발송은 실패했습니다.");
   }
 }
 

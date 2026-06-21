@@ -27,6 +27,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       title: safeText(body.title || "RentFlow 알림"),
       body: safeText(body.body),
       url: safeText(body.url || "/app"),
+      tag: safeText(body.tag),
+      data: body.data && typeof body.data === "object" ? body.data : {},
     });
 
     let sent = 0;

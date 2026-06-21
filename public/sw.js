@@ -70,15 +70,25 @@ self.addEventListener("push", (event) => {
     data = { title: "RentFlow 알림", body: event.data ? event.data.text() : "", url: "/app" };
   }
   const title = data.title || "RentFlow 알림";
+  const tag = data.tag || "";
+  const clickUrl = data.url || defaultNotificationUrl(tag);
   const options = {
     body: data.body || "",
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
-    data: { url: data.url || "/app" },
+    tag,
+    data: { ...(data.data || {}), url: clickUrl, tag },
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
+
+function defaultNotificationUrl(tag) {
+  if (String(tag).startsWith("drive-upload")) return "/photos";
+  if (String(tag).startsWith("reservation")) return "/app/reservation";
+  if (String(tag).includes("dispatch")) return "/app/dispatch";
+  return "/app";
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

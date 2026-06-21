@@ -136,6 +136,27 @@ async function ensureArchiveSchema(env: Env) {
     { name: "archived_at", definition: "DATETIME" },
     { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS drive_upload_jobs (
+      id TEXT PRIMARY KEY,
+      status TEXT DEFAULT 'pending',
+      total_count INTEGER DEFAULT 0,
+      processed_count INTEGER DEFAULT 0,
+      success_count INTEGER DEFAULT 0,
+      failed_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  await ensureColumns(env.DB, "drive_upload_jobs", [
+    { name: "status", definition: "TEXT DEFAULT 'pending'" },
+    { name: "total_count", definition: "INTEGER DEFAULT 0" },
+    { name: "processed_count", definition: "INTEGER DEFAULT 0" },
+    { name: "success_count", definition: "INTEGER DEFAULT 0" },
+    { name: "failed_count", definition: "INTEGER DEFAULT 0" },
+    { name: "created_at", definition: "DATETIME DEFAULT CURRENT_TIMESTAMP" },
+    { name: "updated_at", definition: "DATETIME DEFAULT CURRENT_TIMESTAMP" },
+  ]);
 }
 
 async function fetchUploadRowsByIds(env: Env, fileIds: number[]) {
