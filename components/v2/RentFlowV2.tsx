@@ -208,16 +208,22 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
               </span>
             </Link>
-            <UnreadMessagesButton
-              dispatches={dispatches}
-              returns={returns}
-              vehicles={vehicles}
-              onDispatches={reloadDispatches}
-              onReturns={reloadReturns}
-              open={activeOverlay === "unread"}
-              onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
+            <QuickMenu
+              reservations={reservations}
+              calendarOpen={activeOverlay === "calendar"}
+              onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)}
+              unreadButton={(
+                <UnreadMessagesButton
+                  dispatches={dispatches}
+                  returns={returns}
+                  vehicles={vehicles}
+                  onDispatches={reloadDispatches}
+                  onReturns={reloadReturns}
+                  open={activeOverlay === "unread"}
+                  onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
+                />
+              )}
             />
-            <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
           </div>
         </header>
 
@@ -252,10 +258,12 @@ function QuickMenu({
   reservations,
   calendarOpen,
   onCalendarOpenChange,
+  unreadButton,
 }: {
   reservations: ReservationV2[];
   calendarOpen: boolean;
   onCalendarOpenChange: (open: boolean) => void;
+  unreadButton?: React.ReactNode;
 }) {
   return (
     <nav className="relative z-20 col-start-3 row-start-1 flex flex-col items-end gap-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end sm:overflow-x-auto sm:pb-1">
@@ -270,7 +278,8 @@ function QuickMenu({
           <span className="hidden sm:inline">거래처주소</span>
         </Link>
       </div>
-      <div className="flex w-full justify-end sm:w-auto">
+      <div className="flex w-full items-center justify-center gap-2 sm:w-auto sm:justify-center">
+        {unreadButton}
         <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
       </div>
     </nav>
@@ -312,7 +321,7 @@ function UnreadMessagesButton({
   }
 
   return (
-    <div className="absolute left-1/2 top-1 z-40 -translate-x-1/2 sm:top-4">
+    <div className="relative z-40">
       <button className="quick-btn whitespace-nowrap" type="button" onClick={() => onOpenChange(!open)}>
         안 읽은 메시지
       </button>
@@ -519,14 +528,27 @@ function HomeScreen() {
 function PushPermissionButton() {
   const [status, setStatus] = useState("");
   const [permission, setPermission] = useState<string>("default");
+  const [showGrantedToast, setShowGrantedToast] = useState(false);
 
   useEffect(() => {
     if ("Notification" in window) {
-      setPermission(Notification.permission);
+      const current = Notification.permission;
+      setPermission(current);
+      if (current === "granted") {
+        setShowGrantedToast(true);
+        const timer = window.setTimeout(() => setShowGrantedToast(false), 2400);
+        return () => window.clearTimeout(timer);
+      }
     }
   }, []);
 
-  if (permission === "granted") return null;
+  if (permission === "granted") {
+    return showGrantedToast ? (
+      <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">
+        이미 알림권한이 허용상태입니다
+      </div>
+    ) : null;
+  }
 
   async function requestPermission() {
     if (!("Notification" in window)) {
@@ -559,6 +581,8 @@ function PushPermissionButton() {
       }
       setStatus("알림 허용됨");
       setPermission("granted");
+      setShowGrantedToast(true);
+      window.setTimeout(() => setShowGrantedToast(false), 2400);
     } catch (error) {
       console.error("push subscribe failed", error);
       setStatus("알림 등록 실패");
@@ -2017,20 +2041,20 @@ function CalendarSubscribeBox() {
       </div>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
       <div data-horizontal-scroll="true" className="mt-3 w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <div className="grid min-w-[760px] grid-cols-[repeat(4,minmax(180px,1fr))] gap-2">
-          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+        <div className="grid min-w-[1040px] grid-cols-[repeat(4,minmax(260px,1fr))] gap-2">
+          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">아이폰</strong>
-            설정 &gt; 캘린더<br />구독 캘린더 추가
+            설정 &gt; 캘린더 &gt; 캘린더계정 &gt; 계정추가 &gt; 다른계정추가 &gt; 구독캘린더
           </div>
-          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">갤럭시 + 구글</strong>
-            ICSx 또는 Google Calendar<br />URL로 추가
+            PC에서 구글캘린더 접속 &gt; Other 캘린더 +버튼 &gt; From url
           </div>
-          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">MS Outlook</strong>
-            일정 추가<br />웹에서 구독
+            일정 추가 &gt; 웹에서 구독
           </div>
-          <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-xs leading-relaxed text-[#68746d]">
+          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">네이버</strong>
             실시간 연동 미지원
           </div>
