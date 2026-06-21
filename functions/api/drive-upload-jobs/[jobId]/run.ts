@@ -1,4 +1,3 @@
-import webpush from "web-push";
 import { noStoreHeaders, safeText } from "../../_d1-utils";
 import { ensureArchiveSchema, processDriveArchiveFileIds, type Env } from "../../drive/archive";
 
@@ -170,10 +169,8 @@ async function summarizeJob(env: Env, jobId: string) {
 }
 
 type PushEnv = {
-  VAPID_PUBLIC_KEY?: string;
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY?: string;
-  VAPID_PRIVATE_KEY?: string;
-  VAPID_SUBJECT?: string;
+  PUSH_SERVER_URL?: string;
+  PUSH_SERVER_SECRET?: string;
 };
 
 async function sendJobPushIfTerminal(env: Env & PushEnv, summary: Awaited<ReturnType<typeof summarizeJob>>) {
@@ -197,15 +194,29 @@ async function sendJobPushIfTerminal(env: Env & PushEnv, summary: Awaited<Return
 }
 
 async function sendPushNotification(env: Env & PushEnv, payload: { title: string; body: string; url: string; tag: string }) {
-  const publicKey = env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-  const privateKey = env.VAPID_PRIVATE_KEY || "";
-  if (!publicKey || !privateKey) throw new Error("VAPID keys are not configured");
-  webpush.setVapidDetails(env.VAPID_SUBJECT || "mailto:admin@rentflow.local", publicKey, privateKey);
+  const pushServerUrl = safeText(env.PUSH_SERVER_URL).replace(/\/$/, "");
+  const pushServerSecret = safeText(env.PUSH_SERVER_SECRET);
+  if (!pushServerUrl || !pushServerSecret) throw new Error("PUSH_SERVER_URL or PUSH_SERVER_SECRET is not configured");
   const { results } = await env.DB.prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY created_at DESC").all();
   for (const row of (results || []) as Record<string, unknown>[]) {
-    await webpush.sendNotification({
-      endpoint: safeText(row.endpoint),
-      keys: { p256dh: safeText(row.p256dh), auth: safeText(row.auth) },
-    }, JSON.stringify(payload), { TTL: 60 * 60 });
+    const response = await fetch(`${pushServerUrl}/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${pushServerSecret}`,
+        "X-RentFlow-Push-Secret": pushServerSecret,
+      },
+      body: JSON.stringify({
+        subscription: {
+          endpoint: safeText(row.endpoint),
+          keys: { p256dh: safeText(row.p256dh), auth: safeText(row.auth) },
+        },
+        payload,
+      }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Node push server failed with HTTP ${response.status}: ${text.slice(0, 500)}`);
+    }
   }
 }

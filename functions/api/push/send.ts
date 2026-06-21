@@ -1,26 +1,25 @@
-import webpush from "web-push";
 import { ensureColumns, safeText } from "../_d1-utils";
 
 type Env = {
   DB: any;
-  VAPID_PUBLIC_KEY?: string;
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY?: string;
-  VAPID_PRIVATE_KEY?: string;
-  VAPID_SUBJECT?: string;
+  PUSH_SERVER_URL?: string;
+  PUSH_SERVER_SECRET?: string;
 };
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
     await ensurePushSchema(env);
     const body = await request.json() as any;
-    const publicKey = env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-    const privateKey = env.VAPID_PRIVATE_KEY || "";
-    const subject = env.VAPID_SUBJECT || "mailto:admin@rentflow.local";
-    if (!publicKey || !privateKey) {
-      return Response.json({ error: "VAPID keys are not configured" }, { status: 500 });
+    const pushServerUrl = safeText(env.PUSH_SERVER_URL).replace(/\/$/, "");
+    const pushServerSecret = safeText(env.PUSH_SERVER_SECRET);
+    if (!pushServerUrl || !pushServerSecret) {
+      return Response.json({
+        ok: false,
+        message: "push-server-not-configured",
+        error: "Cloudflare web-push 직접 발송은 지원하지 않습니다. 외부 Node Push Server를 통해 발송합니다.",
+        body: "PUSH_SERVER_URL 또는 PUSH_SERVER_SECRET이 설정되지 않았습니다.",
+      }, { status: 500 });
     }
-
-    webpush.setVapidDetails(subject, publicKey, privateKey);
 
     const directSubscription = normalizeSubscription(body.subscription);
     const rows = directSubscription
@@ -33,7 +32,6 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       tag: safeText(body.tag),
       data: body.data && typeof body.data === "object" ? body.data : {},
     };
-    const payload = JSON.stringify(payloadObject);
 
     let sent = 0;
     let failed = 0;
@@ -43,22 +41,25 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
     for (const row of rows) {
       try {
-        const sendResult = await webpush.sendNotification({
+        const subscription = {
           endpoint: safeText(row.endpoint),
           keys: {
             p256dh: safeText(row.p256dh),
             auth: safeText(row.auth),
           },
-        }, payload, { TTL: 60 * 60 });
-        const result = sendResult as { statusCode?: number; headers?: Record<string, string | string[] | number> } | undefined;
-        const statusCode = typeof result === "object" && result && "statusCode" in result ? Number(result.statusCode) : 201;
+        };
+        const sendResult = await sendViaNodePushServer(pushServerUrl, pushServerSecret, subscription, payloadObject);
+        const statusCode = sendResult.statusCode || sendResult.httpStatus || 0;
+        if (!sendResult.ok) {
+          throw createPushServerError(sendResult);
+        }
         deliveries.push({
           id: safeText(row.id),
           endpoint: safeText(row.endpoint),
           endpointPrefix60: safeText(row.endpoint).slice(0, 60),
           provider: getPushProvider(safeText(row.endpoint)),
           statusCode,
-          headers: normalizeHeaders(result?.headers),
+          headers: sendResult.headers,
         });
         sent += 1;
       } catch (error) {
@@ -87,6 +88,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           endpointPrefix60: safeText(row.endpoint).slice(0, 60),
           statusCode,
           error: message,
+          note: "Cloudflare web-push 직접 발송은 지원하지 않습니다. 외부 Node Push Server를 통해 발송합니다.",
           body,
           stack,
           headers,
@@ -126,6 +128,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       endpointPrefix60: firstDelivery?.endpointPrefix60 || firstError?.endpointPrefix60 || "",
       provider: firstDelivery?.provider || firstError?.provider || "",
       directSubscription: Boolean(directSubscription),
+      deliveryMode: "external-node-push-server",
+      note: "Cloudflare web-push 직접 발송은 지원하지 않습니다. 외부 Node Push Server를 통해 발송합니다.",
       payload: payloadObject,
       title: safeText(body.title),
       body: safeText(body.body),
@@ -157,6 +161,54 @@ function getPushProvider(endpoint: string) {
 function normalizeHeaders(headers?: Record<string, string | string[] | number>) {
   if (!headers) return {};
   return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : String(value)]));
+}
+
+async function sendViaNodePushServer(
+  pushServerUrl: string,
+  pushServerSecret: string,
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  payload: { title: string; body: string; url: string; tag: string; data: Record<string, unknown> },
+) {
+  const response = await fetch(`${pushServerUrl}/send`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${pushServerSecret}`,
+      "X-RentFlow-Push-Secret": pushServerSecret,
+    },
+    body: JSON.stringify({ subscription, payload }),
+  });
+  const text = await response.text();
+  const parsed = parseJson(text);
+  const statusCode = Number(parsed?.statusCode || response.status || 0);
+  return {
+    ok: response.ok && parsed?.ok !== false,
+    httpStatus: response.status,
+    statusCode,
+    headers: Object.fromEntries(response.headers.entries()),
+    body: text,
+    error: safeText(parsed?.error || parsed?.message || (response.ok ? "" : response.statusText)),
+  };
+}
+
+function createPushServerError(result: Awaited<ReturnType<typeof sendViaNodePushServer>>) {
+  const error = new Error(result.error || `Node push server failed with HTTP ${result.httpStatus}`) as Error & {
+    statusCode?: number;
+    body?: string;
+    headers?: Record<string, string>;
+  };
+  error.statusCode = result.statusCode || result.httpStatus;
+  error.body = result.body;
+  error.headers = result.headers;
+  return error;
+}
+
+function parseJson(value: string): any {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 async function ensurePushSchema(env: Env) {

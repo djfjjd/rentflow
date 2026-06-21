@@ -26,8 +26,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-leaflet": "^5.0.0",
-    "tailwind-merge": "latest",
-    "web-push": "^3.6.7"
+    "tailwind-merge": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260613.1",
@@ -35,7 +34,6 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@types/web-push": "^3.6.4",
     "autoprefixer": "latest",
     "node": "20.20.2",
     "postcss": "latest",
