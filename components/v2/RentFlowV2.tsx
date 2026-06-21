@@ -197,9 +197,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   return (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
       <div className={`mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 ${pageClassName}`}>
-        <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
-            <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
+        <header className="rentflow-header sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="header-top">
+            <Link href={isAdmin ? "/admin" : "/app"} className="header-left flex min-h-12 items-center gap-2 font-black">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#116149] text-white">
                 <Home size={20} />
               </span>
@@ -208,22 +208,18 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
               </span>
             </Link>
-            <QuickMenu
-              reservations={reservations}
-              calendarOpen={activeOverlay === "calendar"}
-              onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)}
-              unreadButton={(
-                <UnreadMessagesButton
-                  dispatches={dispatches}
-                  returns={returns}
-                  vehicles={vehicles}
-                  onDispatches={reloadDispatches}
-                  onReturns={reloadReturns}
-                  open={activeOverlay === "unread"}
-                  onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
-                />
-              )}
-            />
+            <div className="header-center">
+              <UnreadMessagesButton
+                dispatches={dispatches}
+                returns={returns}
+                vehicles={vehicles}
+                onDispatches={reloadDispatches}
+                onReturns={reloadReturns}
+                open={activeOverlay === "unread"}
+                onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
+              />
+            </div>
+            <QuickMenu reservations={reservations} calendarOpen={activeOverlay === "calendar"} onCalendarOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
           </div>
         </header>
 
@@ -258,28 +254,25 @@ function QuickMenu({
   reservations,
   calendarOpen,
   onCalendarOpenChange,
-  unreadButton,
 }: {
   reservations: ReservationV2[];
   calendarOpen: boolean;
   onCalendarOpenChange: (open: boolean) => void;
-  unreadButton?: React.ReactNode;
 }) {
   return (
-    <nav className="relative z-20 col-start-3 row-start-1 flex flex-col items-end gap-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end sm:overflow-x-auto sm:pb-1">
-      <div className="flex flex-nowrap items-center justify-end gap-2">
+    <nav className="header-actions relative z-20 flex flex-col items-end gap-2">
+      <div className="flex max-w-full flex-nowrap items-center justify-end gap-2">
         <PushPermissionButton />
-        <Link className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
+        <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/photos" title="사진촬영본" aria-label="사진촬영본">
           <Camera size={17} />
           <span className="hidden sm:inline">사진촬영본</span>
         </Link>
-        <Link className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
+        <Link className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" href="/partners" title="거래처주소" aria-label="거래처주소">
           <MapPin size={17} />
           <span className="hidden sm:inline">거래처주소</span>
         </Link>
       </div>
-      <div className="flex w-full items-center justify-center gap-2 sm:w-auto sm:justify-center">
-        {unreadButton}
+      <div className="mobile-message-row header-calendar-row">
         <TodayCalendar reservations={reservations} open={calendarOpen} onOpenChange={onCalendarOpenChange} />
       </div>
     </nav>
@@ -528,35 +521,36 @@ function HomeScreen() {
 function PushPermissionButton() {
   const [status, setStatus] = useState("");
   const [permission, setPermission] = useState<string>("default");
-  const [showGrantedToast, setShowGrantedToast] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState("확인 전");
 
   useEffect(() => {
     if ("Notification" in window) {
-      const current = Notification.permission;
-      setPermission(current);
-      if (current === "granted") {
-        setShowGrantedToast(true);
-        const timer = window.setTimeout(() => setShowGrantedToast(false), 2400);
-        return () => window.clearTimeout(timer);
-      }
+      setPermission(Notification.permission);
     }
   }, []);
 
-  if (permission === "granted") {
-    return showGrantedToast ? (
-      <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">
-        이미 알림권한이 허용상태입니다
-      </div>
-    ) : null;
+  async function openStatus() {
+    const current = "Notification" in window ? Notification.permission : "unsupported";
+    setPermission(current);
+    setModalOpen(true);
+    setSubscriptionStatus("확인 중");
+    try {
+      const registration = await navigator.serviceWorker?.ready;
+      const subscription = await registration?.pushManager?.getSubscription();
+      setSubscriptionStatus(subscription ? "구독 있음" : "구독 없음");
+    } catch {
+      setSubscriptionStatus("서비스워커 확인 실패");
+    }
   }
 
-  async function requestPermission() {
+  async function resubscribePush() {
     if (!("Notification" in window)) {
       setStatus("알림 미지원");
       return;
     }
 
-    const permission = await Notification.requestPermission();
+    const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
     setPermission(permission);
     if (permission !== "granted") {
       setStatus("알림 차단됨");
@@ -581,20 +575,58 @@ function PushPermissionButton() {
       }
       setStatus("알림 허용됨");
       setPermission("granted");
-      setShowGrantedToast(true);
-      window.setTimeout(() => setShowGrantedToast(false), 2400);
+      setSubscriptionStatus("구독 있음");
     } catch (error) {
       console.error("push subscribe failed", error);
       setStatus("알림 등록 실패");
     }
   }
 
+  async function sendTest() {
+    try {
+      await sendPushNotification({
+        title: "RentFlow 테스트 알림",
+        body: "푸시알림이 정상 동작합니다.",
+        url: "/app",
+        tag: "header-push-test",
+      });
+      setStatus("테스트 알림 발송 완료");
+    } catch (error) {
+      console.error("push test failed", error);
+      setStatus("테스트 알림 실패");
+    }
+  }
+
+  const message = pushPermissionMessage(permission, subscriptionStatus);
+
   return (
-    <button className="quick-btn h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" type="button" onClick={requestPermission} title={status || "알림 권한"} aria-label="알림 권한">
-      <Bell size={16} />
-      <span className="hidden sm:inline">알림</span>
-    </button>
+    <>
+      <button className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" type="button" onClick={openStatus} title={status || "알림 권한"} aria-label="알림 권한">
+        <Bell size={16} />
+        <span className="hidden sm:inline">알림</span>
+      </button>
+      {modalOpen ? (
+        <OverlayModal onClose={() => setModalOpen(false)} panelClassName="w-[92vw] max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+          <h2 className="text-lg font-black text-[#16211d]">알림권한 상태</h2>
+          <p className="mt-3 whitespace-pre-wrap text-sm font-bold leading-relaxed text-[#4b5563]">{message}</p>
+          {status ? <p className="mt-2 text-sm font-black text-[#116149]">{status}</p> : null}
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <button className="small-btn" type="button" onClick={() => setModalOpen(false)}>확인</button>
+            <button className="small-btn" type="button" onClick={resubscribePush}>푸시 재구독</button>
+            <button className="small-btn" type="button" onClick={sendTest}>테스트 알림</button>
+          </div>
+        </OverlayModal>
+      ) : null}
+    </>
   );
+}
+
+function pushPermissionMessage(permission: string, subscriptionStatus: string) {
+  if (permission === "granted" && subscriptionStatus === "구독 있음") return "이미 알림이 허용되어 있습니다.";
+  if (permission === "granted") return "알림 권한은 허용되어 있지만 구독 정보가 없습니다. 재구독을 진행해주세요.";
+  if (permission === "denied") return "알림 권한이 차단되어 있습니다. 브라우저 또는 iPhone 설정에서 알림을 허용해주세요.";
+  if (permission === "unsupported") return "이 브라우저는 알림을 지원하지 않습니다.";
+  return "알림 권한이 아직 설정되지 않았습니다. 알림 권한을 허용해주세요.";
 }
 
 async function fetchVapidPublicKey() {
