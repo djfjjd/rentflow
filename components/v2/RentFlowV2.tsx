@@ -538,6 +538,8 @@ function PushPermissionButton() {
   const [status, setStatus] = useState("");
   const [permission, setPermission] = useState<string>("default");
   const [modalOpen, setModalOpen] = useState(false);
+  const [debugModalOpen, setDebugModalOpen] = useState(false);
+  const [debugInfo, setDebugInfo] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState("확인 전");
 
   useEffect(() => {
@@ -600,15 +602,69 @@ function PushPermissionButton() {
 
   async function sendTest() {
     try {
-      await sendPushNotification({
+      const payload = {
         title: "RentFlow 테스트 알림",
         body: "푸시알림이 정상 동작합니다.",
         url: "/app",
         tag: "header-push-test",
+      };
+      const registration = await navigator.serviceWorker?.ready;
+      const subscription = await registration?.pushManager?.getSubscription();
+      const subscribeInfo = await fetchPushSubscribeInfo();
+      if (!subscription) {
+        setDebugInfo(JSON.stringify({
+          notificationPermission: "Notification" in window ? Notification.permission : "unsupported",
+          serviceWorkerRegistered: Boolean(registration),
+          serviceWorkerScriptURL: registration?.active?.scriptURL || registration?.installing?.scriptURL || registration?.waiting?.scriptURL || "",
+          pushSubscriptionExists: false,
+          endpointPrefix80: "",
+          vapidPublicKeyExists: subscribeInfo.vapidPublicKeyExists || Boolean(subscribeInfo.publicKey),
+          vapidPrivateKeyExists: subscribeInfo.vapidPrivateKeyExists,
+          nextPublicVapidPublicKeyExists: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+          serverResponseStatus: "not sent",
+          serverResponseBody: "현재 기기의 Push Subscription이 없습니다.",
+          webPushErrorMessage: "Push Subscription missing",
+          webPushErrorBody: "",
+          webPushErrorStack: "",
+        }, null, 2));
+        setStatus("테스트 알림 실패");
+        return;
+      }
+      const response = await fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, subscription: subscription?.toJSON ? subscription.toJSON() : subscription }),
       });
+      const body = await response.text();
+      const parsed = parseJsonObject(body);
+      const info = {
+        notificationPermission: "Notification" in window ? Notification.permission : "unsupported",
+        serviceWorkerRegistered: Boolean(registration),
+        serviceWorkerScriptURL: registration?.active?.scriptURL || registration?.installing?.scriptURL || registration?.waiting?.scriptURL || "",
+        pushSubscriptionExists: Boolean(subscription),
+        endpointPrefix80: subscription?.endpoint ? subscription.endpoint.slice(0, 80) : "",
+        vapidPublicKeyExists: subscribeInfo.vapidPublicKeyExists || Boolean(subscribeInfo.publicKey),
+        vapidPrivateKeyExists: subscribeInfo.vapidPrivateKeyExists,
+        nextPublicVapidPublicKeyExists: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+        serverResponseStatus: response.status,
+        serverResponseBody: body,
+        webPushErrorMessage: parsed?.errors?.[0]?.message || parsed?.error || "",
+        webPushErrorBody: parsed?.errors?.[0]?.body || parsed?.body || "",
+        webPushErrorStack: parsed?.errors?.[0]?.stack || parsed?.stack || "",
+      };
+      setDebugInfo(JSON.stringify(info, null, 2));
+      if (!response.ok || parsed?.failed) {
+        setStatus("테스트 알림 실패");
+        return;
+      }
       setStatus("테스트 알림 발송 완료");
     } catch (error) {
       console.error("push test failed", error);
+      setDebugInfo(JSON.stringify({
+        notificationPermission: "Notification" in window ? Notification.permission : "unsupported",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : "",
+      }, null, 2));
       setStatus("테스트 알림 실패");
     }
   }
@@ -625,12 +681,30 @@ function PushPermissionButton() {
         <OverlayModal onClose={() => setModalOpen(false)} panelClassName="w-[92vw] max-w-md rounded-2xl bg-white p-5 shadow-2xl">
           <h2 className="text-lg font-black text-[#16211d]">알림권한 상태</h2>
           <p className="mt-3 whitespace-pre-wrap text-sm font-bold leading-relaxed text-[#4b5563]">{message}</p>
-          {status ? <p className="mt-2 text-sm font-black text-[#116149]">{status}</p> : null}
+          {status ? (
+            <div className="push-status-line mt-2 text-sm font-black text-[#116149]">
+              <span>{status}</span>
+              {debugInfo && status.includes("실패") ? (
+                <button className="push-info-button" type="button" onClick={() => setDebugModalOpen(true)} title="테스트 알림 실패 로그" aria-label="테스트 알림 실패 로그">
+                  i
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <button className="small-btn" type="button" onClick={() => setModalOpen(false)}>확인</button>
             <button className="small-btn" type="button" onClick={resubscribePush}>푸시 재구독</button>
             <button className="small-btn" type="button" onClick={sendTest}>테스트 알림</button>
           </div>
+        </OverlayModal>
+      ) : null}
+      {debugModalOpen ? (
+        <OverlayModal onClose={() => setDebugModalOpen(false)} panelClassName="push-debug-modal w-[92vw] max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black text-[#16211d]">테스트 알림 실패 로그</h2>
+            <button className="small-btn" type="button" onClick={() => setDebugModalOpen(false)}>닫기</button>
+          </div>
+          <pre>{debugInfo}</pre>
         </OverlayModal>
       ) : null}
     </>
@@ -653,6 +727,30 @@ async function fetchVapidPublicKey() {
     return data.publicKey || "";
   } catch {
     return "";
+  }
+}
+
+async function fetchPushSubscribeInfo() {
+  try {
+    const response = await fetch("/api/push/subscribe", { cache: "no-store" });
+    if (!response.ok) return {};
+    return await response.json() as { publicKey?: string; vapidPublicKeyExists?: boolean; vapidPrivateKeyExists?: boolean };
+  } catch {
+    return {};
+  }
+}
+
+function parseJsonObject(value: string) {
+  try {
+    return JSON.parse(value) as {
+      failed?: number;
+      error?: string;
+      body?: string;
+      stack?: string;
+      errors?: { message?: string; body?: string; stack?: string }[];
+    };
+  } catch {
+    return null;
   }
 }
 
