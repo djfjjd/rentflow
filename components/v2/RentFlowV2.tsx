@@ -141,6 +141,8 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const isAdmin = kind.startsWith("admin");
+  const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
+  const mainInnerClass = isAdmin ? "admin-main-inner admin-content" : "app-main-inner";
   const pageClassName =
     kind === "dispatch"
       ? "dispatch-page"
@@ -197,7 +199,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   return (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
       <header className="app-header sticky top-0 z-30 bg-[#f6f7f4]/95 py-3 backdrop-blur">
-        <div className="app-header-inner">
+        <div className={headerInnerClass}>
           <div className="header-top-row">
             <div className="header-left">
               <HeaderLogo isAdmin={isAdmin} />
@@ -234,7 +236,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
           </div>
         </div>
       </header>
-      <div className={`app-main-inner flex flex-col gap-4 py-4 ${pageClassName}`}>
+      <div className={`${mainInnerClass} flex flex-col gap-4 py-4 ${pageClassName}`}>
 
         {isAdmin ? <AdminNav /> : null}
 
@@ -2172,9 +2174,9 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         </div>
         <Textarea name="memo" label="메모" />
       </DataForm>
-      <section data-horizontal-scroll="true" className="panel overflow-x-auto">
+      <section data-horizontal-scroll="true" className="panel admin-table-wrapper overflow-x-auto">
         <h2 className="mb-3 text-xl font-black">차량현황</h2>
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="admin-table w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b">
               <th>드래그</th><th>차량번호</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>차량소속</th><th>수정</th><th>삭제</th>
@@ -2263,8 +2265,8 @@ function DispatchAdmin({
       <div className="sticky top-0 z-10 rounded-lg bg-[#eef4ed] p-1.5">
         <Segmented value={filter} values={["전체", "미정리", "정리완료"]} onChange={setFilter} />
       </div>
-      <div data-horizontal-scroll="true" className="w-full overflow-x-auto">
-        <table className="w-full min-w-[1680px] table-fixed text-left text-sm">
+      <div data-horizontal-scroll="true" className="admin-table-wrapper w-full overflow-x-auto">
+        <table className="admin-table w-full min-w-[1680px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
             <col className="w-[130px]" />
