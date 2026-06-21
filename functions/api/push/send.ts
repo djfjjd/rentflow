@@ -23,28 +23,32 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     webpush.setVapidDetails(subject, publicKey, privateKey);
 
     const { results } = await env.DB.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions ORDER BY created_at DESC").all();
-    const payload = JSON.stringify({
+    const payloadObject = {
       title: safeText(body.title || "RentFlow 알림"),
       body: safeText(body.body),
       url: safeText(body.url || "/app"),
       tag: safeText(body.tag),
       data: body.data && typeof body.data === "object" ? body.data : {},
-    });
+    };
+    const payload = JSON.stringify(payloadObject);
 
     let sent = 0;
     let failed = 0;
     const expired: string[] = [];
     const errors: { id: string; endpoint: string; statusCode: number; message: string; body?: string }[] = [];
+    const deliveries: { id: string; endpoint: string; statusCode: number }[] = [];
 
     for (const row of results || []) {
       try {
-        await webpush.sendNotification({
+        const sendResult = await webpush.sendNotification({
           endpoint: safeText(row.endpoint),
           keys: {
             p256dh: safeText(row.p256dh),
             auth: safeText(row.auth),
           },
         }, payload, { TTL: 60 * 60 });
+        const statusCode = typeof sendResult === "object" && sendResult && "statusCode" in sendResult ? Number((sendResult as { statusCode?: number }).statusCode) : 201;
+        deliveries.push({ id: safeText(row.id), endpoint: safeText(row.endpoint).slice(0, 80), statusCode });
         sent += 1;
       } catch (error) {
         failed += 1;
@@ -89,6 +93,10 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       failed,
       expired: expired.length,
       errors,
+      deliveries,
+      statusCode: deliveries[0]?.statusCode || (sent > 0 ? 201 : failed > 0 ? errors[0]?.statusCode || 0 : 0),
+      endpoint: deliveries[0]?.endpoint || errors[0]?.endpoint || "",
+      payload: payloadObject,
       title: safeText(body.title),
       body: safeText(body.body),
       url: safeText(body.url || "/app"),

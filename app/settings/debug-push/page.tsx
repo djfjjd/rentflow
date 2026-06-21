@@ -7,14 +7,23 @@ type PushDebugState = {
   serviceWorker: string;
   serviceWorkerPath: string;
   serviceWorkerScope: string;
+  serviceWorkerController: string;
+  serviceWorkerActiveScript: string;
   serviceWorkerPushEvent: string;
   serviceWorkerClickEvent: string;
   subscription: string;
+  subscriptionEndpoint: string;
+  dbEndpoint: string;
+  displayModeStandalone: string;
+  navigatorStandalone: string;
   vapidPublicKey: string;
   vapidPrivateKey: string;
   dbSubscriptionCount: string;
   lastSubscribedAt: string;
   lastHttpStatus: string;
+  lastStatusCode: string;
+  lastPayload: string;
+  lastSwPushReceived: string;
   lastPushResult: string;
   lastError: string;
 };
@@ -24,14 +33,23 @@ const initialState: PushDebugState = {
   serviceWorker: "확인 중",
   serviceWorkerPath: "확인 중",
   serviceWorkerScope: "확인 중",
+  serviceWorkerController: "확인 중",
+  serviceWorkerActiveScript: "확인 중",
   serviceWorkerPushEvent: "확인 중",
   serviceWorkerClickEvent: "확인 중",
   subscription: "확인 중",
+  subscriptionEndpoint: "확인 중",
+  dbEndpoint: "확인 중",
+  displayModeStandalone: "확인 중",
+  navigatorStandalone: "확인 중",
   vapidPublicKey: "확인 중",
   vapidPrivateKey: "확인 중",
   dbSubscriptionCount: "확인 중",
   lastSubscribedAt: "-",
   lastHttpStatus: "-",
+  lastStatusCode: "-",
+  lastPayload: "-",
+  lastSwPushReceived: "-",
   lastPushResult: "-",
   lastError: "-",
 };
@@ -42,6 +60,14 @@ export default function DebugPushPage() {
 
   useEffect(() => {
     void refreshState();
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type !== "push-received") return;
+      const text = JSON.stringify(event.data).slice(0, 1000);
+      window.localStorage.setItem("rentflow:lastSwPushReceived", text);
+      setState((current) => ({ ...current, lastSwPushReceived: text }));
+    }
+    navigator.serviceWorker?.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", handleMessage);
   }, []);
 
   async function refreshState() {
@@ -50,24 +76,34 @@ export default function DebugPushPage() {
       serviceWorker: "serviceWorker" in navigator ? "지원" : "미지원",
       serviceWorkerPath: "/sw.js",
       serviceWorkerScope: "확인 중",
+      serviceWorkerController: navigator.serviceWorker?.controller ? "있음" : "없음",
+      serviceWorkerActiveScript: "확인 중",
       serviceWorkerPushEvent: "확인 중",
       serviceWorkerClickEvent: "확인 중",
       subscription: "확인 중",
+      subscriptionEndpoint: "확인 중",
+      dbEndpoint: "확인 중",
+      displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser",
+      navigatorStandalone: String(Boolean((navigator as Navigator & { standalone?: boolean }).standalone)),
       vapidPublicKey: "확인 중",
       vapidPrivateKey: "확인 중",
       dbSubscriptionCount: "확인 중",
       lastSubscribedAt: window.localStorage.getItem("rentflow:lastPushSubscribedAt") || "-",
       lastHttpStatus: window.localStorage.getItem("rentflow:lastPushHttpStatus") || "-",
+      lastStatusCode: window.localStorage.getItem("rentflow:lastPushStatusCode") || "-",
+      lastPayload: window.localStorage.getItem("rentflow:lastPushPayload") || "-",
+      lastSwPushReceived: window.localStorage.getItem("rentflow:lastSwPushReceived") || "-",
       lastPushResult: window.localStorage.getItem("rentflow:lastPushResult") || "-",
       lastError: window.localStorage.getItem("rentflow:lastPushError") || "-",
     };
 
     try {
       const response = await fetch("/api/push/subscribe", { cache: "no-store" });
-      const data = await response.json() as { publicKey?: string; subscriptionCount?: number; vapidPublicKeyExists?: boolean; vapidPrivateKeyExists?: boolean };
+      const data = await response.json() as { publicKey?: string; subscriptionCount?: number; vapidPublicKeyExists?: boolean; vapidPrivateKeyExists?: boolean; endpoints?: string[] };
       next.vapidPublicKey = data.vapidPublicKeyExists || data.publicKey ? "존재" : "없음";
       next.vapidPrivateKey = data.vapidPrivateKeyExists ? "존재" : "없음";
       next.dbSubscriptionCount = `${data.subscriptionCount || 0}개`;
+      next.dbEndpoint = data.endpoints?.[0] || "-";
     } catch {
       next.vapidPublicKey = "확인 실패";
       next.vapidPrivateKey = "확인 실패";
@@ -83,8 +119,10 @@ export default function DebugPushPage() {
       next.serviceWorker = registration ? "등록됨" : next.serviceWorker;
       next.serviceWorkerScope = registration?.scope || "-";
       next.serviceWorkerPath = registration?.active?.scriptURL || registration?.installing?.scriptURL || registration?.waiting?.scriptURL || "/sw.js";
+      next.serviceWorkerActiveScript = registration?.active?.scriptURL || "-";
       const subscription = await registration?.pushManager?.getSubscription();
       next.subscription = subscription ? `구독됨: ${subscription.endpoint.slice(0, 80)}` : "구독 없음";
+      next.subscriptionEndpoint = subscription ? subscription.endpoint.slice(0, 40) : "-";
       if (next.permission === "granted" && !subscription) {
         setState(next);
         await resubscribe({ silent: true });
@@ -133,7 +171,7 @@ export default function DebugPushPage() {
       }
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
-      if (existing && options?.deleteExisting) {
+      if (existing) {
         await fetch("/api/push/subscribe", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
@@ -154,7 +192,7 @@ export default function DebugPushPage() {
       if (!response.ok) throw new Error(text || "subscribe failed");
       const now = new Date().toLocaleString("ko-KR");
       window.localStorage.setItem("rentflow:lastPushSubscribedAt", now);
-      setStatus("푸시 재구독 완료");
+      setStatus(`푸시 재구독 완료 endpoint: ${subscription.endpoint.slice(0, 30)}...`);
       window.localStorage.removeItem("rentflow:lastPushError");
       await refreshState();
     } catch (error) {
@@ -167,15 +205,17 @@ export default function DebugPushPage() {
   async function sendTestPush() {
     setStatus("테스트 알림 발송 중");
     try {
+      const payload = {
+        title: "RentFlow 테스트 알림",
+        body: "푸시알림이 정상적으로 도착했습니다.",
+        url: "/app",
+        tag: "rentflow-test",
+      };
+      window.localStorage.setItem("rentflow:lastPushPayload", JSON.stringify(payload));
       const response = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "RentFlow 테스트 알림",
-          body: "푸시알림이 정상 동작합니다.",
-          url: "/settings/debug-push",
-          tag: "debug-push",
-        }),
+        body: JSON.stringify(payload),
       });
       const text = await response.text();
       const result = `${response.status} ${text.slice(0, 1000)}`;
@@ -183,13 +223,14 @@ export default function DebugPushPage() {
       window.localStorage.setItem("rentflow:lastPushResult", result);
       if (!response.ok) window.localStorage.setItem("rentflow:lastPushError", text.slice(0, 1000));
       const parsed = parseJson(text);
+      if (parsed?.statusCode) window.localStorage.setItem("rentflow:lastPushStatusCode", String(parsed.statusCode));
       if (parsed?.expired) {
         setStatus(`테스트 알림 발송 완료, 만료 구독 ${parsed.expired}개 삭제됨. 필요 시 푸시 재구독을 누르세요.`);
       } else if (parsed?.failed) {
         window.localStorage.setItem("rentflow:lastPushError", JSON.stringify(parsed.errors || parsed).slice(0, 1000));
         setStatus(`테스트 알림 일부 실패: ${result}`);
       } else {
-        setStatus(response.ok ? "테스트 알림 발송 완료" : `테스트 알림 실패: ${result}`);
+        setStatus(response.ok ? `테스트 알림 발송 완료\nstatusCode: ${parsed?.statusCode || "-"}\nendpoint: ${parsed?.endpoint || "-"}` : `테스트 알림 실패: ${result}`);
       }
       await refreshState();
     } catch (error) {
@@ -217,14 +258,23 @@ export default function DebugPushPage() {
           <DebugRow label="서비스워커 등록 여부" value={state.serviceWorker} />
           <DebugRow label="서비스워커 파일 경로" value={state.serviceWorkerPath} />
           <DebugRow label="서비스워커 scope" value={state.serviceWorkerScope} />
+          <DebugRow label="service worker controller 존재 여부" value={state.serviceWorkerController} />
+          <DebugRow label="service worker active scriptURL" value={state.serviceWorkerActiveScript} />
           <DebugRow label="push 이벤트" value={state.serviceWorkerPushEvent} />
           <DebugRow label="notificationclick 이벤트" value={state.serviceWorkerClickEvent} />
+          <DebugRow label="display-mode standalone 여부" value={state.displayModeStandalone} />
+          <DebugRow label="navigator.standalone 여부" value={state.navigatorStandalone} />
           <DebugRow label="현재 Push Subscription 존재 여부" value={state.subscription} />
+          <DebugRow label="현재 subscription endpoint 앞 40자" value={state.subscriptionEndpoint} />
           <DebugRow label="DB 저장된 Subscription 수" value={state.dbSubscriptionCount} />
+          <DebugRow label="DB 저장 endpoint 앞 40자" value={state.dbEndpoint} />
           <DebugRow label="VAPID_PUBLIC_KEY 존재 여부" value={state.vapidPublicKey} />
           <DebugRow label="VAPID_PRIVATE_KEY 존재 여부" value={state.vapidPrivateKey} />
           <DebugRow label="마지막 구독 시간" value={state.lastSubscribedAt} />
           <DebugRow label="마지막 테스트 푸시 HTTP status" value={state.lastHttpStatus} />
+          <DebugRow label="마지막 web-push send 결과 statusCode" value={state.lastStatusCode} />
+          <DebugRow label="마지막 테스트 푸시 payload" value={state.lastPayload} />
+          <DebugRow label="마지막 SW push 수신" value={state.lastSwPushReceived} />
           <DebugRow label="마지막 푸시 결과" value={state.lastPushResult} />
           <DebugRow label="마지막 테스트 푸시 오류 원문" value={state.lastError} />
         </div>
@@ -244,7 +294,7 @@ export default function DebugPushPage() {
 
 function parseJson(value: string) {
   try {
-    return JSON.parse(value) as { expired?: number; failed?: number; errors?: unknown };
+    return JSON.parse(value) as { expired?: number; failed?: number; errors?: unknown; statusCode?: number; endpoint?: string };
   } catch {
     return null;
   }

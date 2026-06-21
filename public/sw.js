@@ -62,25 +62,33 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
-self.addEventListener("push", (event) => {
+self.addEventListener("push", function (event) {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "RentFlow 알림", body: event.data ? event.data.text() : "", url: "/app" };
+    data = {
+      title: "RentFlow 알림",
+      body: event.data ? event.data.text() : "새 알림이 있습니다.",
+    };
   }
   const title = data.title || "RentFlow 알림";
-  const tag = data.tag || "";
+  const tag = data.tag || "rentflow-notification";
   const clickUrl = data.url || defaultNotificationUrl(tag);
   const options = {
-    body: data.body || "",
+    body: data.body || "새 알림이 있습니다.",
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
+    renotify: true,
     tag,
-    data: { ...(data.data || {}), url: clickUrl, tag },
+    data: { ...(data.data || {}), url: clickUrl, tag, receivedAt: Date.now() },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration
+      .showNotification(title, options)
+      .then(() => broadcastPushDebug({ type: "push-received", title, body: options.body, tag, url: clickUrl, receivedAt: options.data.receivedAt })),
+  );
 });
 
 function defaultNotificationUrl(tag) {
@@ -90,19 +98,17 @@ function defaultNotificationUrl(tag) {
   return "/app";
 }
 
-self.addEventListener("notificationclick", (event) => {
+self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  const url = event.notification.data?.url || "/app";
 
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(url);
-    }),
-  );
+  event.waitUntil(self.clients.openWindow(url));
 });
+
+function broadcastPushDebug(message) {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      client.postMessage(message);
+    }
+  });
+}
