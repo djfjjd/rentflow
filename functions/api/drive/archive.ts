@@ -1,6 +1,6 @@
 import { ensureColumns, noStoreHeaders, safeText } from "../_d1-utils";
 
-type Env = {
+export type Env = {
   DB: any;
   RENTFLOW_UPLOADS?: any;
   GOOGLE_CLIENT_ID?: string;
@@ -22,6 +22,17 @@ type UploadRow = {
   record_id?: string;
   uploaded_at?: string;
   created_at?: string;
+};
+
+export type DriveArchiveResultItem = {
+  id: number;
+  fileName?: string;
+  status: "uploaded" | "skipped" | "failed" | string;
+  reason?: string;
+  diagnostics?: Record<string, unknown>;
+  error?: string;
+  driveFileId?: string;
+  driveUrl?: string;
 };
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -49,75 +60,15 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       return Response.json({ error: "한 번에 최대 5개까지만 업로드 가능합니다." }, { status: 400, headers: noStoreHeaders() });
     }
 
-    const rows = await fetchUploadRowsByIds(env, fileIds);
-    const accessToken = await getGoogleAccessToken(env);
-    const archiveFolderId = await getOrCreateFolder(accessToken, rootFolderId, "장기보관");
-    let uploaded = 0;
-    let skipped = 0;
-    let r2Missing = 0;
-    let failed = 0;
-    const itemResults = [];
-
-    for (const row of rows) {
-      await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("archiving", row.id).run();
-      const fileName = safeText(row.file_name) || `file-${row.id}`;
-      const monthFolderName = driveMonthFolderName(row);
-      const caseFolderName = buildTargetFolderName(row);
-      const folderPath = `장기보관/${monthFolderName}/${caseFolderName}`;
-      const r2Keys = resolveR2Keys(row);
-      let r2ObjectFound = false;
-      let caseFolderId = "";
-      try {
-        const monthFolderId = await getOrCreateFolder(accessToken, archiveFolderId, monthFolderName);
-        caseFolderId = await getOrCreateFolder(accessToken, monthFolderId, caseFolderName);
-        const object = await getR2Object(env, r2Keys);
-        r2ObjectFound = Boolean(object);
-        if (!object) {
-          r2Missing += 1;
-          throw new Error("R2 file not found");
-        }
-
-        const existing = await findDriveFile(accessToken, caseFolderId, fileName);
-        if (existing) {
-          const driveUrl = driveViewUrl(existing.id);
-          await updateArchiveRow(env, row.id, existing.id, driveUrl, "archived");
-          skipped += 1;
-          itemResults.push({ id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "skipped"), driveFileId: existing.id, driveUrl });
-          continue;
-        }
-
-        const mimeType = row.mime_type || object.httpMetadata?.contentType || "application/octet-stream";
-        const driveFile = await uploadDriveFile(accessToken, caseFolderId, fileName, object, mimeType);
-        const driveUrl = driveViewUrl(driveFile.id);
-        await updateArchiveRow(env, row.id, driveFile.id, driveUrl, "archived");
-        uploaded += 1;
-        itemResults.push({ id: row.id, fileName, status: "uploaded", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "uploaded"), driveFileId: driveFile.id, driveUrl });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failed += 1;
-        await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("failed", row.id).run();
-        const reason = message === "R2 file not found" ? "r2_not_found" : "upload_failed";
-        const diagnostics = buildDiagnostics(folderPath, r2Keys, r2ObjectFound, message);
-        console.error("drive archive item failed", { fileName, folderPath, r2KeyExists: diagnostics.r2KeyExists, r2ObjectFound: diagnostics.r2ObjectFound, googleDriveUploadResult: diagnostics.googleDriveUploadResult });
-        itemResults.push({ id: row.id, fileName, status: "failed", reason, diagnostics, error: message });
-      }
-    }
-
-    const rowIds = new Set(rows.map((row) => row.id));
-    const missingIds = fileIds.filter((id) => !rowIds.has(id));
-    failed += missingIds.length;
-    for (const id of missingIds) {
-      itemResults.push({ id, fileName: `file-${id}`, status: "failed", reason: "db_row_not_found", error: "업로드할 파일을 찾지 못했습니다." });
-    }
-    const message = uploaded === 0 && skipped === 0 && failed > 0 ? "업로드할 파일을 찾지 못했습니다." : undefined;
-    return Response.json({ total: fileIds.length, uploaded, skipped, r2Missing, failed, message, results: itemResults }, { headers: noStoreHeaders() });
+    const result = await processDriveArchiveFileIds(env, fileIds);
+    return Response.json(result, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("drive archive failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500, headers: noStoreHeaders() });
   }
 }
 
-async function ensureArchiveSchema(env: Env) {
+export async function ensureArchiveSchema(env: Env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS uploaded_files (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,24 +90,127 @@ async function ensureArchiveSchema(env: Env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS drive_upload_jobs (
       id TEXT PRIMARY KEY,
-      status TEXT DEFAULT 'pending',
+      status TEXT NOT NULL DEFAULT 'pending',
       total_count INTEGER DEFAULT 0,
       processed_count INTEGER DEFAULT 0,
-      success_count INTEGER DEFAULT 0,
+      uploaded_count INTEGER DEFAULT 0,
+      skipped_count INTEGER DEFAULT 0,
       failed_count INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      cancelled_count INTEGER DEFAULT 0,
+      started_at TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_error TEXT
     )
   `).run();
   await ensureColumns(env.DB, "drive_upload_jobs", [
-    { name: "status", definition: "TEXT DEFAULT 'pending'" },
+    { name: "status", definition: "TEXT NOT NULL DEFAULT 'pending'" },
     { name: "total_count", definition: "INTEGER DEFAULT 0" },
     { name: "processed_count", definition: "INTEGER DEFAULT 0" },
-    { name: "success_count", definition: "INTEGER DEFAULT 0" },
+    { name: "uploaded_count", definition: "INTEGER DEFAULT 0" },
+    { name: "skipped_count", definition: "INTEGER DEFAULT 0" },
     { name: "failed_count", definition: "INTEGER DEFAULT 0" },
-    { name: "created_at", definition: "DATETIME DEFAULT CURRENT_TIMESTAMP" },
-    { name: "updated_at", definition: "DATETIME DEFAULT CURRENT_TIMESTAMP" },
+    { name: "cancelled_count", definition: "INTEGER DEFAULT 0" },
+    { name: "started_at", definition: "TEXT" },
+    { name: "completed_at", definition: "TEXT" },
+    { name: "created_at", definition: "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+    { name: "updated_at", definition: "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+    { name: "last_error", definition: "TEXT" },
   ]);
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS drive_upload_job_items (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      folder_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      result_message TEXT,
+      processed_at TEXT,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+  await ensureColumns(env.DB, "drive_upload_job_items", [
+    { name: "job_id", definition: "TEXT NOT NULL DEFAULT ''" },
+    { name: "folder_id", definition: "TEXT NOT NULL DEFAULT ''" },
+    { name: "status", definition: "TEXT NOT NULL DEFAULT 'pending'" },
+    { name: "result_message", definition: "TEXT" },
+    { name: "processed_at", definition: "TEXT" },
+    { name: "created_at", definition: "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP" },
+  ]);
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_drive_upload_job_items_job_id ON drive_upload_job_items (job_id)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_drive_upload_job_items_status ON drive_upload_job_items (status)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_drive_upload_job_items_created_at ON drive_upload_job_items (created_at)").run();
+}
+
+export async function processDriveArchiveFileIds(env: Env, fileIds: number[]) {
+  const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
+  if (!rootFolderId) throw new Error("GOOGLE_DRIVE_FOLDER_ID is not configured");
+
+  const rows = await fetchUploadRowsByIds(env, fileIds);
+  const accessToken = await getGoogleAccessToken(env);
+  const archiveFolderId = await getOrCreateFolder(accessToken, rootFolderId, "장기보관");
+  let uploaded = 0;
+  let skipped = 0;
+  let r2Missing = 0;
+  let failed = 0;
+  const itemResults: DriveArchiveResultItem[] = [];
+
+  for (const row of rows) {
+    const item = await processDriveArchiveRow(env, accessToken, archiveFolderId, row);
+    itemResults.push(item);
+    if (item.status === "uploaded") uploaded += 1;
+    else if (item.status === "skipped") skipped += 1;
+    else {
+      failed += 1;
+      if (item.reason === "r2_not_found") r2Missing += 1;
+    }
+  }
+
+  const rowIds = new Set(rows.map((row) => row.id));
+  const missingIds = fileIds.filter((id) => !rowIds.has(id));
+  failed += missingIds.length;
+  for (const id of missingIds) {
+    itemResults.push({ id, fileName: `file-${id}`, status: "failed", reason: "db_row_not_found", error: "업로드할 파일을 찾지 못했습니다." });
+  }
+  const message = uploaded === 0 && skipped === 0 && failed > 0 ? "업로드할 파일을 찾지 못했습니다." : undefined;
+  return { total: fileIds.length, uploaded, skipped, r2Missing, failed, message, results: itemResults };
+}
+
+async function processDriveArchiveRow(env: Env, accessToken: string, archiveFolderId: string, row: UploadRow): Promise<DriveArchiveResultItem> {
+  await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("archiving", row.id).run();
+  const fileName = safeText(row.file_name) || `file-${row.id}`;
+  const monthFolderName = driveMonthFolderName(row);
+  const caseFolderName = buildTargetFolderName(row);
+  const folderPath = `장기보관/${monthFolderName}/${caseFolderName}`;
+  const r2Keys = resolveR2Keys(row);
+  let r2ObjectFound = false;
+  try {
+    const monthFolderId = await getOrCreateFolder(accessToken, archiveFolderId, monthFolderName);
+    const caseFolderId = await getOrCreateFolder(accessToken, monthFolderId, caseFolderName);
+    const object = await getR2Object(env, r2Keys);
+    r2ObjectFound = Boolean(object);
+    if (!object) throw new Error("R2 file not found");
+
+    const existing = await findDriveFile(accessToken, caseFolderId, fileName);
+    if (existing) {
+      const driveUrl = driveViewUrl(existing.id);
+      await updateArchiveRow(env, row.id, existing.id, driveUrl, "archived");
+      return { id: row.id, fileName, status: "skipped", reason: "already_exists", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "skipped"), driveFileId: existing.id, driveUrl };
+    }
+
+    const mimeType = row.mime_type || object.httpMetadata?.contentType || "application/octet-stream";
+    const driveFile = await uploadDriveFile(accessToken, caseFolderId, fileName, object, mimeType);
+    const driveUrl = driveViewUrl(driveFile.id);
+    await updateArchiveRow(env, row.id, driveFile.id, driveUrl, "archived");
+    return { id: row.id, fileName, status: "uploaded", diagnostics: buildDiagnostics(folderPath, r2Keys, r2ObjectFound, "uploaded"), driveFileId: driveFile.id, driveUrl };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("failed", row.id).run();
+    const reason = message === "R2 file not found" ? "r2_not_found" : "upload_failed";
+    const diagnostics = buildDiagnostics(folderPath, r2Keys, r2ObjectFound, message);
+    console.error("drive archive item failed", { fileName, folderPath, r2KeyExists: diagnostics.r2KeyExists, r2ObjectFound: diagnostics.r2ObjectFound, googleDriveUploadResult: diagnostics.googleDriveUploadResult });
+    return { id: row.id, fileName, status: "failed", reason, diagnostics, error: message };
+  }
 }
 
 async function fetchUploadRowsByIds(env: Env, fileIds: number[]) {

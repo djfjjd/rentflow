@@ -1292,7 +1292,6 @@ function ThumbnailBackfillButton() {
 }
 
 function DriveArchiveButton({
-  selectedBatches,
   selectedIds,
   totalVisible,
   allSelected,
@@ -1315,6 +1314,8 @@ function DriveArchiveButton({
   const [uploadingDots, setUploadingDots] = useState(".");
   const [failureListOpen, setFailureListOpen] = useState(false);
   const [pushNotice, setPushNotice] = useState("");
+  const [activeJobId, setActiveJobId] = useState("");
+  const [activeNotice, setActiveNotice] = useState(false);
   const cancelRef = useRef(false);
 
   useEffect(() => {
@@ -1331,13 +1332,46 @@ function DriveArchiveButton({
     return () => window.clearInterval(timer);
   }, [running]);
 
+  useEffect(() => {
+    void loadActiveJob();
+  }, []);
+
+  async function loadActiveJob() {
+    try {
+      const response = await fetch("/api/drive-upload-jobs/active", { cache: "no-store" });
+      const data = await readJsonResponse<{ active?: DriveUploadJobStatus | null }>(response);
+      if (!response.ok || !data.active) return;
+      setActiveJobId(data.active.id);
+      setActiveNotice(true);
+      applyJobStatus(data.active);
+    } catch (error) {
+      console.error("active drive upload job check failed", error);
+    }
+  }
+
   async function archiveSelected() {
     if (!selectedIds.length) {
       setError("선택된 파일이 없습니다.");
       return;
     }
-    const batches = buildDriveArchiveRequestBatches(selectedBatches);
-    await runArchiveBatches(batches, selectedIds.length);
+    setError("");
+    setPushNotice("");
+    setActiveNotice(false);
+    try {
+      const response = await fetch("/api/drive-upload-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderIds: selectedIds.map(String) }),
+      });
+      const data = await readJsonResponse<{ ok?: boolean; jobId?: string; error?: string }>(response);
+      if (!response.ok || !data.jobId) throw new Error(data.error || "Google Drive upload job create failed");
+      setActiveJobId(data.jobId);
+      await runJobLoop(data.jobId);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught);
+      console.error("Google Drive job create failed", caught);
+      setError(message);
+    }
   }
 
   async function retryFailures() {
@@ -1346,15 +1380,28 @@ function DriveArchiveButton({
       .map((item) => Number(item.id))
       .filter((id) => Number.isFinite(id) && id > 0);
     if (!failedIds.length) return;
-    const batches = chunkArray(failedIds, DRIVE_ARCHIVE_BATCH_SIZE).map((fileIds, index) => ({
-      key: `retry-${index}`,
-      label: `실패 파일 재시도 ${index + 1}`,
-      fileIds,
-    }));
-    await runArchiveBatches(batches, failedIds.length);
+    try {
+      const response = await fetch("/api/drive-upload-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderIds: failedIds.map(String) }),
+      });
+      const data = await readJsonResponse<{ ok?: boolean; jobId?: string; error?: string }>(response);
+      if (!response.ok || !data.jobId) throw new Error(data.error || "retry job create failed");
+      setActiveJobId(data.jobId);
+      await runJobLoop(data.jobId);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
   }
 
-  async function runArchiveBatches(batches: DriveArchiveBatch[], total: number) {
+  async function resumeActiveJob() {
+    if (!activeJobId) return;
+    setActiveNotice(false);
+    await runJobLoop(activeJobId);
+  }
+
+  async function runJobLoop(jobId: string) {
     cancelRef.current = false;
     setRunning(true);
     setUploadCancelled(false);
@@ -1363,58 +1410,28 @@ function DriveArchiveButton({
     setResult(null);
     setLogs([]);
     setFailureListOpen(false);
-    setProgress({ total, processed: 0, uploaded: 0, skipped: 0, failed: 0, cancelled: 0 });
     try {
-      const aggregate: DriveArchiveResult = { total, foldersReady: 0, uploaded: 0, skipped: 0, r2Missing: 0, failed: 0, cancelled: 0, results: [] };
-      for (const batch of batches) {
-        if (cancelRef.current) break;
-        const response = await fetch("/api/drive/archive", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileIds: batch.fileIds }),
-        });
-        const data = await readJsonResponse<DriveArchiveResult & { error?: string }>(response);
-        if (!response.ok) throw new Error(data.error || "Google Drive upload failed");
-        const batchResults = data.results || [];
-        const failures = batchResults.filter((item) => item.status === "failed");
-        if (failures.length) console.error("Google Drive archive failures", failures);
-        aggregate.foldersReady = (aggregate.foldersReady || 0) + (data.foldersReady || 0);
-        aggregate.uploaded += data.uploaded || 0;
-        aggregate.skipped += data.skipped || 0;
-        aggregate.r2Missing = (aggregate.r2Missing || 0) + (data.r2Missing || 0);
-        aggregate.failed += data.failed || 0;
-        aggregate.results = [...(aggregate.results || []), ...batchResults];
-        setProgress((current) => ({
-          total,
-          processed: Math.min(total, (current?.processed || 0) + (data.total || batch.fileIds.length)),
-          uploaded: aggregate.uploaded,
-          skipped: aggregate.skipped,
-          failed: aggregate.failed,
-          cancelled: cancelRef.current ? Math.max(0, total - Math.min(total, (current?.processed || 0) + (data.total || batch.fileIds.length))) : 0,
-        }));
-        setLogs((current) => [...batchArchiveLogs(batch.label, batchResults, data), ...current].slice(0, 5));
-        await wait(500);
+      let latest: DriveUploadJobStatus | null = null;
+      while (!cancelRef.current) {
+        const runResponse = await fetch(`/api/drive-upload-jobs/${encodeURIComponent(jobId)}/run`, { method: "POST" });
+        const runData = await readJsonResponse<DriveUploadJobStatus & { error?: string }>(runResponse);
+        if (!runResponse.ok) throw new Error(runData.error || "Google Drive upload job run failed");
+        latest = runData;
+        applyJobStatus(runData);
+        if (isTerminalJobStatus(runData.status)) break;
+        await wait(2000);
       }
       if (cancelRef.current) {
-        const processed = aggregate.uploaded + aggregate.skipped + aggregate.failed;
-        aggregate.cancelled = Math.max(0, total - processed);
-        aggregate.message = "업로드가 중지되었습니다.";
-        setUploadCancelled(true);
-        setProgress({
-          total,
-          processed,
-          uploaded: aggregate.uploaded,
-          skipped: aggregate.skipped,
-          failed: aggregate.failed,
-          cancelled: aggregate.cancelled,
-        });
+        await cancelJob(jobId);
+        latest = await fetchJobStatus(jobId);
+        applyJobStatus(latest);
+      } else if (latest) {
+        setResult(jobStatusToResult(latest));
       }
-      setResult(aggregate);
-      await notifyDriveArchiveResult(aggregate, setPushNotice);
       await onArchived();
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
-      console.error("Google Drive archive failed", caught);
+      console.error("Google Drive job failed", caught);
       setError(message);
     } finally {
       setRunning(false);
@@ -1424,6 +1441,24 @@ function DriveArchiveButton({
   function cancelUpload() {
     cancelRef.current = true;
     setUploadCancelled(true);
+  }
+
+  function applyJobStatus(status: DriveUploadJobStatus) {
+    const cancelled = status.status === "cancelled";
+    setUploadCancelled(cancelled);
+    setProgress({
+      total: status.totalCount,
+      processed: status.processedCount,
+      uploaded: status.uploadedCount,
+      skipped: status.skippedCount,
+      failed: status.failedCount,
+      cancelled: status.cancelledCount,
+    });
+    setLogs(jobStatusLogs(status));
+    if (isTerminalJobStatus(status.status)) {
+      setResult(jobStatusToResult(status));
+      setActiveNotice(false);
+    }
   }
 
   return (
@@ -1461,6 +1496,16 @@ function DriveArchiveButton({
           </button>
         ) : null}
       </div>
+      {activeNotice && activeJobId ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+          <p>진행 중인 Google Drive 업로드가 있습니다.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button className="small-btn" type="button" disabled={running} onClick={resumeActiveJob}>이어서 업로드</button>
+            <button className="small-btn" type="button" disabled={running} onClick={() => void cancelJob(activeJobId).then((status) => { applyJobStatus(status); setActiveNotice(false); })}>중지</button>
+            <button className="small-btn" type="button" onClick={() => void fetchJobStatus(activeJobId).then(applyJobStatus)}>상태 보기</button>
+          </div>
+        </div>
+      ) : null}
       {progress ? <DriveArchiveProgressView dots={uploadingDots} progress={progress} running={running} cancelled={uploadCancelled} /> : null}
       {logs.length ? <DriveArchiveLogList logs={logs} /> : null}
       {result ? (
@@ -1533,6 +1578,30 @@ type DriveArchiveResult = {
   results?: DriveArchiveResultItem[];
 };
 
+type DriveUploadJobLog = {
+  id: string;
+  folderId: string;
+  status: string;
+  message: string;
+  processedAt?: string;
+  createdAt?: string;
+};
+
+type DriveUploadJobStatus = {
+  id: string;
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled" | string;
+  totalCount: number;
+  processedCount: number;
+  uploadedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  cancelledCount: number;
+  percent?: number;
+  lastError?: string;
+  recentLogs?: DriveUploadJobLog[];
+  error?: string;
+};
+
 const DRIVE_ARCHIVE_BATCH_SIZE = 5;
 
 function DriveArchiveProgressView({ progress, running, cancelled, dots }: { progress: DriveArchiveProgress; running: boolean; cancelled: boolean; dots: string }) {
@@ -1596,6 +1665,59 @@ function batchArchiveLogs(label: string, results: DriveArchiveResultItem[], data
     return [{ key: `${label}-uploaded-${Date.now()}`, status: "uploaded" as const, text: `${label} 업로드 완료 ${data.uploaded}개` }];
   }
   return [{ key: `${label}-skipped-${Date.now()}`, status: "skipped" as const, text: `${label} 이미 존재, 건너뜀 ${data.skipped}개` }];
+}
+
+async function fetchJobStatus(jobId: string) {
+  const response = await fetch(`/api/drive-upload-jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  const data = await readJsonResponse<DriveUploadJobStatus & { error?: string }>(response);
+  if (!response.ok || data.error) throw new Error(data.error || "drive upload job status failed");
+  return data;
+}
+
+async function cancelJob(jobId: string) {
+  const response = await fetch(`/api/drive-upload-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  const data = await readJsonResponse<DriveUploadJobStatus & { error?: string }>(response);
+  if (!response.ok || data.error) throw new Error(data.error || "drive upload job cancel failed");
+  return data;
+}
+
+function isTerminalJobStatus(status: string) {
+  return ["completed", "failed", "cancelled"].includes(status);
+}
+
+function jobStatusToResult(status: DriveUploadJobStatus): DriveArchiveResult {
+  return {
+    total: status.totalCount,
+    uploaded: status.uploadedCount,
+    skipped: status.skippedCount,
+    failed: status.failedCount,
+    cancelled: status.cancelledCount,
+    message: status.lastError,
+    results: (status.recentLogs || []).map((log) => ({
+      id: Number(log.folderId) || 0,
+      fileName: log.folderId,
+      status: log.status,
+      error: log.status === "failed" ? log.message : undefined,
+      reason: log.message,
+    })),
+  };
+}
+
+function jobStatusLogs(status: DriveUploadJobStatus): DriveArchiveLog[] {
+  return (status.recentLogs || []).map((log) => ({
+    key: log.id,
+    status: log.status === "failed" ? "failed" as const : log.status === "skipped" ? "skipped" as const : "uploaded" as const,
+    text: `${driveJobStatusLabel(log.status)}: ${log.message || log.folderId}`,
+  }));
+}
+
+function driveJobStatusLabel(status: string) {
+  if (status === "uploaded") return "업로드 완료";
+  if (status === "skipped") return "이미 존재";
+  if (status === "failed") return "실패";
+  if (status === "cancelled") return "중지";
+  if (status === "processing") return "처리 중";
+  return "대기";
 }
 
 function DriveArchiveFailureList({
