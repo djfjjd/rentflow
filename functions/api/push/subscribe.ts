@@ -15,7 +15,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM push_subscriptions").first() as { count?: number } | null;
     subscriptionCount = Number(row?.count || 0);
     const { results } = await env.DB.prepare("SELECT endpoint FROM push_subscriptions ORDER BY updated_at DESC, created_at DESC LIMIT 5").all();
-    endpoints = ((results || []) as { endpoint?: string }[]).map((item) => safeText(item.endpoint).slice(0, 40)).filter(Boolean);
+    endpoints = ((results || []) as { endpoint?: string }[]).map((item) => safeText(item.endpoint).slice(0, 60)).filter(Boolean);
   } catch (error) {
     console.error("push subscription count failed", { error: error instanceof Error ? error.message : String(error) });
   }

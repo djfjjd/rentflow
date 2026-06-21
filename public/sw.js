@@ -64,12 +64,20 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("push", function (event) {
   let data = {};
+  let rawPayload = "";
   try {
-    data = event.data ? event.data.json() : {};
+    rawPayload = event.data ? event.data.text() : "";
+    data = rawPayload ? JSON.parse(rawPayload) : {};
   } catch {
     data = {
-      title: "RentFlow 알림",
-      body: event.data ? event.data.text() : "새 알림이 있습니다.",
+      title: "RentFlow 테스트 알림",
+      body: rawPayload || "푸시알림 테스트입니다.",
+    };
+  }
+  if (!data || typeof data !== "object") {
+    data = {
+      title: "RentFlow 테스트 알림",
+      body: rawPayload || "푸시알림 테스트입니다.",
     };
   }
   const title = data.title || "RentFlow 알림";
@@ -85,9 +93,19 @@ self.addEventListener("push", function (event) {
   };
 
   event.waitUntil(
-    self.registration
-      .showNotification(title, options)
-      .then(() => broadcastPushDebug({ type: "push-received", title, body: options.body, tag, url: clickUrl, receivedAt: options.data.receivedAt })),
+    Promise.all([
+      self.registration.showNotification(title, options),
+      broadcastPushDebug({
+        type: "PUSH_RECEIVED",
+        legacyType: "push-received",
+        payload: rawPayload,
+        title,
+        body: options.body,
+        tag,
+        url: clickUrl,
+        receivedAt: new Date(options.data.receivedAt).toISOString(),
+      }),
+    ]),
   );
 });
 

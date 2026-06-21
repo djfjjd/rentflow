@@ -13,6 +13,7 @@ type PushDebugState = {
   serviceWorkerClickEvent: string;
   subscription: string;
   subscriptionEndpoint: string;
+  subscriptionEndpointIsApple: string;
   dbEndpoint: string;
   displayModeStandalone: string;
   navigatorStandalone: string;
@@ -22,6 +23,7 @@ type PushDebugState = {
   lastSubscribedAt: string;
   lastHttpStatus: string;
   lastStatusCode: string;
+  lastHeaders: string;
   lastPayload: string;
   lastSwPushReceived: string;
   lastPushResult: string;
@@ -39,6 +41,7 @@ const initialState: PushDebugState = {
   serviceWorkerClickEvent: "확인 중",
   subscription: "확인 중",
   subscriptionEndpoint: "확인 중",
+  subscriptionEndpointIsApple: "확인 중",
   dbEndpoint: "확인 중",
   displayModeStandalone: "확인 중",
   navigatorStandalone: "확인 중",
@@ -48,6 +51,7 @@ const initialState: PushDebugState = {
   lastSubscribedAt: "-",
   lastHttpStatus: "-",
   lastStatusCode: "-",
+  lastHeaders: "-",
   lastPayload: "-",
   lastSwPushReceived: "-",
   lastPushResult: "-",
@@ -57,11 +61,12 @@ const initialState: PushDebugState = {
 export default function DebugPushPage() {
   const [state, setState] = useState<PushDebugState>(initialState);
   const [status, setStatus] = useState("");
+  const [testResultModal, setTestResultModal] = useState("");
 
   useEffect(() => {
     void refreshState();
     function handleMessage(event: MessageEvent) {
-      if (event.data?.type !== "push-received") return;
+      if (event.data?.type !== "PUSH_RECEIVED" && event.data?.type !== "push-received") return;
       const text = JSON.stringify(event.data).slice(0, 1000);
       window.localStorage.setItem("rentflow:lastSwPushReceived", text);
       setState((current) => ({ ...current, lastSwPushReceived: text }));
@@ -82,6 +87,7 @@ export default function DebugPushPage() {
       serviceWorkerClickEvent: "확인 중",
       subscription: "확인 중",
       subscriptionEndpoint: "확인 중",
+      subscriptionEndpointIsApple: "확인 중",
       dbEndpoint: "확인 중",
       displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser",
       navigatorStandalone: String(Boolean((navigator as Navigator & { standalone?: boolean }).standalone)),
@@ -91,6 +97,7 @@ export default function DebugPushPage() {
       lastSubscribedAt: window.localStorage.getItem("rentflow:lastPushSubscribedAt") || "-",
       lastHttpStatus: window.localStorage.getItem("rentflow:lastPushHttpStatus") || "-",
       lastStatusCode: window.localStorage.getItem("rentflow:lastPushStatusCode") || "-",
+      lastHeaders: window.localStorage.getItem("rentflow:lastPushHeaders") || "-",
       lastPayload: window.localStorage.getItem("rentflow:lastPushPayload") || "-",
       lastSwPushReceived: window.localStorage.getItem("rentflow:lastSwPushReceived") || "-",
       lastPushResult: window.localStorage.getItem("rentflow:lastPushResult") || "-",
@@ -122,7 +129,8 @@ export default function DebugPushPage() {
       next.serviceWorkerActiveScript = registration?.active?.scriptURL || "-";
       const subscription = await registration?.pushManager?.getSubscription();
       next.subscription = subscription ? `구독됨: ${subscription.endpoint.slice(0, 80)}` : "구독 없음";
-      next.subscriptionEndpoint = subscription ? subscription.endpoint.slice(0, 40) : "-";
+      next.subscriptionEndpoint = subscription ? subscription.endpoint.slice(0, 60) : "-";
+      next.subscriptionEndpointIsApple = subscription?.endpoint.includes("web.push.apple.com") ? "예" : subscription ? "아니오" : "-";
       if (next.permission === "granted" && !subscription) {
         setState(next);
         await resubscribe({ silent: true });
@@ -211,26 +219,55 @@ export default function DebugPushPage() {
         url: "/app",
         tag: "rentflow-test",
       };
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        setStatus("현재 기기의 push subscription이 없습니다. 푸시 재구독을 먼저 실행하세요.");
+        return;
+      }
+      const subscriptionJson = subscription.toJSON ? subscription.toJSON() : subscription;
       window.localStorage.setItem("rentflow:lastPushPayload", JSON.stringify(payload));
       const response = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, subscription: subscriptionJson }),
       });
       const text = await response.text();
       const result = `${response.status} ${text.slice(0, 1000)}`;
       window.localStorage.setItem("rentflow:lastPushHttpStatus", String(response.status));
       window.localStorage.setItem("rentflow:lastPushResult", result);
-      if (!response.ok) window.localStorage.setItem("rentflow:lastPushError", text.slice(0, 1000));
+      window.localStorage.setItem("rentflow:lastPushError", response.ok ? "-" : text.slice(0, 2000));
       const parsed = parseJson(text);
-      if (parsed?.statusCode) window.localStorage.setItem("rentflow:lastPushStatusCode", String(parsed.statusCode));
+      window.localStorage.setItem("rentflow:lastPushStatusCode", parsed?.statusCode ? String(parsed.statusCode) : "-");
+      window.localStorage.setItem("rentflow:lastPushHeaders", parsed?.headers ? JSON.stringify(parsed.headers).slice(0, 2000) : "-");
+      const modalInfo = {
+        notificationPermission: "Notification" in window ? Notification.permission : "unsupported",
+        displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
+        navigatorStandalone: Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+        serviceWorkerActive: Boolean(registration.active),
+        serviceWorkerScriptURL: registration.active?.scriptURL || "",
+        subscriptionEndpoint: subscription.endpoint,
+        subscriptionEndpointPrefix60: subscription.endpoint.slice(0, 60),
+        endpointIsApple: subscription.endpoint.includes("web.push.apple.com"),
+        dbEndpointPrefix60: state.dbEndpoint,
+        vapidPublicKeyExists: state.vapidPublicKey,
+        vapidPrivateKeyExists: state.vapidPrivateKey,
+        httpStatus: response.status,
+        webPushStatusCode: parsed?.statusCode || null,
+        webPushHeaders: parsed?.headers || null,
+        webPushError: parsed?.error || parsed?.errors || null,
+        webPushBody: parsed?.body || parsed?.errors?.[0]?.body || null,
+        webPushStack: parsed?.stack || parsed?.errors?.[0]?.stack || null,
+        rawResponse: text.slice(0, 4000),
+      };
+      setTestResultModal(JSON.stringify(modalInfo, null, 2));
       if (parsed?.expired) {
         setStatus(`테스트 알림 발송 완료, 만료 구독 ${parsed.expired}개 삭제됨. 필요 시 푸시 재구독을 누르세요.`);
       } else if (parsed?.failed) {
-        window.localStorage.setItem("rentflow:lastPushError", JSON.stringify(parsed.errors || parsed).slice(0, 1000));
+        window.localStorage.setItem("rentflow:lastPushError", JSON.stringify(parsed.errors || parsed).slice(0, 2000));
         setStatus(`테스트 알림 일부 실패: ${result}`);
       } else {
-        setStatus(response.ok ? `테스트 알림 발송 완료\nstatusCode: ${parsed?.statusCode || "-"}\nendpoint: ${parsed?.endpoint || "-"}` : `테스트 알림 실패: ${result}`);
+        setStatus(response.ok ? `테스트 알림 발송 완료\nstatusCode: ${parsed?.statusCode || "-"}\nendpoint: ${parsed?.endpointPrefix60 || parsed?.endpoint || "-"}` : `테스트 알림 실패: ${result}`);
       }
       await refreshState();
     } catch (error) {
@@ -265,14 +302,16 @@ export default function DebugPushPage() {
           <DebugRow label="display-mode standalone 여부" value={state.displayModeStandalone} />
           <DebugRow label="navigator.standalone 여부" value={state.navigatorStandalone} />
           <DebugRow label="현재 Push Subscription 존재 여부" value={state.subscription} />
-          <DebugRow label="현재 subscription endpoint 앞 40자" value={state.subscriptionEndpoint} />
+          <DebugRow label="현재 subscription endpoint 앞 60자" value={state.subscriptionEndpoint} />
+          <DebugRow label="endpoint가 web.push.apple.com 인지 여부" value={state.subscriptionEndpointIsApple} />
           <DebugRow label="DB 저장된 Subscription 수" value={state.dbSubscriptionCount} />
-          <DebugRow label="DB 저장 endpoint 앞 40자" value={state.dbEndpoint} />
+          <DebugRow label="DB 저장 endpoint 앞 60자" value={state.dbEndpoint} />
           <DebugRow label="VAPID_PUBLIC_KEY 존재 여부" value={state.vapidPublicKey} />
           <DebugRow label="VAPID_PRIVATE_KEY 존재 여부" value={state.vapidPrivateKey} />
           <DebugRow label="마지막 구독 시간" value={state.lastSubscribedAt} />
           <DebugRow label="마지막 테스트 푸시 HTTP status" value={state.lastHttpStatus} />
           <DebugRow label="마지막 web-push send 결과 statusCode" value={state.lastStatusCode} />
+          <DebugRow label="마지막 web-push send 결과 headers" value={state.lastHeaders} />
           <DebugRow label="마지막 테스트 푸시 payload" value={state.lastPayload} />
           <DebugRow label="마지막 SW push 수신" value={state.lastSwPushReceived} />
           <DebugRow label="마지막 푸시 결과" value={state.lastPushResult} />
@@ -288,13 +327,35 @@ export default function DebugPushPage() {
 
         {status ? <p className="rounded-lg border border-[#d8ded8] bg-white p-3 text-sm font-black text-[#116149]">{status}</p> : null}
       </section>
+      {testResultModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setTestResultModal("")}>
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-black text-[#16211d]">테스트 알림 발송 상세</h2>
+              <button className="small-btn" type="button" onClick={() => setTestResultModal("")}>닫기</button>
+            </div>
+            <pre className="whitespace-pre-wrap break-words rounded-xl bg-[#0f172a] p-3 text-xs leading-relaxed text-white">{testResultModal}</pre>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
 
 function parseJson(value: string) {
   try {
-    return JSON.parse(value) as { expired?: number; failed?: number; errors?: unknown; statusCode?: number; endpoint?: string };
+    return JSON.parse(value) as {
+      expired?: number;
+      failed?: number;
+      errors?: { body?: string; stack?: string }[];
+      statusCode?: number;
+      endpoint?: string;
+      endpointPrefix60?: string;
+      headers?: Record<string, string>;
+      error?: string;
+      body?: string;
+      stack?: string;
+    };
   } catch {
     return null;
   }
