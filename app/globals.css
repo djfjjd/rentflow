@@ -205,10 +205,49 @@ select {
   border-collapse: collapse;
 }
 
+.partners-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.partners-toolbar {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .partners-content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.6fr) minmax(360px, 0.4fr);
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.partners-list {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.partner-card {
+  position: relative;
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.partner-card-selected {
+  border-color: #116149;
 }
 
 .partner-map-wrapper {
@@ -216,8 +255,19 @@ select {
   overflow: hidden;
 }
 
-.partner-map {
-  height: 520px;
+.partner-map-panel {
+  position: sticky;
+  top: 96px;
+  height: 620px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.partner-map,
+.leaflet-container {
+  width: 100%;
+  height: 100%;
 }
 
 .partner-card-header {
@@ -225,6 +275,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding-right: 40px;
 }
 
 .partner-card-title {
@@ -235,6 +286,9 @@ select {
 }
 
 .partner-edit-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
   width: 32px;
   height: 32px;
   border: 1px solid #e5e7eb;
@@ -245,6 +299,13 @@ select {
   justify-content: center;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.partner-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .dispatch-page,
@@ -533,7 +594,33 @@ select {
   }
 
   .partners-content-grid {
-    grid-template-columns: minmax(0, 1fr);
+    display: block;
+  }
+
+  .partners-page {
+    max-width: 100%;
+    padding: 16px;
+  }
+
+  .partners-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .partners-toolbar button,
+  .partners-toolbar input {
+    width: 100%;
+  }
+
+  .partners-list {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  .partner-map-panel {
+    display: none;
   }
 
   .vehicle-board-search {

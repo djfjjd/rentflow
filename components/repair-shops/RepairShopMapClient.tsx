@@ -163,7 +163,7 @@ export default function RepairShopMapClient({
   }
 
   const content = (
-    <section className="mx-auto grid max-w-7xl gap-4">
+    <section className="partners-page grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-black">{title}</h1>
@@ -173,8 +173,8 @@ export default function RepairShopMapClient({
         </div>
 
         <section className="grid gap-2">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button className="primary-btn w-full shrink-0 sm:w-[120px]" type="button" onClick={() => setShowAddModal(true)}>
+          <div className="partners-toolbar">
+            <button className="primary-btn shrink-0" type="button" onClick={() => setShowAddModal(true)}>
               주소 추가
             </button>
             <div className="relative flex-1">
@@ -201,10 +201,10 @@ export default function RepairShopMapClient({
         </section>
 
         <section className="partners-content-grid">
-          <aside className="grid max-h-[520px] min-h-[420px] min-w-0 gap-2 overflow-auto">
+          <aside className="partners-list min-w-0">
             {filtered.map((shop) => (
               <article
-                className={`rounded-lg border bg-white p-2 text-left shadow-sm lg:p-4 ${selectedShopId === shop.id ? "border-[#116149] ring-2 ring-[#116149]/20" : "border-[#d8ded8]"}`}
+                className={`partner-card text-left ${selectedShopId === shop.id ? "partner-card-selected ring-2 ring-[#116149]/20" : ""}`}
                 key={shop.id}
                 onClick={() => {
                   if (hasCoordinates(shop)) setSelectedShopId(shop.id);
@@ -226,7 +226,7 @@ export default function RepairShopMapClient({
                   </button>
                 </div>
                 <p className="mt-1 text-xs font-bold text-[#667269] lg:text-sm">{shop.address}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 lg:flex-nowrap lg:gap-2 lg:overflow-x-auto">
+                <div className="partner-actions">
                   <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
                   <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
                   <button className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
@@ -248,7 +248,7 @@ export default function RepairShopMapClient({
             {!filtered.length ? <div className="panel text-center font-black text-[#667269]">검색 결과가 없습니다.</div> : null}
           </aside>
 
-          <div className="partner-map-wrapper rounded-lg border border-[#d8ded8] bg-white shadow-sm">
+          <div className="partner-map-panel partner-map-wrapper">
             <MapContainer center={center} zoom={12} scrollWheelZoom className="partner-map min-h-[420px] w-full">
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

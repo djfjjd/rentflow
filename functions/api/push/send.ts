@@ -36,8 +36,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     let sent = 0;
     let failed = 0;
     const expired: string[] = [];
-    const errors: { id: string; endpoint: string; endpointPrefix60: string; provider: string; statusCode: number; message: string; body?: string; stack?: string; headers?: Record<string, string> }[] = [];
-    const deliveries: { id: string; endpoint: string; endpointPrefix60: string; provider: string; statusCode: number; headers?: Record<string, string> }[] = [];
+    const errors: { id: string; endpoint: string; endpointPrefix60: string; provider: string; statusCode: number; message: string; body?: string; stack?: string; headers?: Record<string, string>; pushServerHttpStatus?: number; pushServerResponseBody?: string }[] = [];
+    const deliveries: { id: string; endpoint: string; endpointPrefix60: string; provider: string; statusCode: number; headers?: Record<string, string>; pushServerHttpStatus: number; pushServerResponseBody: string }[] = [];
 
     for (const row of rows) {
       try {
@@ -60,6 +60,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           provider: getPushProvider(safeText(row.endpoint)),
           statusCode,
           headers: sendResult.headers,
+          pushServerHttpStatus: sendResult.httpStatus,
+          pushServerResponseBody: sendResult.body,
         });
         sent += 1;
       } catch (error) {
@@ -82,6 +84,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           body: body.slice(0, 2000),
           stack: stack.slice(0, 2000),
           headers,
+          pushServerHttpStatus: typeof error === "object" && error && "httpStatus" in error ? Number((error as { httpStatus?: number }).httpStatus) : statusCode,
+          pushServerResponseBody: body.slice(0, 2000),
         });
         console.error("web push delivery failed", {
           id: row.id,
@@ -124,6 +128,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       deliveries,
       statusCode,
       headers: firstDelivery?.headers || firstError?.headers || {},
+      pushServerHttpStatus: firstDelivery?.pushServerHttpStatus || firstError?.pushServerHttpStatus || 0,
+      pushServerResponseBody: firstDelivery?.pushServerResponseBody || firstError?.pushServerResponseBody || "",
       endpoint: firstDelivery?.endpoint || firstError?.endpoint || "",
       endpointPrefix60: firstDelivery?.endpointPrefix60 || firstError?.endpointPrefix60 || "",
       provider: firstDelivery?.provider || firstError?.provider || "",
@@ -169,7 +175,8 @@ async function sendViaNodePushServer(
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: { title: string; body: string; url: string; tag: string; data: Record<string, unknown> },
 ) {
-  const response = await fetch(`${pushServerUrl}/send`, {
+  const targetUrl = pushServerUrl.endsWith("/send") ? pushServerUrl : `${pushServerUrl}/send`;
+  const response = await fetch(targetUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -194,10 +201,12 @@ async function sendViaNodePushServer(
 function createPushServerError(result: Awaited<ReturnType<typeof sendViaNodePushServer>>) {
   const error = new Error(result.error || `Node push server failed with HTTP ${result.httpStatus}`) as Error & {
     statusCode?: number;
+    httpStatus?: number;
     body?: string;
     headers?: Record<string, string>;
   };
   error.statusCode = result.statusCode || result.httpStatus;
+  error.httpStatus = result.httpStatus;
   error.body = result.body;
   error.headers = result.headers;
   return error;

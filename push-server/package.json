@@ -1,0 +1,8 @@
+{
+  "name": "rentflow-push-server",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "web-push": "latest"
+  }
+}

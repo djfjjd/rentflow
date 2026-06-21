@@ -199,7 +199,8 @@ async function sendPushNotification(env: Env & PushEnv, payload: { title: string
   if (!pushServerUrl || !pushServerSecret) throw new Error("PUSH_SERVER_URL or PUSH_SERVER_SECRET is not configured");
   const { results } = await env.DB.prepare("SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY created_at DESC").all();
   for (const row of (results || []) as Record<string, unknown>[]) {
-    const response = await fetch(`${pushServerUrl}/send`, {
+    const targetUrl = pushServerUrl.endsWith("/send") ? pushServerUrl : `${pushServerUrl}/send`;
+    const response = await fetch(targetUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

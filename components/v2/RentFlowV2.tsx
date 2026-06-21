@@ -648,6 +648,8 @@ function PushPermissionButton() {
         nextPublicVapidPublicKeyExists: Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
         serverResponseStatus: response.status,
         serverResponseBody: body,
+        pushServerHttpStatus: parsed?.pushServerHttpStatus || parsed?.deliveries?.[0]?.pushServerHttpStatus || parsed?.errors?.[0]?.pushServerHttpStatus || "",
+        pushServerResponseBody: parsed?.pushServerResponseBody || parsed?.deliveries?.[0]?.pushServerResponseBody || parsed?.errors?.[0]?.pushServerResponseBody || "",
         webPushErrorMessage: parsed?.errors?.[0]?.message || parsed?.error || "",
         webPushErrorBody: parsed?.errors?.[0]?.body || parsed?.body || "",
         webPushErrorStack: parsed?.errors?.[0]?.stack || parsed?.stack || "",
@@ -747,7 +749,10 @@ function parseJsonObject(value: string) {
       error?: string;
       body?: string;
       stack?: string;
-      errors?: { message?: string; body?: string; stack?: string }[];
+      pushServerHttpStatus?: number;
+      pushServerResponseBody?: string;
+      deliveries?: { pushServerHttpStatus?: number; pushServerResponseBody?: string }[];
+      errors?: { message?: string; body?: string; stack?: string; pushServerHttpStatus?: number; pushServerResponseBody?: string }[];
     };
   } catch {
     return null;
