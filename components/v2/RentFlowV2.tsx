@@ -19,6 +19,7 @@ import {
   Info,
   MapPin,
   PackageSearch,
+  Phone,
   Plus,
   Search,
   Settings,
@@ -93,13 +94,13 @@ const adminItems = [
 const dispatchBoardColumns = [
   { label: "날짜", width: "w-[130px]" },
   { label: "차량번호", width: "w-[100px]" },
+  { label: "연락처", width: "w-[170px]" },
   { label: "구분", width: "w-[70px]" },
   { label: "차종/색상", width: "w-[160px]" },
   { label: "오더자", width: "w-[180px]" },
   { label: "고객차종", width: "w-[130px]" },
   { label: "주유량", width: "w-[80px]" },
   { label: "수리처", width: "w-[160px]" },
-  { label: "연락처", width: "w-[170px]" },
   { label: "메모", width: "w-[220px]" },
   { label: "사진링크", width: "w-[80px]" },
   { label: "사진추가업로드", width: "w-[100px]" },
@@ -140,6 +141,14 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const isAdmin = kind.startsWith("admin");
+  const pageClassName =
+    kind === "dispatch"
+      ? "dispatch-page"
+      : kind === "return"
+        ? "return-page"
+        : kind === "reservation"
+          ? "schedule-page reservation-page"
+          : "";
 
   async function reloadReservations() {
     setReservations(await fetchJson<ReservationV2[]>("/api/reservations", []));
@@ -187,7 +196,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
   return (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div className={`mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 ${pageClassName}`}>
         <header className="sticky top-0 z-30 -mx-4 border-b border-[#d7ddd4] bg-[#f6f7f4]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-between">
             <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 items-center gap-2 font-black">
@@ -619,7 +628,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
   const [recordId, setRecordId] = useState(() => createId("dispatch"));
   const [resetKey, setResetKey] = useState(0);
   return (
-    <section className="space-y-4">
+    <section className="dispatch-page space-y-4">
       <DataForm
         endpoint="/api/dispatches"
         buildPayload={(data) => ({
@@ -713,7 +722,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [resetKey, setResetKey] = useState(0);
   const latest = vehicle ? latestByVehicle(dispatches, vehicle.plateNumber) : undefined;
   return (
-    <section className="space-y-4">
+    <section className="return-page space-y-4">
     <DataForm
       endpoint="/api/returns"
       buildPayload={(data) => ({
@@ -794,7 +803,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
   const [resetKey, setResetKey] = useState(0);
   const parsed = useMemo(() => parseReservationText(draft), [draft]);
   return (
-    <section className="space-y-4">
+    <section className="schedule-page reservation-page space-y-4">
       <CalendarSubscribeBox />
       <DataForm
         endpoint="/api/reservations"
@@ -1928,9 +1937,17 @@ function DispatchAdmin({
         <table className="w-full min-w-[1680px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
-            {dispatchBoardColumns.slice(0, 3).map((column) => <col className={column.width} key={column.label} />)}
+            <col className="w-[130px]" />
+            <col className="w-[100px]" />
+            <col className="w-[70px]" />
             <col className="w-[80px]" />
-            {dispatchBoardColumns.slice(3, 10).map((column) => <col className={column.width} key={column.label} />)}
+            <col className="w-[160px]" />
+            <col className="w-[180px]" />
+            <col className="w-[130px]" />
+            <col className="w-[80px]" />
+            <col className="w-[160px]" />
+            <col className="w-[170px]" />
+            <col className="w-[220px]" />
             <col className="w-[120px]" />
           </colgroup>
           <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
@@ -1988,25 +2005,25 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
   return (
     <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">배차 현황판</h2>
-      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+      <div data-horizontal-scroll="true" className="dispatch-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[1640px] table-fixed text-left text-sm">
           <colgroup>
             {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
           </colgroup>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
             return (
               <tr className="border-b" key={item.id}>
                 <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
                 <TruncatedCell className={getVehicleNumberClass(vehicle?.companyType)} value={clean(item.rentalCarNumber)} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
                 <TruncatedCell value={clean(item.orderedBy || item.customerName)} />
                 <TruncatedCell value={clean(item.customerCarModel)} />
                 <TruncatedCell value={clean(item.fuelDisplay)} />
                 <TruncatedCell value={clean(item.repairShop)} />
-                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
                 <MemoCell value={item.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
@@ -2042,7 +2059,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
   return (
     <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
-      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+      <div data-horizontal-scroll="true" className="return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[1080px] text-left text-sm">
           <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
@@ -2729,7 +2746,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   return (
     <section className="panel w-full overflow-hidden">
       <h2 className="mb-3 text-xl font-black">예약 목록</h2>
-      <div data-horizontal-scroll="true" className="w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+      <div data-horizontal-scroll="true" className="reservation-table-wrap schedule-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[980px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[90px]" />
@@ -3472,9 +3489,11 @@ function PhoneCell({ phone }: { phone?: string }) {
   const href = `tel:${value.replace(/[^\d+]/g, "") || value}`;
   const display = formatPhoneNumber(value);
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1">
+    <div className="flex min-w-0 items-center gap-2">
       <span className="whitespace-nowrap" title={value}>{display}</span>
-      <a className="small-btn shrink-0" href={href}>통화</a>
+      <a className="call-button shrink-0" href={href} title="전화걸기" aria-label="전화걸기">
+        <Phone size={16} />
+      </a>
     </div>
   );
 }

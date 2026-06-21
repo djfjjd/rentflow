@@ -171,7 +171,96 @@ select {
   flex: 0 0 auto;
 }
 
+.dispatch-page,
+.return-page,
+.schedule-page,
+.reservation-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.dispatch-table-wrap,
+.return-table-wrap,
+.schedule-table-wrap,
+.reservation-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.call-button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #0f766e;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.call-button:hover {
+  transform: scale(1.08);
+}
+
+.call-button:active {
+  transform: scale(0.95);
+}
+
 @media (max-width: 768px) {
+  .dispatch-page,
+  .return-page,
+  .schedule-page,
+  .reservation-page {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .dispatch-page *,
+  .return-page *,
+  .schedule-page *,
+  .reservation-page * {
+    box-sizing: border-box;
+  }
+
+  .dispatch-page input,
+  .dispatch-page textarea,
+  .dispatch-page button,
+  .return-page input,
+  .return-page textarea,
+  .return-page button,
+  .schedule-page input,
+  .schedule-page textarea,
+  .schedule-page button,
+  .reservation-page input,
+  .reservation-page textarea,
+  .reservation-page button {
+    max-width: 100%;
+  }
+
+  .schedule-table-wrap,
+  .reservation-table-wrap,
+  .dispatch-table-wrap,
+  .return-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .schedule-table-wrap table,
+  .reservation-table-wrap table,
+  .dispatch-table-wrap table,
+  .return-table-wrap table {
+    min-width: 680px;
+  }
+
   .partners-content-grid {
     grid-template-columns: minmax(0, 1fr);
   }

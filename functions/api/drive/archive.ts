@@ -14,6 +14,7 @@ type UploadRow = {
   file_name: string;
   r2_url?: string;
   r2_key: string;
+  business_date?: string;
   vehicle_number?: string;
   mime_type?: string;
   file_type?: string;
@@ -56,12 +57,15 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     for (const row of rows) {
       await env.DB.prepare("UPDATE uploaded_files SET archive_status = ? WHERE id = ?").bind("archiving", row.id).run();
       const fileName = safeText(row.file_name) || `file-${row.id}`;
-      const folderPath = `장기보관/${buildTargetFolderName(row)}`;
+      const monthFolderName = driveMonthFolderName(row);
+      const caseFolderName = buildTargetFolderName(row);
+      const folderPath = `장기보관/${monthFolderName}/${caseFolderName}`;
       const r2Keys = resolveR2Keys(row);
       let r2ObjectFound = false;
       let caseFolderId = "";
       try {
-        caseFolderId = await getOrCreateFolder(accessToken, archiveFolderId, buildTargetFolderName(row));
+        const monthFolderId = await getOrCreateFolder(accessToken, archiveFolderId, monthFolderName);
+        caseFolderId = await getOrCreateFolder(accessToken, monthFolderId, caseFolderName);
         const object = await getR2Object(env, r2Keys);
         r2ObjectFound = Boolean(object);
         if (!object) {
@@ -135,9 +139,29 @@ async function fetchUploadRowsByIds(env: Env, fileIds: number[]) {
   for (const chunk of chunkArray(fileIds, 50)) {
     const placeholders = chunk.map(() => "?").join(", ");
     const { results } = await env.DB.prepare(`
-      SELECT id, file_name, r2_url, r2_key, vehicle_number, mime_type, file_type, record_type, record_id, uploaded_at, created_at
-      FROM uploaded_files
-      WHERE id IN (${placeholders})
+      SELECT
+        uf.id,
+        uf.file_name,
+        uf.r2_url,
+        uf.r2_key,
+        COALESCE(uf.vehicle_number, d.vehicle_number, r.vehicle_number, res.vehicle_number) AS vehicle_number,
+        uf.mime_type,
+        uf.file_type,
+        uf.record_type,
+        uf.record_id,
+        uf.uploaded_at,
+        uf.created_at,
+        CASE uf.record_type
+          WHEN 'dispatch' THEN d.date
+          WHEN 'return' THEN r.date
+          WHEN 'reservation' THEN res.date
+          ELSE NULL
+        END AS business_date
+      FROM uploaded_files uf
+      LEFT JOIN dispatches d ON uf.record_type = 'dispatch' AND uf.record_id = d.id
+      LEFT JOIN returns r ON uf.record_type = 'return' AND uf.record_id = r.id
+      LEFT JOIN reservations res ON uf.record_type = 'reservation' AND uf.record_id = res.id
+      WHERE uf.id IN (${placeholders})
     `).bind(...chunk).all();
     rows.push(...((results || []) as UploadRow[]));
   }
@@ -336,8 +360,25 @@ function parseR2KeyFromUrl(value?: string) {
 function buildTargetFolderName(row: UploadRow) {
   const vehicleNumber = safePathSegment(row.vehicle_number || "차량번호없음");
   const typeLabel = safePathSegment(recordTypeLabel(row.record_type) || "기타");
-  const recordId = safePathSegment(row.record_id || "");
-  return recordId ? `${vehicleNumber}_${typeLabel}_${recordId}` : `${vehicleNumber}_${typeLabel}`;
+  return `${vehicleNumber}_${typeLabel}_${driveDateString(row)}`;
+}
+
+function driveMonthFolderName(row: UploadRow) {
+  return driveDateString(row).slice(0, 7);
+}
+
+function driveDateString(row: UploadRow) {
+  return normalizeDriveDate(row.business_date || row.uploaded_at || row.created_at) || new Date().toISOString().slice(0, 10);
+}
+
+function normalizeDriveDate(value?: string) {
+  const text = safeText(value);
+  if (!text) return "";
+  const match = text.match(/\d{4}-\d{2}-\d{2}/);
+  if (match) return match[0];
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
 }
 
 function recordTypeLabel(value?: string) {
