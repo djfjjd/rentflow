@@ -5,10 +5,16 @@ import { useEffect, useState } from "react";
 type PushDebugState = {
   permission: string;
   serviceWorker: string;
+  serviceWorkerPath: string;
+  serviceWorkerScope: string;
+  serviceWorkerPushEvent: string;
+  serviceWorkerClickEvent: string;
   subscription: string;
-  vapid: string;
+  vapidPublicKey: string;
+  vapidPrivateKey: string;
   dbSubscriptionCount: string;
   lastSubscribedAt: string;
+  lastHttpStatus: string;
   lastPushResult: string;
   lastError: string;
 };
@@ -16,10 +22,16 @@ type PushDebugState = {
 const initialState: PushDebugState = {
   permission: "확인 중",
   serviceWorker: "확인 중",
+  serviceWorkerPath: "확인 중",
+  serviceWorkerScope: "확인 중",
+  serviceWorkerPushEvent: "확인 중",
+  serviceWorkerClickEvent: "확인 중",
   subscription: "확인 중",
-  vapid: "확인 중",
+  vapidPublicKey: "확인 중",
+  vapidPrivateKey: "확인 중",
   dbSubscriptionCount: "확인 중",
   lastSubscribedAt: "-",
+  lastHttpStatus: "-",
   lastPushResult: "-",
   lastError: "-",
 };
@@ -36,29 +48,43 @@ export default function DebugPushPage() {
     const next: PushDebugState = {
       permission: "Notification" in window ? Notification.permission : "미지원",
       serviceWorker: "serviceWorker" in navigator ? "지원" : "미지원",
+      serviceWorkerPath: "/sw.js",
+      serviceWorkerScope: "확인 중",
+      serviceWorkerPushEvent: "확인 중",
+      serviceWorkerClickEvent: "확인 중",
       subscription: "확인 중",
-      vapid: "확인 중",
+      vapidPublicKey: "확인 중",
+      vapidPrivateKey: "확인 중",
       dbSubscriptionCount: "확인 중",
       lastSubscribedAt: window.localStorage.getItem("rentflow:lastPushSubscribedAt") || "-",
+      lastHttpStatus: window.localStorage.getItem("rentflow:lastPushHttpStatus") || "-",
       lastPushResult: window.localStorage.getItem("rentflow:lastPushResult") || "-",
       lastError: window.localStorage.getItem("rentflow:lastPushError") || "-",
     };
 
     try {
       const response = await fetch("/api/push/subscribe", { cache: "no-store" });
-      const data = await response.json() as { publicKey?: string; subscriptionCount?: number; vapidConfigured?: boolean };
-      next.vapid = data.publicKey ? "설정됨" : "VAPID_PUBLIC_KEY 없음";
+      const data = await response.json() as { publicKey?: string; subscriptionCount?: number; vapidPublicKeyExists?: boolean; vapidPrivateKeyExists?: boolean };
+      next.vapidPublicKey = data.vapidPublicKeyExists || data.publicKey ? "존재" : "없음";
+      next.vapidPrivateKey = data.vapidPrivateKeyExists ? "존재" : "없음";
       next.dbSubscriptionCount = `${data.subscriptionCount || 0}개`;
     } catch {
-      next.vapid = "확인 실패";
+      next.vapidPublicKey = "확인 실패";
+      next.vapidPrivateKey = "확인 실패";
       next.dbSubscriptionCount = "확인 실패";
     }
 
     try {
-      const registration = await navigator.serviceWorker?.ready;
+      let registration = await navigator.serviceWorker.getRegistration("/");
+      if (!registration) {
+        registration = await navigator.serviceWorker.register("/sw.js");
+      }
+      await navigator.serviceWorker.ready;
       next.serviceWorker = registration ? "등록됨" : next.serviceWorker;
+      next.serviceWorkerScope = registration?.scope || "-";
+      next.serviceWorkerPath = registration?.active?.scriptURL || registration?.installing?.scriptURL || registration?.waiting?.scriptURL || "/sw.js";
       const subscription = await registration?.pushManager?.getSubscription();
-      next.subscription = subscription ? "구독됨" : "구독 없음";
+      next.subscription = subscription ? `구독됨: ${subscription.endpoint.slice(0, 80)}` : "구독 없음";
       if (next.permission === "granted" && !subscription) {
         setState(next);
         await resubscribe({ silent: true });
@@ -67,6 +93,16 @@ export default function DebugPushPage() {
     } catch {
       next.serviceWorker = "등록 실패";
       next.subscription = "확인 실패";
+    }
+
+    try {
+      const swResponse = await fetch("/sw.js", { cache: "no-store" });
+      const swText = await swResponse.text();
+      next.serviceWorkerPushEvent = swResponse.ok && swText.includes('"push"') ? "있음" : "없음";
+      next.serviceWorkerClickEvent = swResponse.ok && swText.includes('"notificationclick"') ? "있음" : "없음";
+    } catch {
+      next.serviceWorkerPushEvent = "확인 실패";
+      next.serviceWorkerClickEvent = "확인 실패";
     }
 
     setState(next);
@@ -142,13 +178,24 @@ export default function DebugPushPage() {
         }),
       });
       const text = await response.text();
-      const result = `${response.status} ${text.slice(0, 180)}`;
+      const result = `${response.status} ${text.slice(0, 1000)}`;
+      window.localStorage.setItem("rentflow:lastPushHttpStatus", String(response.status));
       window.localStorage.setItem("rentflow:lastPushResult", result);
-      setStatus(response.ok ? "테스트 알림 발송 완료" : `테스트 알림 실패: ${result}`);
+      if (!response.ok) window.localStorage.setItem("rentflow:lastPushError", text.slice(0, 1000));
+      const parsed = parseJson(text);
+      if (parsed?.expired) {
+        setStatus(`테스트 알림 발송 완료, 만료 구독 ${parsed.expired}개 삭제됨. 필요 시 푸시 재구독을 누르세요.`);
+      } else if (parsed?.failed) {
+        window.localStorage.setItem("rentflow:lastPushError", JSON.stringify(parsed.errors || parsed).slice(0, 1000));
+        setStatus(`테스트 알림 일부 실패: ${result}`);
+      } else {
+        setStatus(response.ok ? "테스트 알림 발송 완료" : `테스트 알림 실패: ${result}`);
+      }
       await refreshState();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       window.localStorage.setItem("rentflow:lastPushResult", message);
+      window.localStorage.setItem("rentflow:lastPushHttpStatus", "fetch-error");
       window.localStorage.setItem("rentflow:lastPushError", message);
       setStatus(`테스트 알림 실패: ${message}`);
       await refreshState();
@@ -168,12 +215,18 @@ export default function DebugPushPage() {
         <div className="panel grid gap-2 text-sm font-bold text-[#25342e]">
           <DebugRow label="알림 권한 상태" value={state.permission} />
           <DebugRow label="서비스워커 등록 여부" value={state.serviceWorker} />
+          <DebugRow label="서비스워커 파일 경로" value={state.serviceWorkerPath} />
+          <DebugRow label="서비스워커 scope" value={state.serviceWorkerScope} />
+          <DebugRow label="push 이벤트" value={state.serviceWorkerPushEvent} />
+          <DebugRow label="notificationclick 이벤트" value={state.serviceWorkerClickEvent} />
           <DebugRow label="현재 Push Subscription 존재 여부" value={state.subscription} />
           <DebugRow label="DB 저장된 Subscription 수" value={state.dbSubscriptionCount} />
-          <DebugRow label="VAPID 설정 여부" value={state.vapid} />
+          <DebugRow label="VAPID_PUBLIC_KEY 존재 여부" value={state.vapidPublicKey} />
+          <DebugRow label="VAPID_PRIVATE_KEY 존재 여부" value={state.vapidPrivateKey} />
           <DebugRow label="마지막 구독 시간" value={state.lastSubscribedAt} />
+          <DebugRow label="마지막 테스트 푸시 HTTP status" value={state.lastHttpStatus} />
           <DebugRow label="마지막 푸시 결과" value={state.lastPushResult} />
-          <DebugRow label="마지막 오류 메시지" value={state.lastError} />
+          <DebugRow label="마지막 테스트 푸시 오류 원문" value={state.lastError} />
         </div>
 
         <div className="panel grid gap-2 sm:grid-cols-4">
@@ -187,6 +240,14 @@ export default function DebugPushPage() {
       </section>
     </main>
   );
+}
+
+function parseJson(value: string) {
+  try {
+    return JSON.parse(value) as { expired?: number; failed?: number; errors?: unknown };
+  } catch {
+    return null;
+  }
 }
 
 function DebugRow({ label, value }: { label: string; value: string }) {

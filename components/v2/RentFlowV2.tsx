@@ -661,6 +661,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           title: "새 배차 등록",
           body: `${payload.rentalCarNumber || ""} ${businessType} ${payload.customerCarModel || ""}\n${formatOrdererShop(payload.orderedBy || payload.customerName, payload.repairShop)}`.trim(),
           url: "/app/dispatch",
+          tag: "dispatch-created",
         })}
         reloadEndpoint="/api/dispatches"
         onReloaded={(items) => onDispatches(items as DispatchV2[])}
@@ -752,6 +753,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         title: "새 회차 등록",
         body: `${payload.rentalCarNumber || ""} 회차\n주차구역: ${payload.arrivalAddress || ""}\n주유량: ${payload.fuelDisplay || ""}`.trim(),
         url: "/app/return",
+        tag: "return-created",
       })}
       reloadEndpoint="/api/returns"
       onReloaded={(items) => onReturns(items as ReturnV2[])}
@@ -844,6 +846,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           title: "새 예약 등록",
           body: String(payload.reservationText || payload.customerName || ""),
           url: "/app/reservation",
+          tag: "reservation-added",
         })}
       >
         <Input
@@ -3101,7 +3104,7 @@ function DataForm({
   reloadEndpoint?: string;
   onReloaded?: (items: unknown) => void;
   onSaved?: (payload: Record<string, unknown>) => void;
-  notify?: (payload: Record<string, unknown>) => { title: string; body: string; url: string };
+  notify?: (payload: Record<string, unknown>) => { title: string; body: string; url: string; tag?: string; data?: Record<string, unknown> };
   buttonLabel?: string;
 }) {
   const [status, setStatus] = useState("");
@@ -3145,7 +3148,7 @@ function DataForm({
   );
 }
 
-async function notifyWorkflow(message: { title: string; body: string; url: string }) {
+async function notifyWorkflow(message: { title: string; body: string; url: string; tag?: string; data?: Record<string, unknown> }) {
   try {
     await sendPushNotification(message);
   } catch {

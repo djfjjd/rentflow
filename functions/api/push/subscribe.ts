@@ -4,6 +4,7 @@ type Env = {
   DB: any;
   VAPID_PUBLIC_KEY?: string;
   NEXT_PUBLIC_VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -18,6 +19,8 @@ export async function onRequestGet({ env }: { env: Env }) {
   return Response.json({
     publicKey: env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
     vapidConfigured: Boolean(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+    vapidPublicKeyExists: Boolean(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+    vapidPrivateKeyExists: Boolean(env.VAPID_PRIVATE_KEY),
     subscriptionCount,
   });
 }

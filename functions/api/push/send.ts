@@ -34,6 +34,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     let sent = 0;
     let failed = 0;
     const expired: string[] = [];
+    const errors: { id: string; endpoint: string; statusCode: number; message: string; body?: string }[] = [];
 
     for (const row of results || []) {
       try {
@@ -48,13 +49,23 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       } catch (error) {
         failed += 1;
         const statusCode = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode?: number }).statusCode) : 0;
+        const message = error instanceof Error ? error.message : String(error);
+        const body = typeof error === "object" && error && "body" in error ? safeText((error as { body?: unknown }).body) : "";
         if (statusCode === 404 || statusCode === 410) {
           expired.push(safeText(row.id));
         }
+        errors.push({
+          id: safeText(row.id),
+          endpoint: safeText(row.endpoint).slice(0, 80),
+          statusCode,
+          message,
+          body: body.slice(0, 500),
+        });
         console.error("web push delivery failed", {
           id: row.id,
           statusCode,
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
+          body,
         });
       }
     }
@@ -77,6 +88,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       sent,
       failed,
       expired: expired.length,
+      errors,
       title: safeText(body.title),
       body: safeText(body.body),
       url: safeText(body.url || "/app"),
