@@ -4,14 +4,20 @@ type Env = {
   DB: any;
   PUSH_SERVER_URL?: string;
   PUSH_SERVER_SECRET?: string;
+  VAPID_PUBLIC_KEY?: string;
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 };
+
+const DEFAULT_PUSH_SERVER_URL = "https://push-server-sage.vercel.app/api/send";
+const DEFAULT_PUSH_SERVER_SECRET = "CxeF2nKAOY-7--VrDZAIpT0iTCDF7SW9IVoQ4A5F3KA";
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
     await ensurePushSchema(env);
     const body = await request.json() as any;
-    const pushServerUrl = safeText(env.PUSH_SERVER_URL).replace(/\/$/, "");
-    const pushServerSecret = safeText(env.PUSH_SERVER_SECRET);
+    const pushServerUrl = safeText(env.PUSH_SERVER_URL || DEFAULT_PUSH_SERVER_URL).replace(/\/$/, "");
+    const pushServerSecret = safeText(env.PUSH_SERVER_SECRET || DEFAULT_PUSH_SERVER_SECRET);
     if (!pushServerUrl || !pushServerSecret) {
       return Response.json({
         ok: false,
@@ -32,6 +38,10 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       tag: safeText(body.tag),
       data: body.data && typeof body.data === "object" ? body.data : {},
     };
+    const vapid = {
+      publicKey: safeText(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+      privateKey: safeText(env.VAPID_PRIVATE_KEY),
+    };
 
     let sent = 0;
     let failed = 0;
@@ -48,7 +58,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
             auth: safeText(row.auth),
           },
         };
-        const sendResult = await sendViaNodePushServer(pushServerUrl, pushServerSecret, subscription, payloadObject);
+        const sendResult = await sendViaNodePushServer(pushServerUrl, pushServerSecret, subscription, payloadObject, vapid);
         const statusCode = sendResult.statusCode || sendResult.httpStatus || 0;
         if (!sendResult.ok) {
           throw createPushServerError(sendResult);
@@ -174,6 +184,7 @@ async function sendViaNodePushServer(
   pushServerSecret: string,
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
   payload: { title: string; body: string; url: string; tag: string; data: Record<string, unknown> },
+  vapid: { publicKey: string; privateKey: string },
 ) {
   const targetUrl = pushServerUrl.endsWith("/send") ? pushServerUrl : `${pushServerUrl}/send`;
   const response = await fetch(targetUrl, {
@@ -183,7 +194,7 @@ async function sendViaNodePushServer(
       "Authorization": `Bearer ${pushServerSecret}`,
       "X-RentFlow-Push-Secret": pushServerSecret,
     },
-    body: JSON.stringify({ subscription, payload }),
+    body: JSON.stringify({ subscription, payload, vapid }),
   });
   const text = await response.text();
   const parsed = parseJson(text);

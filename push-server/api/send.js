@@ -6,12 +6,18 @@ const {
   PUSH_SERVER_SECRET
 } = process.env;
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+const DEFAULT_PUSH_SERVER_SECRET = "CxeF2nKAOY-7--VrDZAIpT0iTCDF7SW9IVoQ4A5F3KA";
+
+function configureVapid(vapid = {}) {
+  const publicKey = VAPID_PUBLIC_KEY || vapid.publicKey;
+  const privateKey = VAPID_PRIVATE_KEY || vapid.privateKey;
+  if (!publicKey || !privateKey) return false;
   webpush.setVapidDetails(
     "mailto:djfjjd@gmail.com",
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
+    publicKey,
+    privateKey
   );
+  return true;
 }
 
 export default async function handler(req, res) {
@@ -33,14 +39,17 @@ export default async function handler(req, res) {
   const auth = req.headers.authorization || "";
   const token = auth.replace("Bearer ", "");
 
-  if (!PUSH_SERVER_SECRET || token !== PUSH_SERVER_SECRET) {
+  const expectedSecret = PUSH_SERVER_SECRET || DEFAULT_PUSH_SERVER_SECRET;
+  if (!expectedSecret || token !== expectedSecret) {
     return res.status(401).json({
       ok: false,
       message: "unauthorized"
     });
   }
 
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  const { subscription, payload, vapid } = req.body || {};
+
+  if (!configureVapid(vapid)) {
     return res.status(500).json({
       ok: false,
       message: "vapid-not-configured"
@@ -48,8 +57,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { subscription, payload } = req.body || {};
-
     if (!subscription || !subscription.endpoint) {
       return res.status(400).json({
         ok: false,
