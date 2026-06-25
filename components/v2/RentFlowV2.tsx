@@ -108,6 +108,12 @@ const dispatchBoardColumns = [
   { label: "삭제", width: "w-[70px]" },
 ];
 
+const dispatchTypeSegmentClasses: Record<string, string> = {
+  보험: "border-red-200 bg-red-100 text-red-800",
+  자차: "border-green-200 bg-green-100 text-green-800",
+  셀프: "border-blue-200 bg-blue-100 text-blue-800",
+};
+
 const pageTitles: Record<PageKind, string> = {
   home: "현장 업무 홈",
   dispatch: "배차",
@@ -867,7 +873,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
         </FormBlock>
         <DateTimeTodayField key={`dispatch-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <FormBlock title="구분">
-          <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
+          <Segmented value={businessType} values={["보험", "자차", "셀프"]} itemClassNames={dispatchTypeSegmentClasses} onChange={setBusinessType} />
         </FormBlock>
         {businessType === "보험" ? (
           <CompactRow>
@@ -3980,8 +3986,41 @@ function parseBusinessDateTime(date: string | undefined, time: string | undefine
   };
 }
 
-function Segmented({ value, values, labels, onChange }: { value: string; values: string[]; labels?: Record<string, string>; onChange: (value: string) => void }) {
-  return <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>{values.map((item) => <button className={`min-h-11 whitespace-nowrap rounded-md text-center font-black ${value === item ? "bg-white shadow" : ""}`} key={item} type="button" onClick={() => onChange(item)}>{labels?.[item] || item}</button>)}</div>;
+function Segmented({
+  value,
+  values,
+  labels,
+  itemClassNames,
+  onChange,
+}: {
+  value: string;
+  values: string[];
+  labels?: Record<string, string>;
+  itemClassNames?: Record<string, string>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>
+      {values.map((item) => {
+        const itemClassName = itemClassNames?.[item];
+        const selectedClassName = value === item
+          ? itemClassName
+            ? "shadow ring-2 ring-white"
+            : "bg-white shadow"
+          : "";
+        return (
+          <button
+            className={`min-h-11 whitespace-nowrap rounded-md border border-transparent text-center font-black ${itemClassName || ""} ${selectedClassName}`}
+            key={item}
+            type="button"
+            onClick={() => onChange(item)}
+          >
+            {labels?.[item] || item}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function FilterBar({ query, onQuery, placeholder }: { query: string; onQuery: (query: string) => void; placeholder: string }) {
