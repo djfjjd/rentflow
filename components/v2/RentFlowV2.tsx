@@ -108,10 +108,19 @@ const dispatchBoardColumns = [
   { label: "삭제", width: "w-[70px]" },
 ];
 
-const dispatchTypeSegmentClasses: Record<string, string> = {
-  보험: "border-red-200 bg-red-100 text-red-800",
-  자차: "border-green-200 bg-green-100 text-green-800",
-  셀프: "border-blue-200 bg-blue-100 text-blue-800",
+const dispatchTypeSegmentClasses: Record<string, { selected: string; unselected: string }> = {
+  보험: {
+    selected: "border-red-700 bg-red-700 text-white",
+    unselected: "border-red-200 bg-red-100 text-red-800 opacity-65",
+  },
+  자차: {
+    selected: "border-green-700 bg-green-700 text-white",
+    unselected: "border-green-200 bg-green-100 text-green-800 opacity-65",
+  },
+  셀프: {
+    selected: "border-blue-700 bg-blue-700 text-white",
+    unselected: "border-blue-200 bg-blue-100 text-blue-800 opacity-65",
+  },
 };
 
 const pageTitles: Record<PageKind, string> = {
@@ -2648,7 +2657,9 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
         <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
-        <label className="label">구분<select className="field min-h-12" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)}><option>보험</option><option>자차</option><option>셀프</option></select></label>
+        <FormBlock title="구분">
+          <Segmented value={businessType} values={["보험", "자차", "셀프"]} itemClassNames={dispatchTypeSegmentClasses} onChange={setBusinessType} />
+        </FormBlock>
         <Input name="orderedBy" label="오더자" defaultValue={dispatch.orderedBy} />
         <Input name="repairShop" label="수리처" defaultValue={dispatch.repairShop} />
         <Input name="customerCarModel" label="고객차종" defaultValue={dispatch.customerCarModel} />
@@ -3140,6 +3151,7 @@ type VehicleDashboardRow = {
   vehicleNumber: string;
   companyType?: string;
   model: string;
+  color?: string;
   contactPhone?: string;
   statusLabel: string;
   dispatchDate: string;
@@ -3176,11 +3188,22 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
       </div>
       <div data-horizontal-scroll="true" className="vehicle-status-table-wrapper">
         <table className="vehicle-status-table text-left text-sm">
+          <colgroup>
+            <col className="w-[100px]" />
+            <col className="w-[52px]" />
+            <col className="w-[120px]" />
+            <col className="w-[90px]" />
+            <col className="w-[96px]" />
+            <col className="w-[74px]" />
+            <col className="w-[130px]" />
+            <col className="w-[190px]" />
+            <col className="w-[150px]" />
+          </colgroup>
           <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>
               <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
-              <td><VehicleModelSummary model={row.model} onOpen={setModelDetail} /></td>
+              <td><VehicleModelSummary color={row.color} model={row.model} onOpen={setModelDetail} /></td>
               <td className="whitespace-nowrap">{isDispatchStatus(row.statusLabel) ? <PhoneCell phone={row.contactPhone} /> : "-"}</td>
               <td><StatusPill status={row.statusLabel} /></td>
               <td className="whitespace-nowrap">{row.dispatchDate}</td>
@@ -3197,18 +3220,14 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
   );
 }
 
-function VehicleModelSummary({ model, onOpen }: { model: string; onOpen: (model: string) => void }) {
-  const value = clean(model);
-  const short = value.slice(0, 6);
-  const needsDetail = value.length > 6;
+function VehicleModelSummary({ model, color, onOpen }: { model: string; color?: string; onOpen: (model: string) => void }) {
+  const value = [clean(model), clean(color)].filter(Boolean).join("/");
+  if (!value) return <div className="vehicle-model-cell vehicle-model-cell-empty">-</div>;
   return (
     <div className="vehicle-model-cell">
-      <span className="vehicle-model-text" title={value}>{needsDetail ? short : value || "-"}</span>
-      {needsDetail ? (
-        <button className="info-icon-button vehicle-model-info-button" type="button" aria-label="차종 정보" onClick={() => onOpen(value)}>
-          <Info size={14} />
-        </button>
-      ) : null}
+      <button className="info-icon-button vehicle-model-info-button" type="button" aria-label="차종 정보" title={value} onClick={() => onOpen(value)}>
+        <Info size={14} />
+      </button>
     </div>
   );
 }
@@ -3996,25 +4015,29 @@ function Segmented({
   value: string;
   values: string[];
   labels?: Record<string, string>;
-  itemClassNames?: Record<string, string>;
+  itemClassNames?: Record<string, { selected: string; unselected: string }>;
   onChange: (value: string) => void;
 }) {
   return (
     <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>
       {values.map((item) => {
         const itemClassName = itemClassNames?.[item];
-        const selectedClassName = value === item
-          ? itemClassName
-            ? "shadow ring-2 ring-white"
-            : "bg-white shadow"
-          : "";
+        const isSelected = value === item;
+        const stateClassName = itemClassName
+          ? isSelected
+            ? `${itemClassName.selected} shadow`
+            : itemClassName.unselected
+          : isSelected
+            ? "bg-white shadow"
+            : "";
         return (
           <button
-            className={`min-h-11 whitespace-nowrap rounded-md border border-transparent text-center font-black ${itemClassName || ""} ${selectedClassName}`}
+            className={`inline-flex min-h-11 items-center justify-center gap-1 whitespace-nowrap rounded-md border text-center font-black transition ${itemClassName ? "" : "border-transparent"} ${stateClassName}`}
             key={item}
             type="button"
             onClick={() => onChange(item)}
           >
+            {itemClassName && isSelected ? <Check size={16} strokeWidth={3} /> : null}
             {labels?.[item] || item}
           </button>
         );
@@ -4362,6 +4385,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
+        color: vehicle.color,
         contactPhone: "",
         statusLabel: "주차구역표시",
         dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
@@ -4379,6 +4403,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
+        color: vehicle.color,
         contactPhone: dispatchPhone(latestDispatch),
         statusLabel,
         dispatchDate: formatMonthDay(latestDispatch.date || latestDispatch.createdAt),
@@ -4396,6 +4421,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       vehicleNumber,
       companyType: vehicle.companyType,
       model: vehicle.model,
+      color: vehicle.color,
       contactPhone: "",
       statusLabel: "주차구역표시",
       dispatchDate: "",

@@ -200,7 +200,7 @@ select {
 .vehicle-table,
 .vehicle-board-table,
 .vehicle-status-table {
-  min-width: 1280px;
+  min-width: 1102px;
   width: max-content;
   border-collapse: collapse;
 }
@@ -309,6 +309,15 @@ select {
   min-width: 0;
   align-items: center;
   gap: 6px;
+}
+
+.vehicle-model-cell {
+  justify-content: center;
+}
+
+.vehicle-model-cell-empty {
+  color: #68746d;
+  font-weight: 800;
 }
 
 .reservation-name-text,
