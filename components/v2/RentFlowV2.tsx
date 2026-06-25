@@ -369,7 +369,7 @@ function UnreadMessagesButton({
                       <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
                       <td><VehicleNumberText vehicle={vehicle} value={plate} /></td>
                       <td>{row.kind}</td>
-                      <td>{vehicleModelColor(vehicle)}</td>
+                      <td>{ret ? clean(returnSnapshot?.carModelColor || vehicleModelColor(vehicle)) : vehicleModelColor(vehicle)}</td>
                       <td><UnreadStatusBadge status={firstText(returnSnapshot?.status, linkedDispatch?.dispatchType, linkedDispatch?.businessType, linkedDispatch?.status)} /></td>
                       <td>{ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)}</td>
                       <td>{ret ? clean(returnSnapshot?.customerCarModel) : clean(linkedDispatch?.customerCarModel)}</td>
@@ -854,7 +854,6 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           setResetKey((key) => key + 1);
         }}
       >
-        <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
         <FormBlock title="차량 선택">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
             <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
@@ -867,6 +866,9 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
           </div>
         </FormBlock>
         <DateTimeTodayField key={`dispatch-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
+        <FormBlock title="구분">
+          <Segmented value={businessType} values={["보험", "자차", "셀프"]} onChange={setBusinessType} />
+        </FormBlock>
         {businessType === "보험" ? (
           <CompactRow>
             <Input name="orderedBy" label="오더자" />
@@ -902,23 +904,10 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [time, setTime] = useState(currentTimeKorea());
   const [recordId, setRecordId] = useState(() => createId("return"));
   const [resetKey, setResetKey] = useState(0);
-  const [selectedDispatchId, setSelectedDispatchId] = useState("");
-  const pendingDispatches = useMemo(() => {
-    if (!vehicle) return [];
-    return pendingDispatchesForVehicle(dispatches, vehicle.plateNumber);
+  const latestDispatch = useMemo(() => {
+    if (!vehicle) return undefined;
+    return latestByVehicle(dispatches, vehicle.plateNumber);
   }, [dispatches, vehicle]);
-  
-  const selectedDispatch = useMemo(() => {
-    return pendingDispatches.find((d) => d.id === selectedDispatchId) || (pendingDispatches.length === 1 ? pendingDispatches[0] : undefined);
-  }, [pendingDispatches, selectedDispatchId]);
-
-  useEffect(() => {
-    if (pendingDispatches.length === 1) {
-      setSelectedDispatchId(pendingDispatches[0].id);
-    } else if (pendingDispatches.length === 0) {
-      setSelectedDispatchId("");
-    }
-  }, [pendingDispatches]);
 
   return (
     <section className="return-page space-y-4">
@@ -933,15 +922,15 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
         fuelLevelText: text(data, "fuelDisplay"),
-        dispatchId: selectedDispatch?.id || "",
+        dispatchId: latestDispatch?.id || "",
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
         memo: text(data, "notes"),
         status: "회차등록",
         isCompleted: false,
       })}
-      beforeSave={() => Boolean(vehicle && selectedDispatch)}
-      disabled={!vehicle || !selectedDispatch}
+      beforeSave={() => Boolean(vehicle)}
+      disabled={!vehicle}
       afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
         status: "주차구역표시",
         location: String(payload.arrivalAddress || ""),
@@ -963,7 +952,6 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         setTime(currentTimeKorea());
         setRecordId(createId("return"));
         setResetKey((key) => key + 1);
-        setSelectedDispatchId("");
       }}
     >
       <FormBlock title="차량 선택">
@@ -972,52 +960,31 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
       <DateTimeTodayField key={`return-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
       <div className="field-block">
         <label className="block text-sm font-bold text-[#16211d]">배차정보</label>
-        {pendingDispatches.length === 0 ? (
-          <input
-            value="미회차 배차건이 없습니다."
-            readOnly
-            className="field min-h-12 w-full truncate bg-[#f8faf7] text-[#16211d]"
-          />
-        ) : pendingDispatches.length === 1 ? (
-          <input
-            value={formatLatestDispatchInfo(pendingDispatches[0])}
-            readOnly
-            className="field min-h-12 w-full truncate bg-[#f8faf7] text-[#16211d]"
-          />
-        ) : (
-          <select
-            className="field min-h-12 w-full bg-[#f8faf7] text-[#16211d]"
-            value={selectedDispatchId}
-            onChange={(e) => setSelectedDispatchId(e.target.value)}
-          >
-            <option value="">회차 처리할 배차건을 선택해주세요.</option>
-            {pendingDispatches.map((d) => (
-              <option key={d.id} value={d.id}>
-                {formatDispatchSelectLabel(d)}
-              </option>
-            ))}
-          </select>
-        )}
+        <input
+          value={latestDispatch ? formatDispatchSelectLabel(latestDispatch) : "최근 배차정보가 없습니다."}
+          readOnly
+          className="field min-h-12 w-full truncate bg-[#f8faf7] text-[#16211d]"
+        />
       </div>
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
         <div className="grid grid-cols-2 gap-2">
           <Input
             label="배차주유량"
-            value={selectedDispatch ? firstText(selectedDispatch.fuelLevelText, selectedDispatch.fuelDisplay) : ""}
+            value={latestDispatch ? firstText(latestDispatch.fuelLevelText, latestDispatch.fuelDisplay) : ""}
             readOnly
             className="field min-h-12 bg-[#f8faf7] text-[#16211d]"
           />
           <Input name="fuelDisplay" label="회차시주유량" placeholder="7/12" />
         </div>
-        <Input name="location" label="주차구역" list="parking-locations" defaultValue={firstText(selectedDispatch?.deliveryAddress, selectedDispatch?.pickupAddress)} />
+        <Input name="location" label="주차구역" list="parking-locations" defaultValue={firstText(latestDispatch?.deliveryAddress, latestDispatch?.pickupAddress)} />
       </CompactRow>
       <div className="grid gap-2 sm:grid-cols-3">
-        <Input label="고객차종" value={selectedDispatch ? clean(selectedDispatch.customerCarModel) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="연락처" value={selectedDispatch ? dispatchPhone(selectedDispatch) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="오더자" value={selectedDispatch ? formatOrdererName(firstText(selectedDispatch.orderer, selectedDispatch.orderedBy, selectedDispatch.customerName), selectedDispatch.corporateVehicle) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="고객차종" value={latestDispatch ? clean(latestDispatch.customerCarModel) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="연락처" value={latestDispatch ? dispatchPhone(latestDispatch) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="오더자" value={latestDispatch ? formatOrdererName(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.corporateVehicle) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
       </div>
-      <Textarea name="notes" label="특이사항" defaultValue={selectedDispatch?.notes || ""} />
+      <Textarea name="notes" label="특이사항" defaultValue={latestDispatch?.notes || ""} />
       <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
@@ -1085,7 +1052,7 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           required
-          className="field min-h-[21rem]"
+          className="field min-h-[10.5rem]"
         />
         <div className="reservation-date-name-row">
           <Input key={parsed.date} name="date" label="날짜 선택" type="date" defaultValue={parsed.date} required />
@@ -2643,6 +2610,8 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
   const [selected, setSelected] = useState<VehicleV2 | undefined>(findVehicle(vehicles, dispatch.rentalCarNumber || ""));
   const [date, setDate] = useState(dispatch.date || todayKorea());
   const [time, setTime] = useState(dispatch.time || currentTimeKorea());
+  const initialBusinessType = normalizeDispatchStatus(firstText(dispatch.dispatchType, dispatch.businessType, dispatch.status));
+  const [businessType, setBusinessType] = useState(["보험", "자차", "셀프"].includes(initialBusinessType) ? initialBusinessType : "보험");
   return (
     <ModalShell title="배차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
@@ -2654,8 +2623,9 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
           time,
           rentalCarNumber: selected?.plateNumber || dispatch.rentalCarNumber,
           vehicleColor: selected?.color || dispatch.vehicleColor || "",
-          businessType: text(data, "businessType"),
-          status: text(data, "businessType"),
+          businessType,
+          dispatchType: businessType,
+          status: businessType,
           orderedBy: text(data, "orderedBy"),
           repairShop: text(data, "repairShop"),
           customerCarModel: text(data, "customerCarModel"),
@@ -2672,7 +2642,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
       }} className="space-y-3">
         <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
         <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
-        <label className="label">구분<select className="field min-h-12" name="businessType" defaultValue={dispatch.businessType || dispatch.status || "보험"}><option>보험</option><option>자차</option><option>셀프</option></select></label>
+        <label className="label">구분<select className="field min-h-12" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)}><option>보험</option><option>자차</option><option>셀프</option></select></label>
         <Input name="orderedBy" label="오더자" defaultValue={dispatch.orderedBy} />
         <Input name="repairShop" label="수리처" defaultValue={dispatch.repairShop} />
         <Input name="customerCarModel" label="고객차종" defaultValue={dispatch.customerCarModel} />
@@ -3164,6 +3134,7 @@ type VehicleDashboardRow = {
   vehicleNumber: string;
   companyType?: string;
   model: string;
+  contactPhone?: string;
   statusLabel: string;
   dispatchDate: string;
   fuelLevelText: string;
@@ -3174,6 +3145,7 @@ type VehicleDashboardRow = {
 
 function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
   const [query, setQuery] = useState("");
+  const [modelDetail, setModelDetail] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRows = normalizedQuery
     ? rows.filter((row) => {
@@ -3198,11 +3170,13 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
       </div>
       <div data-horizontal-scroll="true" className="vehicle-status-table-wrapper">
         <table className="vehicle-status-table text-left text-sm">
-          <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
+          <thead><tr className="border-b"><th>차량번호</th><th>지점</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>
               <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
-              <td>{row.model}</td>
+              <td className="whitespace-nowrap">{formatVehicleCompany(row.companyType)}</td>
+              <td><VehicleModelSummary model={row.model} onOpen={setModelDetail} /></td>
+              <td className="whitespace-nowrap">{isDispatchStatus(row.statusLabel) ? <PhoneCell phone={row.contactPhone} /> : "-"}</td>
               <td><StatusPill status={row.statusLabel} /></td>
               <td className="whitespace-nowrap">{row.dispatchDate}</td>
               <td>{row.fuelLevelText || "-"}</td>
@@ -3213,7 +3187,24 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
           ))}</tbody>
         </table>
       </div>
+      {modelDetail ? <SimpleTextModal title="차종 정보" text={modelDetail} onClose={() => setModelDetail("")} /> : null}
     </section>
+  );
+}
+
+function VehicleModelSummary({ model, onOpen }: { model: string; onOpen: (model: string) => void }) {
+  const value = clean(model);
+  const short = value.slice(0, 6);
+  const needsDetail = value.length > 6;
+  return (
+    <div className="vehicle-model-cell">
+      <span className="vehicle-model-text" title={value}>{needsDetail ? short : value || "-"}</span>
+      {needsDetail ? (
+        <button className="info-icon-button vehicle-model-info-button" type="button" aria-label="차종 정보" onClick={() => onOpen(value)}>
+          <Info size={14} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -3324,6 +3315,7 @@ function VehicleCompanySelect({ defaultValue }: { defaultValue?: string }) {
 function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   const [editing, setEditing] = useState<ReservationV2 | null>(null);
   const [detail, setDetail] = useState<ReservationV2 | null>(null);
+  const [nameDetail, setNameDetail] = useState("");
   const [tab, setTab] = useState<"upcoming" | "done">("upcoming");
   const [page, setPage] = useState(1);
   const today = todayKorea();
@@ -3369,7 +3361,16 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
               return (
                 <tr className="border-b [&>td]:whitespace-nowrap [&>td]:align-middle" key={reservation.id}>
                   <td>{reservation.date}</td>
-                  <td className="font-black">{reservation.customerName}</td>
+                  <td className="font-black">
+                    <div className="reservation-name-cell">
+                      <span className="reservation-name-text" title={reservation.customerName}>{reservation.customerName}</span>
+                      {clean(reservation.customerName).length > 0 ? (
+                        <button className="reservation-name-info-button" type="button" aria-label="예약자명 전체보기" onClick={() => setNameDetail(clean(reservation.customerName))}>
+                          <Info size={14} />
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                   <td title={reservationText}>
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="min-w-0 flex-1 truncate">{reservationText}</div>
@@ -3400,7 +3401,16 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReservationEditModal reservation={editing} onClose={() => setEditing(null)} onSaved={() => onReservations()} /> : null}
       {detail ? <ReservationDetailModal reservation={detail} onClose={() => setDetail(null)} /> : null}
+      {nameDetail ? <SimpleTextModal title="예약자명" text={nameDetail} onClose={() => setNameDetail("")} /> : null}
     </section>
+  );
+}
+
+function SimpleTextModal({ title, text, onClose }: { title: string; text: string; onClose: () => void }) {
+  return (
+    <ModalShell title={title} onClose={onClose}>
+      <p className="whitespace-pre-wrap break-words text-sm font-bold text-[#16211d]">{text}</p>
+    </ModalShell>
   );
 }
 
@@ -4314,6 +4324,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
+        contactPhone: "",
         statusLabel: "주차구역표시",
         dispatchDate: formatMonthDay(latestReturn.date || latestReturn.createdAt),
         fuelLevelText: firstText(latestReturn.fuelLevelText, latestReturn.fuelDisplay),
@@ -4330,6 +4341,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
+        contactPhone: dispatchPhone(latestDispatch),
         statusLabel,
         dispatchDate: formatMonthDay(latestDispatch.date || latestDispatch.createdAt),
         fuelLevelText: firstText(latestDispatch.fuelLevelText, latestDispatch.fuelDisplay),
@@ -4346,6 +4358,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       vehicleNumber,
       companyType: vehicle.companyType,
       model: vehicle.model,
+      contactPhone: "",
       statusLabel: "주차구역표시",
       dispatchDate: "",
       fuelLevelText: vehicle.fuelDisplay || "",
@@ -4394,6 +4407,10 @@ function normalizeDispatchStatus(value: unknown) {
   if (status === "self" || status === "자차") return "자차";
   if (status === "direct" || status === "셀프") return "셀프";
   return "주차구역표시";
+}
+
+function isDispatchStatus(status: string) {
+  return ["보험", "자차", "셀프"].includes(normalizeDispatchStatus(status));
 }
 
 function formatDashboardOrdererShop(orderer: unknown, repairShop: unknown, isCorporateVehicle?: unknown) {

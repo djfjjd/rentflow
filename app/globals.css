@@ -200,7 +200,7 @@ select {
 .vehicle-table,
 .vehicle-board-table,
 .vehicle-status-table {
-  min-width: 1100px;
+  min-width: 1280px;
   width: max-content;
   border-collapse: collapse;
 }
@@ -294,6 +294,36 @@ select {
   display: inline-flex;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #cfd8d1;
+  background: #fff;
+  color: #116149;
+}
+
+.reservation-name-cell,
+.vehicle-model-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.reservation-name-text,
+.vehicle-model-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reservation-name-info-button,
+.vehicle-model-info-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
