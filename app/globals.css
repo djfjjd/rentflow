@@ -215,10 +215,102 @@ select {
 
 .partners-toolbar {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
+  max-width: 100%;
+}
+
+.partner-add-btn {
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+.search-input-wrapper {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.search-input {
+  width: 100%;
+  padding-right: 42px;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+}
+
+.dispatch-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dispatch-board-header h2 {
+  flex-shrink: 0;
+}
+
+.dispatch-board-search {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  min-width: 0;
+}
+
+.dispatch-board-search input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.dispatch-board-search-clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  font-weight: 900;
+  color: #667269;
+}
+
+.reservation-date-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.info-icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #cfd8d1;
+  background: #fff;
+  color: #116149;
+}
+
+.photo-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  margin: -16px -16px 12px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .partners-content-grid {
@@ -603,12 +695,11 @@ select {
   }
 
   .partners-toolbar {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
     gap: 12px;
   }
 
-  .partners-toolbar button,
   .partners-toolbar input {
     width: 100%;
   }
@@ -625,5 +716,23 @@ select {
 
   .vehicle-board-search {
     flex-basis: 100%;
+  }
+
+  .dispatch-board-header {
+    gap: 8px;
+  }
+
+  .dispatch-board-search {
+    max-width: 180px;
+  }
+
+  .dispatch-board-search input {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reservation-date-name-row {
+    grid-template-columns: 1fr;
   }
 }

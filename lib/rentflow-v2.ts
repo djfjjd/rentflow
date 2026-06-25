@@ -106,6 +106,8 @@ export type DispatchV2 = {
   businessType?: string;
   corporateVehicle?: boolean;
   isCompleted?: boolean;
+  returnCompleted?: boolean;
+  returnAt?: string;
   pickupAddress?: string;
   deliveryAddress?: string;
   fuelDisplay?: string;
@@ -120,6 +122,25 @@ export type DispatchV2 = {
 
 export type ReturnV2 = {
   id: string;
+  dispatchId?: string;
+  dispatch_id?: string;
+  dispatchDateSnapshot?: string;
+  dispatchInfoSnapshot?: string;
+  dispatchFuelSnapshot?: string;
+  dispatchParkingLocationSnapshot?: string;
+  dispatchMemoSnapshot?: string;
+  ordererSnapshot?: string;
+  repairShopSnapshot?: string;
+  customerCarModelSnapshot?: string;
+  customerPhoneSnapshot?: string;
+  carModelColorSnapshot?: string;
+  statusSnapshot?: string;
+  isCorporateVehicleSnapshot?: boolean;
+  orderer?: string;
+  repairShop?: string;
+  customerCarModel?: string;
+  customerPhone?: string;
+  carModelColor?: string;
   date?: string;
   time?: string;
   vehicleNumber?: string;
@@ -151,6 +172,8 @@ export type IncidentRecordV2 = {
   foundDate?: string;
   status?: string;
   isCompleted?: boolean;
+  repaired?: boolean;
+  completedAt?: string;
   createdAt?: string;
 };
 
@@ -158,10 +181,15 @@ export type LostItemV2 = {
   id: string;
   vehicleNumber?: string;
   customerName?: string;
+  customerPhone?: string;
+  itemName?: string;
   foundDate?: string;
+  date?: string;
   memo?: string;
   status?: string;
+  isResolved?: boolean;
   isCompleted?: boolean;
+  resolvedAt?: string;
   createdAt?: string;
 };
 

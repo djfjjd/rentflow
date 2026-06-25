@@ -24,7 +24,11 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const updates = await request.json() as any;
     const fields = [];
     const values = [];
-    if (updates.isCompleted !== undefined) { fields.push("is_completed = ?"); values.push(safeBoolInt(updates.isCompleted)); }
+    if (updates.isCompleted !== undefined || updates.completed !== undefined || updates.repaired !== undefined) {
+      const completed = safeBoolInt(updates.isCompleted ?? updates.completed ?? updates.repaired);
+      fields.push("is_completed = ?", "completed = ?", "repaired = ?", "completed_at = ?");
+      values.push(completed, completed, completed, completed ? safeNullableText(updates.completedAt || new Date().toISOString()) : null);
+    }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
     values.push(id);
@@ -110,6 +114,9 @@ function mapHistory(row: any) {
     documents: JSON.parse(row.documents || "[]"),
     status: row.status,
     isCompleted: Boolean(row.is_completed),
+    completed: Boolean(row.completed ?? row.is_completed),
+    repaired: Boolean(row.repaired ?? row.is_completed),
+    completedAt: row.completed_at,
     linkedDispatchId: row.linked_dispatch_id,
     linkedReturnId: row.linked_return_id,
     linkedSmartInboxItemId: row.linked_smart_inbox_item_id,
@@ -157,6 +164,9 @@ async function ensureAccidentSchema(env: Env) {
     { name: "documents", definition: "TEXT" },
     { name: "status", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "completed", definition: "INTEGER DEFAULT 0" },
+    { name: "repaired", definition: "INTEGER DEFAULT 0" },
+    { name: "completed_at", definition: "DATETIME" },
     { name: "linked_dispatch_id", definition: "TEXT" },
     { name: "linked_return_id", definition: "TEXT" },
     { name: "linked_smart_inbox_item_id", definition: "TEXT" },

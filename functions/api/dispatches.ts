@@ -38,13 +38,15 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const memo = d.memo ?? d.notes;
     const isCorporate = safeBoolInt(d.isCorporate ?? d.is_corporate ?? d.corporateVehicle);
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, customer_name, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, is_corporate, is_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, business_type, status, customer_name, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, notes, is_corporate, corporate_vehicle, is_completed, return_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(d.id),
       safeNullableText(d.date),
       safeNullableText(d.time),
       safeText(vehicleNumber),
       safeText(dispatchType),
+      safeText(dispatchType),
+      safeText(d.status || dispatchType),
       safeText(d.customerName),
       safeText(orderer),
       safeText(repairShop),
@@ -52,8 +54,11 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(fuelLevelText),
       safeText(customerPhone),
       safeText(memo),
+      safeText(memo),
       isCorporate,
-      safeBoolInt(d.isCompleted)
+      isCorporate,
+      safeBoolInt(d.isCompleted),
+      0
     ).run();
 
     console.log("dispatch saved", d.id);
@@ -82,11 +87,21 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const memo = body.memo ?? body.notes;
     const isCorporate = body.isCorporate ?? body.is_corporate ?? body.corporateVehicle;
     const isCompleted = body.isCompleted ?? body.is_completed;
+    const returnCompleted = body.returnCompleted ?? body.return_completed;
+    const returnAt = body.returnAt ?? body.return_at;
     const keys = Object.keys(body);
 
     if (isCompleted !== undefined && keys.every((key) => key === "isCompleted" || key === "is_completed")) {
       await env.DB.prepare("UPDATE dispatches SET is_completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
         safeBoolInt(isCompleted),
+        safeText(id)
+      ).run();
+      return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
+    }
+    if ((returnCompleted !== undefined || returnAt !== undefined) && keys.every((key) => ["returnCompleted", "return_completed", "returnAt", "return_at"].includes(key))) {
+      await env.DB.prepare("UPDATE dispatches SET return_completed = COALESCE(?, return_completed), return_at = COALESCE(?, return_at), updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
+        returnCompleted === undefined ? null : safeBoolInt(returnCompleted),
+        returnAt === undefined ? null : safeNullableText(returnAt),
         safeText(id)
       ).run();
       return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
@@ -98,14 +113,20 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
         time = ?,
         vehicle_number = ?,
         dispatch_type = ?,
+        business_type = ?,
+        status = ?,
         customer_name = ?,
         orderer = ?,
+        ordered_by = ?,
         repair_shop = ?,
         customer_car_model = ?,
         fuel_level_text = ?,
+        fuel_display = ?,
         customer_phone = ?,
         memo = ?,
+        notes = ?,
         is_corporate = ?,
+        corporate_vehicle = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     ).bind(
@@ -113,13 +134,19 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeNullableText(body.time),
       safeText(vehicleNumber),
       safeText(dispatchType),
+      safeText(dispatchType),
+      safeText(body.status || dispatchType),
       safeText(body.customerName),
+      safeText(orderer),
       safeText(orderer),
       safeText(repairShop),
       safeText(customerCarModel),
       safeText(fuelLevelText),
+      safeText(fuelLevelText),
       safeText(customerPhone),
       safeText(memo),
+      safeText(memo),
+      safeBoolInt(isCorporate),
       safeBoolInt(isCorporate),
       safeText(id)
     ).run();
@@ -170,6 +197,8 @@ function mapDispatch(row: any) {
     memo,
     is_corporate: row.is_corporate ?? row.corporate_vehicle ?? 0,
     is_completed: row.is_completed ?? 0,
+    return_completed: row.return_completed ?? 0,
+    return_at: row.return_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
     claimNumber: row.claim_number,
@@ -191,6 +220,8 @@ function mapDispatch(row: any) {
     businessType: dispatchType,
     corporateVehicle: Boolean(row.is_corporate ?? row.corporate_vehicle),
     isCompleted: Boolean(row.is_completed),
+    returnCompleted: Boolean(row.return_completed),
+    returnAt: row.return_at,
     notes: memo,
     status: row.status,
     intakeType: row.intake_type,
@@ -246,6 +277,8 @@ async function ensureDispatchSchema(env: Env) {
     { name: "date", definition: "TEXT" },
     { name: "time", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "return_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "return_at", definition: "DATETIME" },
     { name: "is_corporate", definition: "INTEGER DEFAULT 0" },
     { name: "corporate_vehicle", definition: "INTEGER DEFAULT 0" },
     { name: "fuel_level_text", definition: "TEXT" },

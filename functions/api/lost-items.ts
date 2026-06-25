@@ -23,11 +23,18 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
     const updates = await request.json() as any;
     const fields = [];
     const values = [];
-    if (updates.isCompleted !== undefined || updates.isResolved !== undefined) {
-      const isResolved = safeBoolInt(updates.isResolved ?? updates.isCompleted);
+    if (updates.isCompleted !== undefined || updates.isResolved !== undefined || updates.completed !== undefined || updates.resolved !== undefined) {
+      const isResolved = safeBoolInt(updates.isResolved ?? updates.isCompleted ?? updates.resolved ?? updates.completed);
       fields.push("is_completed = ?", "is_resolved = ?");
       values.push(isResolved, isResolved);
+      fields.push("resolved_at = ?");
+      values.push(isResolved ? safeNullableText(updates.resolvedAt || new Date().toISOString()) : null);
     }
+    if (updates.vehicleNumber !== undefined) { fields.push("vehicle_number = ?"); values.push(safeNullableText(updates.vehicleNumber)); }
+    if (updates.customerName !== undefined) { fields.push("customer_name = ?"); values.push(safeNullableText(updates.customerName)); }
+    if (updates.customerPhone !== undefined || updates.customer_phone !== undefined || updates.phone !== undefined) { fields.push("customer_phone = ?"); values.push(safeNullableText(updates.customerPhone ?? updates.customer_phone ?? updates.phone)); }
+    if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(safeNullableText(updates.memo)); }
+    if (updates.date !== undefined || updates.foundDate !== undefined) { fields.push("date = ?", "found_date = ?"); values.push(safeNullableText(updates.date ?? updates.foundDate), safeNullableText(updates.date ?? updates.foundDate)); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
     values.push(id);
@@ -46,13 +53,14 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const date = item.date ?? item.foundDate;
     const isResolved = safeBoolInt(item.isResolved ?? item.isCompleted);
     await env.DB.prepare(
-      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, customer_phone, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, resolved_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
     ).bind(
       safeText(item.id),
       safeNullableText(date),
       safeNullableText(item.vehicleNumber),
       safeText(item.itemName || "분실물"),
       safeNullableText(item.customerName),
+      safeNullableText(item.customerPhone ?? item.customer_phone ?? item.phone),
       safeNullableText(date),
       safeNullableText(item.foundLocation),
       safeNullableText(item.storageLocation),
@@ -60,6 +68,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       safeText(item.status || "보관중"),
       isResolved,
       isResolved,
+      isResolved ? safeNullableText(item.resolvedAt || new Date().toISOString()) : null,
     ).run();
     console.log("saved lost item id", item.id);
     return Response.json({ ok: true, success: true, id: safeText(item.id) }, { headers: noStoreHeaders() });
@@ -75,6 +84,7 @@ function mapLostItem(row: any) {
     vehicleNumber: row.vehicle_number,
     itemName: row.item_name,
     customerName: row.customer_name,
+    customerPhone: row.customer_phone || row.phone,
     date: row.date || row.found_date,
     foundDate: row.date || row.found_date,
     foundLocation: row.found_location,
@@ -84,6 +94,7 @@ function mapLostItem(row: any) {
     status: row.status,
     isResolved: Boolean(row.is_resolved ?? row.is_completed),
     isCompleted: Boolean(row.is_resolved ?? row.is_completed),
+    resolvedAt: row.resolved_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -107,6 +118,8 @@ async function ensureLostItemsSchema(env: Env) {
     { name: "vehicle_number", definition: "TEXT" },
     { name: "item_name", definition: "TEXT" },
     { name: "customer_name", definition: "TEXT" },
+    { name: "customer_phone", definition: "TEXT" },
+    { name: "phone", definition: "TEXT" },
     { name: "found_date", definition: "TEXT" },
     { name: "found_location", definition: "TEXT" },
     { name: "storage_location", definition: "TEXT" },
@@ -114,6 +127,7 @@ async function ensureLostItemsSchema(env: Env) {
     { name: "status", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
     { name: "is_resolved", definition: "INTEGER DEFAULT 0" },
+    { name: "resolved_at", definition: "DATETIME" },
     { name: "photo_url", definition: "TEXT" },
     { name: "updated_at", definition: "DATETIME" },
   ]);

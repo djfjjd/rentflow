@@ -32,9 +32,17 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const memo = r.memo ?? r.notes;
     const vehicleNumber = r.vehicleNumber ?? r.rentalCarNumber;
     const parkingZone = r.parkingZone ?? r.arrivalAddress;
+    const dispatchId = safeText(r.dispatchId ?? r.dispatch_id);
+    const dispatchSnapshot = dispatchId
+      ? await env.DB.prepare("SELECT * FROM dispatches WHERE id = ?").bind(dispatchId).first()
+      : null;
+    const snapshot = buildDispatchSnapshot(r, dispatchSnapshot);
     const columns = [
       "id", "date", "time", "vehicle_number", "rental_car_number", "return_address", "arrival_address", "mileage",
-      "fuel_level", "fuel_display", "fuel_level_text", "vehicle_color", "parking_zone", "notes", "memo", "status", "is_completed", "updated_at"
+      "fuel_level", "fuel_display", "fuel_level_text", "vehicle_color", "parking_zone", "notes", "memo", "status", "is_completed",
+      "dispatch_id", "dispatch_date_snapshot", "dispatch_info_snapshot", "dispatch_fuel_snapshot", "dispatch_parking_location_snapshot",
+      "dispatch_memo_snapshot", "orderer_snapshot", "repair_shop_snapshot", "customer_car_model_snapshot", "customer_phone_snapshot",
+      "car_model_color_snapshot", "status_snapshot", "is_corporate_vehicle_snapshot", "updated_at"
     ];
     const values = [
       safeText(r.id),
@@ -54,15 +62,27 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(memo),
       safeText(r.status || "회차등록"),
       safeBoolInt(r.isCompleted),
+      dispatchId,
+      safeNullableText(snapshot.dispatchDate),
+      safeNullableText(snapshot.dispatchInfo),
+      safeNullableText(snapshot.dispatchFuel),
+      safeNullableText(snapshot.dispatchParkingLocation),
+      safeNullableText(snapshot.dispatchMemo),
+      safeNullableText(snapshot.orderer),
+      safeNullableText(snapshot.repairShop),
+      safeNullableText(snapshot.customerCarModel),
+      safeNullableText(snapshot.customerPhone),
+      safeNullableText(snapshot.carModelColor),
+      safeNullableText(snapshot.status),
+      safeBoolInt(snapshot.isCorporateVehicle),
       "CURRENT_TIMESTAMP"
     ];
-    if (await hasColumn(env.DB, "returns", "dispatch_id")) {
-      columns.splice(columns.length - 1, 0, "dispatch_id");
-      values.splice(values.length - 1, 0, safeText(r.dispatchId ?? r.dispatch_id));
-    }
     const placeholders = values.map((value) => value === "CURRENT_TIMESTAMP" ? "CURRENT_TIMESTAMP" : "?").join(", ");
     const bindValues = values.filter((value) => value !== "CURRENT_TIMESTAMP");
     await env.DB.prepare(`INSERT INTO returns (${columns.join(", ")}) VALUES (${placeholders})`).bind(...bindValues).run();
+    if (dispatchId) {
+      await env.DB.prepare("UPDATE dispatches SET return_completed = 1, return_at = COALESCE(return_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(dispatchId).run();
+    }
 
     console.log("return saved", r.id);
     return Response.json({ ok: true, success: true, id: safeText(r.id) }, { headers: noStoreHeaders() });
@@ -153,6 +173,23 @@ function mapReturn(row: any) {
     id: row.id,
     dispatch_id: row.dispatch_id,
     dispatchId: row.dispatch_id,
+    dispatchDateSnapshot: row.dispatch_date_snapshot,
+    dispatchInfoSnapshot: row.dispatch_info_snapshot,
+    dispatchFuelSnapshot: row.dispatch_fuel_snapshot,
+    dispatchParkingLocationSnapshot: row.dispatch_parking_location_snapshot,
+    dispatchMemoSnapshot: row.dispatch_memo_snapshot,
+    ordererSnapshot: row.orderer_snapshot,
+    repairShopSnapshot: row.repair_shop_snapshot,
+    customerCarModelSnapshot: row.customer_car_model_snapshot,
+    customerPhoneSnapshot: row.customer_phone_snapshot,
+    carModelColorSnapshot: row.car_model_color_snapshot,
+    statusSnapshot: row.status_snapshot,
+    isCorporateVehicleSnapshot: Boolean(row.is_corporate_vehicle_snapshot),
+    orderer: row.orderer_snapshot,
+    repairShop: row.repair_shop_snapshot,
+    customerCarModel: row.customer_car_model_snapshot,
+    customerPhone: row.customer_phone_snapshot,
+    carModelColor: row.car_model_color_snapshot,
     date: row.date,
     time: row.time,
     vehicle_number: vehicleNumber,
@@ -231,7 +268,46 @@ async function ensureReturnSchema(env: Env) {
     { name: "notes", definition: "TEXT" },
     { name: "status", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
+    { name: "dispatch_id", definition: "TEXT" },
+    { name: "dispatch_date_snapshot", definition: "TEXT" },
+    { name: "dispatch_info_snapshot", definition: "TEXT" },
+    { name: "dispatch_fuel_snapshot", definition: "TEXT" },
+    { name: "dispatch_parking_location_snapshot", definition: "TEXT" },
+    { name: "dispatch_memo_snapshot", definition: "TEXT" },
+    { name: "orderer_snapshot", definition: "TEXT" },
+    { name: "repair_shop_snapshot", definition: "TEXT" },
+    { name: "customer_car_model_snapshot", definition: "TEXT" },
+    { name: "customer_phone_snapshot", definition: "TEXT" },
+    { name: "car_model_color_snapshot", definition: "TEXT" },
+    { name: "status_snapshot", definition: "TEXT" },
+    { name: "is_corporate_vehicle_snapshot", definition: "INTEGER DEFAULT 0" },
     { name: "created_at", definition: "DATETIME" },
     { name: "updated_at", definition: "DATETIME" },
   ]);
+}
+
+function buildDispatchSnapshot(input: any, dispatch: any) {
+  const vehicleNumber = dispatch?.vehicle_number || dispatch?.rental_car_number || input.vehicleNumber || input.rentalCarNumber || "";
+  const carModelColor = [dispatch?.customer_car_model || input.customerCarModel, dispatch?.vehicle_color || input.vehicleColor].filter(Boolean).join(" / ");
+  return {
+    dispatchDate: dispatch?.date || input.dispatchDate,
+    dispatchInfo: input.dispatchInfo || formatSnapshotDispatchInfo(dispatch),
+    dispatchFuel: dispatch?.fuel_level_text || dispatch?.fuel_display || input.dispatchFuel || input.fuelLevelText || input.fuelDisplay,
+    dispatchParkingLocation: dispatch?.parking_zone || dispatch?.delivery_address || input.dispatchParkingLocation,
+    dispatchMemo: dispatch?.memo || dispatch?.notes || input.dispatchMemo,
+    orderer: dispatch?.orderer || dispatch?.ordered_by || dispatch?.customer_name || input.orderer,
+    repairShop: dispatch?.repair_shop || input.repairShop,
+    customerCarModel: dispatch?.customer_car_model || input.customerCarModel,
+    customerPhone: dispatch?.customer_phone || input.customerPhone,
+    carModelColor: input.carModelColor || carModelColor || vehicleNumber,
+    status: dispatch?.dispatch_type || dispatch?.business_type || dispatch?.status || input.status,
+    isCorporateVehicle: dispatch?.is_corporate ?? dispatch?.corporate_vehicle ?? input.isCorporateVehicle,
+  };
+}
+
+function formatSnapshotDispatchInfo(dispatch: any) {
+  if (!dispatch) return "";
+  const orderer = dispatch.orderer || dispatch.ordered_by || dispatch.customer_name || "";
+  const repairShop = dispatch.repair_shop || "";
+  return [dispatch.date, orderer && repairShop ? `${orderer} / ${repairShop}` : orderer || repairShop].filter(Boolean).join(" · ");
 }
