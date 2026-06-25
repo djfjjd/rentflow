@@ -3170,11 +3170,10 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
       </div>
       <div data-horizontal-scroll="true" className="vehicle-status-table-wrapper">
         <table className="vehicle-status-table text-left text-sm">
-          <thead><tr className="border-b"><th>차량번호</th><th>지점</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
+          <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>
               <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
-              <td className="whitespace-nowrap">{formatVehicleCompany(row.companyType)}</td>
               <td><VehicleModelSummary model={row.model} onOpen={setModelDetail} /></td>
               <td className="whitespace-nowrap">{isDispatchStatus(row.statusLabel) ? <PhoneCell phone={row.contactPhone} /> : "-"}</td>
               <td><StatusPill status={row.statusLabel} /></td>
