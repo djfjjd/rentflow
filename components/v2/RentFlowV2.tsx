@@ -289,7 +289,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={reloadReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
-        {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} /> : null}
+        {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
         {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
@@ -1209,7 +1209,17 @@ function IncidentForm({
   );
 }
 
-function BillingForm({ contracts, dispatches, onContracts }: { contracts: ContractV2[]; dispatches: DispatchV2[]; onContracts: ReloadHandler<ContractV2> }) {
+function BillingForm({
+  contracts,
+  dispatches,
+  onContracts,
+  onDispatches,
+}: {
+  contracts: ContractV2[];
+  dispatches: DispatchV2[];
+  onContracts: ReloadHandler<ContractV2>;
+  onDispatches: ReloadHandler<DispatchV2>;
+}) {
   const pendingDispatches = dispatches.filter((dispatch) => !dispatch.isCompleted);
   const [dispatchId, setDispatchId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -1253,8 +1263,9 @@ function BillingForm({ contracts, dispatches, onContracts }: { contracts: Contra
         driveFileId: (contractFile as UploadedFileV2 & { drive_file_id?: string }).driveFileId || (contractFile as UploadedFileV2 & { drive_file_id?: string }).drive_file_id || "",
         uploadedAt: new Date().toISOString(),
       });
+      await sendJson(`/api/dispatches?id=${encodeURIComponent(selectedDispatch.id)}`, { isCompleted: true }, "PATCH");
       setProgress({ completed: uploaded.success, total: files.length, failed: uploaded.failed, label, done: true });
-      await onContracts();
+      await Promise.all([onContracts(), onDispatches()]);
       setFiles([]);
       setDispatchId("");
       showToast("계약서가 저장되었습니다.");
