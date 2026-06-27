@@ -64,7 +64,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     const result = await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, mime_type, record_type, record_id, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, drive_backup_status, drive_file_id, drive_url, drive_folder_id, drive_folder_url, vehicle_number, insurance_number, customer_name, intake_type, file_type, mime_type, record_type, record_id, folder_key, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(f.fileName),
       safeText(f.r2Url),
@@ -84,10 +84,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(f.mimeType || f.mime_type),
       safeNullableText(f.recordType),
       safeNullableText(f.recordId),
+      safeNullableText(f.folderKey || f.folder_key),
       safeNullableText(f.vehicleFolderUrl),
       safeNullableText(f.insuranceFolderUrl),
       safeNullableText(f.customerFolderUrl),
-      safeText(f.uploadedAt || new Date().toISOString())
+      safeText(f.uploadedAt || f.createdAt || new Date().toISOString()),
+      safeText(f.createdAt || f.uploadedAt || new Date().toISOString())
     ).run();
 
     return Response.json({ ok: true, success: true, id: result.meta?.last_row_id ?? null }, { headers: noStoreHeaders() });
@@ -132,6 +134,8 @@ function mapFile(row: any) {
     record_type: row.record_type,
     recordId: row.record_id,
     record_id: row.record_id,
+    folderKey: row.folder_key,
+    folder_key: row.folder_key,
     businessDate: row.business_date,
     businessTime: row.business_time,
     businessKind: row.business_kind,
@@ -198,6 +202,7 @@ async function ensureUploadedFilesSchema(env: Env) {
       file_type TEXT,
       record_type TEXT,
       record_id TEXT,
+      folder_key TEXT,
       vehicle_folder_url TEXT,
       insurance_folder_url TEXT,
       customer_folder_url TEXT,
@@ -211,12 +216,22 @@ async function ensureUploadedFilesSchema(env: Env) {
     { name: "mime_type", definition: "TEXT" },
     { name: "record_type", definition: "TEXT" },
     { name: "record_id", definition: "TEXT" },
+    { name: "folder_key", definition: "TEXT" },
     { name: "uploaded_at", definition: "DATETIME" },
     { name: "created_at", definition: "DATETIME" },
     { name: "thumbnail_url", definition: "TEXT" },
     { name: "thumbnail_key", definition: "TEXT" },
     { name: "drive_file_id", definition: "TEXT" },
     { name: "drive_url", definition: "TEXT" },
+    { name: "drive_folder_id", definition: "TEXT" },
+    { name: "drive_folder_url", definition: "TEXT" },
+    { name: "drive_backup_status", definition: "TEXT" },
+    { name: "insurance_number", definition: "TEXT" },
+    { name: "customer_name", definition: "TEXT" },
+    { name: "intake_type", definition: "TEXT" },
+    { name: "vehicle_folder_url", definition: "TEXT" },
+    { name: "insurance_folder_url", definition: "TEXT" },
+    { name: "customer_folder_url", definition: "TEXT" },
     { name: "archived_at", definition: "DATETIME" },
     { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);

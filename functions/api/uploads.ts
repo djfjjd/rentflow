@@ -29,6 +29,7 @@ type FileRecord = {
   fileType?: string;
   recordType?: string;
   recordId?: string;
+  folderKey?: string;
   vehicleFolderUrl?: string;
   insuranceFolderUrl?: string;
   customerFolderUrl?: string;
@@ -89,6 +90,9 @@ export async function onRequestGet({ request, env }: UploadContext) {
   const recordType = url.searchParams.get("recordType");
   const recordId = url.searchParams.get("recordId");
   const vehicleNumber = url.searchParams.get("vehicleNumber");
+  const folderId = url.searchParams.get("folderId");
+  const date = url.searchParams.get("date");
+  const time = url.searchParams.get("time");
 
   // Handle R2 file download/view
   if (key && env.RENTFLOW_UPLOADS) {
@@ -113,42 +117,41 @@ export async function onRequestGet({ request, env }: UploadContext) {
     return new Response(object.body, { headers });
   }
 
-  if ((recordType || vehicleNumber) && env.DB) {
+  if ((folderId || recordType || recordId || vehicleNumber) && env.DB) {
     await ensureUploadedFilesSchema(env);
     await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
     let results: any[] = [];
+    const recordTypes = photoRecordTypeLookupValues(recordType);
+    const recordTypeWhere = recordTypes.map(() => "?").join(", ");
 
-    if (recordType && recordId) {
+    if (folderId) {
       const response = await env.DB.prepare(
         `SELECT *
          FROM uploaded_files
-         WHERE record_type = ? AND record_id = ?
+         WHERE drive_folder_id = ?
            AND ${activePhotoRetentionWhere()}
          ORDER BY uploaded_at DESC, created_at DESC`
-      ).bind(safeText(recordType), safeText(recordId)).all();
+      ).bind(safeText(folderId)).all();
       results = response.results || [];
     }
 
-    if (!results.length && recordType && vehicleNumber) {
+    if (!results.length && recordTypes.length && recordId) {
       const response = await env.DB.prepare(
         `SELECT *
          FROM uploaded_files
-         WHERE record_type = ? AND vehicle_number = ?
+         WHERE record_type IN (${recordTypeWhere}) AND record_id = ?
            AND ${activePhotoRetentionWhere()}
          ORDER BY uploaded_at DESC, created_at DESC`
-      ).bind(safeText(recordType), safeText(vehicleNumber)).all();
+      ).bind(...recordTypes.map(safeText), safeText(recordId)).all();
       results = response.results || [];
     }
 
-    if (!results.length && vehicleNumber) {
-      const response = await env.DB.prepare(
-        `SELECT *
-         FROM uploaded_files
-         WHERE vehicle_number = ?
-           AND ${activePhotoRetentionWhere()}
-         ORDER BY uploaded_at DESC, created_at DESC`
-      ).bind(safeText(vehicleNumber)).all();
-      results = response.results || [];
+    if (!results.length && !folderId && !recordId && vehicleNumber) {
+      results = await findClosestLegacyPhotoFolder(env, {
+        recordTypes,
+        vehicleNumber,
+        targetIso: parsePhotoTargetIso(date, time),
+      });
     }
 
     return Response.json(dedupeUploadedRows(results).map(mapUploadedFile), { headers: noStoreHeaders() });
@@ -174,6 +177,10 @@ function mapUploadedFile(row: any) {
     driveUrl: row.drive_url,
     drive_file_id: row.drive_file_id,
     driveFileId: row.drive_file_id,
+    drive_folder_id: row.drive_folder_id,
+    driveFolderId: row.drive_folder_id,
+    drive_folder_url: row.drive_folder_url,
+    driveFolderUrl: row.drive_folder_url,
     archived_at: row.archived_at,
     archivedAt: row.archived_at,
     archive_status: row.archive_status || "none",
@@ -186,6 +193,8 @@ function mapUploadedFile(row: any) {
     recordType: row.record_type,
     record_id: row.record_id,
     recordId: row.record_id,
+    folder_key: row.folder_key,
+    folderKey: row.folder_key,
     vehicle_number: row.vehicle_number,
     vehicleNumber: row.vehicle_number,
     created_at: row.created_at,
@@ -219,6 +228,7 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
       file_type TEXT,
       record_type TEXT,
       record_id TEXT,
+      folder_key TEXT,
       uploaded_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -230,15 +240,65 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
     { name: "mime_type", definition: "TEXT" },
     { name: "record_type", definition: "TEXT" },
     { name: "record_id", definition: "TEXT" },
+    { name: "folder_key", definition: "TEXT" },
     { name: "uploaded_at", definition: "DATETIME" },
     { name: "created_at", definition: "DATETIME" },
     { name: "thumbnail_url", definition: "TEXT" },
     { name: "thumbnail_key", definition: "TEXT" },
     { name: "drive_file_id", definition: "TEXT" },
+    { name: "drive_folder_id", definition: "TEXT" },
+    { name: "drive_folder_url", definition: "TEXT" },
     { name: "drive_url", definition: "TEXT" },
     { name: "archived_at", definition: "DATETIME" },
     { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);
+}
+
+function photoRecordTypeLookupValues(recordType: string | null) {
+  const normalized = safeText(recordType);
+  if (!normalized) return [];
+  if (normalized === "lostItem") return ["lost_item", "lostItem"];
+  if (normalized === "accidentRepair") return ["accident", "maintenance", "accidentRepair"];
+  return [normalized];
+}
+
+function parsePhotoTargetIso(date: string | null, time: string | null) {
+  const datePart = safeText(date).slice(0, 10);
+  if (!datePart) return "";
+  const timeMatch = safeText(time).match(/(\d{1,2}):(\d{2})/);
+  const timePart = timeMatch ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}` : "00:00";
+  return `${datePart}T${timePart}:00`;
+}
+
+async function findClosestLegacyPhotoFolder(
+  env: UploadContext["env"],
+  {
+    recordTypes,
+    vehicleNumber,
+    targetIso,
+  }: { recordTypes: string[]; vehicleNumber: string; targetIso: string }
+) {
+  const typeClause = recordTypes.length ? `AND record_type IN (${recordTypes.map(() => "?").join(", ")})` : "";
+  const targetSeconds = targetIso ? Math.floor(new Date(targetIso).getTime() / 1000) : 0;
+  const orderBy = targetSeconds
+    ? "ABS(strftime('%s', COALESCE(uploaded_at, created_at)) - ?) ASC, uploaded_at DESC, created_at DESC"
+    : "uploaded_at DESC, created_at DESC";
+  const binds = [
+    safeText(vehicleNumber),
+    ...recordTypes.map(safeText),
+    ...(targetSeconds ? [targetSeconds] : []),
+  ];
+  const response = await env.DB.prepare(
+    `SELECT *
+     FROM uploaded_files
+     WHERE vehicle_number = ?
+       ${typeClause}
+       AND COALESCE(record_id, '') = ''
+       AND ${activePhotoRetentionWhere()}
+     ORDER BY ${orderBy}
+     LIMIT 1`
+  ).bind(...binds).all();
+  return response.results || [];
 }
 
 export async function onRequestDelete({ request, env }: UploadContext) {
@@ -282,6 +342,7 @@ function toFileRecord(
     fileType: String(driveResult.fileType || fallback.fileType || fallback.intakeType || ""),
     recordType: String(driveResult.recordType || fallback.recordType || ""),
     recordId: String(driveResult.recordId || fallback.recordId || ""),
+    folderKey: String(driveResult.folderKey || fallback.folderKey || `${fallback.recordType || "unknown"}:${fallback.recordId || "legacy"}`),
     vehicleFolderUrl: String(driveResult.vehicleFolderUrl || ""),
     insuranceFolderUrl: String(driveResult.insuranceFolderUrl || ""),
     customerFolderUrl: String(driveResult.customerFolderUrl || ""),

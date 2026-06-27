@@ -579,6 +579,14 @@ function PushPermissionButton() {
   }
 
   async function resubscribePush() {
+    await subscribePush({ forceNew: true });
+  }
+
+  async function allowPushSubscription() {
+    await subscribePush({ forceNew: false });
+  }
+
+  async function subscribePush({ forceNew }: { forceNew: boolean }) {
     if (!("Notification" in window)) {
       setStatus("알림 미지원");
       return;
@@ -592,8 +600,13 @@ function PushPermissionButton() {
     }
 
     try {
-      const registration = await navigator.serviceWorker?.ready;
+      const registration = await getPushRegistration();
       let subscription = await registration?.pushManager?.getSubscription();
+      const alreadySubscribed = Boolean(subscription);
+      if (forceNew && subscription) {
+        await subscription.unsubscribe();
+        subscription = null;
+      }
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || await fetchVapidPublicKey();
       if (!subscription && registration?.pushManager && vapidPublicKey) {
         subscription = await registration.pushManager.subscribe({
@@ -607,7 +620,7 @@ function PushPermissionButton() {
         setStatus("VAPID 설정 필요");
         return;
       }
-      setStatus("알림 허용됨");
+      setStatus(forceNew ? "푸시 재구독 완료" : alreadySubscribed ? "이미 푸시알림 구독 있음" : "푸시알림 구독 허용됨");
       setPermission("granted");
       setSubscriptionStatus("구독 있음");
     } catch (error) {
@@ -697,7 +710,10 @@ function PushPermissionButton() {
       </button>
       {modalOpen ? (
         <OverlayModal onClose={() => setModalOpen(false)} panelClassName="w-[92vw] max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-          <h2 className="text-lg font-black text-[#16211d]">알림권한 상태</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black text-[#16211d]">알림권한 상태</h2>
+            <button className="small-btn min-h-9 px-3" type="button" onClick={() => setModalOpen(false)}>닫기</button>
+          </div>
           <p className="mt-3 whitespace-pre-wrap text-sm font-bold leading-relaxed text-[#4b5563]">{message}</p>
           {status ? (
             <div className="push-status-line mt-2 text-sm font-black text-[#116149]">
@@ -710,7 +726,7 @@ function PushPermissionButton() {
             </div>
           ) : null}
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            <button className="small-btn" type="button" onClick={() => setModalOpen(false)}>확인</button>
+            <button className="small-btn" type="button" onClick={allowPushSubscription}>푸시알림구독 허용</button>
             <button className="small-btn" type="button" onClick={resubscribePush}>푸시 재구독</button>
             <button className="small-btn" type="button" onClick={sendTest}>테스트 알림</button>
           </div>
@@ -755,6 +771,17 @@ async function fetchPushSubscribeInfo() {
     return await response.json() as { publicKey?: string; vapidPublicKeyExists?: boolean; vapidPrivateKeyExists?: boolean };
   } catch {
     return {};
+  }
+}
+
+async function getPushRegistration() {
+  if (!("serviceWorker" in navigator)) return undefined;
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (existing) return existing;
+  try {
+    return await navigator.serviceWorker.register("/sw.js");
+  } catch {
+    return await navigator.serviceWorker.ready;
   }
 }
 
@@ -1154,21 +1181,31 @@ function IncidentForm({
 }
 
 function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
+  const [recordId, setRecordId] = useState(() => createId("billing"));
+  const [dispatchId, setDispatchId] = useState(dispatches[0]?.id || "");
+  const selectedDispatch = dispatches.find((dispatch) => dispatch.id === dispatchId);
+  useEffect(() => {
+    if (!dispatchId && dispatches[0]?.id) setDispatchId(dispatches[0].id);
+  }, [dispatchId, dispatches]);
   return (
-    <DataForm endpoint="/api/billings" buildPayload={(data) => Object.fromEntries(data.entries())}>
+    <DataForm
+      endpoint="/api/billings"
+      buildPayload={(data) => Object.fromEntries(data.entries())}
+      afterReset={() => {
+        setRecordId(createId("billing"));
+        setDispatchId(dispatches[0]?.id || "");
+      }}
+    >
+      <input name="id" type="hidden" value={recordId} readOnly />
       <label className="label">
         배차건 선택
-        <select className="field min-h-12" name="dispatchId">
+        <select className="field min-h-12" name="dispatchId" value={dispatchId} onChange={(event) => setDispatchId(event.target.value)}>
           {dispatches.map((dispatch) => (
             <option key={dispatch.id} value={dispatch.id}>{dispatch.rentalCarNumber} · {dispatch.customerName}</option>
           ))}
         </select>
       </label>
-      <Input name="contractTitle" label="계약서 생성" placeholder="계약서 제목" />
-      <Input name="amount" label="청구금액" type="number" />
-      <Input name="faultRate" label="과실비율" />
-      <Input name="taxInvoiceStatus" label="세금계산서 상태" />
-      <Input name="receivableStatus" label="미수금 상태" />
+      <PhotoUploadButton recordId={recordId} recordType="billing" vehicleNumber={selectedDispatch?.rentalCarNumber || ""} />
     </DataForm>
   );
 }
@@ -2751,7 +2788,7 @@ function IncidentBoard({
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
           const plate = clean(row.item.plateNumber);
-          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType={row.type === "사고" ? "accident" : "maintenance"} vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType="accidentRepair" vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -2781,7 +2818,7 @@ function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; 
         <thead><tr className="border-b"><th>{tab === "done" ? "보관중으로" : "정리완료"}</th><th>차량번호</th><th>고객명</th><th>연락처</th><th>특이사항</th><th>수정</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const plate = clean(item.vehicleNumber);
-          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(item.customerName)}</td><td><PhoneCell phone={item.customerPhone} /></td><td>{clean(item.memo)}</td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lost_item" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(item.customerName)}</td><td><PhoneCell phone={item.customerPhone} /></td><td>{clean(item.memo)}</td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -2882,10 +2919,17 @@ function PhotoFolderGalleryModal({
 
   useEffect(() => {
     setLoading(true);
-    fetchJson<UploadedFileV2[]>(`/api/uploads?recordType=${encodeURIComponent(recordType)}&recordId=${encodeURIComponent(recordId)}&vehicleNumber=${encodeURIComponent(vehicleNumber || "")}`, [])
+    const params = new URLSearchParams({
+      recordType,
+      recordId,
+      date: date || "",
+      time: time || "",
+    });
+    if (vehicleNumber) params.set("vehicleNumber", vehicleNumber);
+    fetchJson<UploadedFileV2[]>(`/api/uploads?${params.toString()}`, [])
       .then(setFiles)
       .finally(() => setLoading(false));
-  }, [recordId, recordType, vehicleNumber]);
+  }, [date, recordId, recordType, time, vehicleNumber]);
 
   useEffect(() => {
     prefetchThumbnailUrls(sortedFiles.map(fileThumbnailUrl).filter(Boolean));
@@ -3727,7 +3771,7 @@ function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType
   );
 }
 
-function AdditionalUploadButton({ recordType, recordId, vehicleNumber, label = "추가" }: { recordType: "dispatch" | "return" | "reservation"; recordId: string; vehicleNumber: string; label?: string }) {
+function AdditionalUploadButton({ recordType, recordId, vehicleNumber, label = "추가" }: { recordType: "dispatch" | "return" | "reservation" | "billing"; recordId: string; vehicleNumber: string; label?: string }) {
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgressState | null>(null);
@@ -3840,12 +3884,16 @@ async function uploadSelectedFiles(
   let failed = 0;
   const label = uploadProgressLabel(files);
   for (const file of files) {
+    const createdAt = new Date().toISOString();
     const fileMetadata = {
       fileName: file.name,
       vehicleNumber: metadata.vehicleNumber,
       mimeType: file.type || "application/octet-stream",
       recordType: metadata.recordType,
       recordId: metadata.recordId || "",
+      folderKey: `${metadata.recordType}:${metadata.recordId || "legacy"}`,
+      createdAt,
+      uploadedAt: createdAt,
       intakeType: metadata.recordType,
       fileType: file.type.startsWith("video/") ? "영상" : "사진",
     };
