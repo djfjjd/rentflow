@@ -23,7 +23,6 @@ import {
   Paperclip,
   Phone,
   Plus,
-  QrCode,
   Search,
   Settings,
   Trash2,
@@ -112,7 +111,6 @@ const adminItems = [
   { href: "/admin/vehicles", label: "차량수정", icon: Car },
   { href: "/admin/receivables", label: "미수금", icon: CreditCard },
   { href: "/admin/stats", label: "통계", icon: BarChart3 },
-  { href: "/admin/install", label: "설치 안내", icon: QrCode },
 ];
 
 const dispatchBoardColumns = [
@@ -852,7 +850,7 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 
 function AdminNav() {
   const pathname = usePathname();
-  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles" || item.href === "/admin/install");
+  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
   return (
     <nav className="flex w-full items-center justify-between gap-2 pb-2">
       {visibleItems.map((item) => {
