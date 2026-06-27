@@ -89,6 +89,16 @@ type ContractV2 = {
   document_url?: string;
   driveFileId?: string;
   drive_file_id?: string;
+  driveFolderId?: string;
+  drive_folder_id?: string;
+  driveFolderUrl?: string;
+  drive_folder_url?: string;
+  contractDriveFileId?: string;
+  contract_drive_file_id?: string;
+  contractDriveFolderId?: string;
+  contract_drive_folder_id?: string;
+  contractDriveUrl?: string;
+  contract_drive_url?: string;
   uploadedAt?: string;
   uploaded_at?: string;
   memo?: string;
@@ -1246,23 +1256,12 @@ function BillingForm({
     setProgress({ completed: 0, total: files.length, failed: 0, label });
     setSaving(true);
     try {
-      const uploaded = await uploadSelectedFiles(files, {
+      const uploaded = await uploadContractFilesDirectly(files, {
         recordType: "dispatchContract",
         recordId: selectedDispatch.id,
-        vehicleNumber: selectedDispatch.rentalCarNumber || "",
-      }, setProgress);
-      const contractFile = uploaded.files[0];
-      if (!contractFile) throw new Error("contract upload missing");
-      await sendJson("/api/contracts", {
-        recordId: selectedDispatch.id,
-        recordType: "dispatchContract",
         dispatchId: selectedDispatch.id,
         vehicleNumber: selectedDispatch.rentalCarNumber || "",
-        fileName: fileName(contractFile),
-        fileUrl: fileUrl(contractFile),
-        driveFileId: (contractFile as UploadedFileV2 & { drive_file_id?: string }).driveFileId || (contractFile as UploadedFileV2 & { drive_file_id?: string }).drive_file_id || "",
-        uploadedAt: new Date().toISOString(),
-      });
+      }, setProgress);
       await sendJson(`/api/dispatches?id=${encodeURIComponent(selectedDispatch.id)}`, { isCompleted: true }, "PATCH");
       setProgress({ completed: uploaded.success, total: files.length, failed: uploaded.failed, label, done: true });
       await Promise.all([onContracts(), onDispatches()]);
@@ -1417,7 +1416,13 @@ function contractForRecord(contracts: ContractV2[], recordId: string) {
 }
 
 function contractUrl(contract: ContractV2) {
-  return clean(contract.fileUrl || contract.file_url || contract.documentUrl || contract.document_url);
+  const driveUrl = clean(contract.contractDriveUrl || contract.contract_drive_url || contract.fileUrl || contract.file_url || contract.documentUrl || contract.document_url);
+  if (driveUrl) return driveUrl;
+  const fileId = clean(contract.contractDriveFileId || contract.contract_drive_file_id || contract.driveFileId || contract.drive_file_id);
+  if (fileId) return `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`;
+  const folderId = clean(contract.contractDriveFolderId || contract.contract_drive_folder_id || contract.driveFolderId || contract.drive_folder_id);
+  if (folderId) return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`;
+  return "";
 }
 
 function formatBillingDispatchOption(dispatch: DispatchV2) {
@@ -4137,6 +4142,34 @@ async function uploadSelectedFiles(
   }
   if (failed === files.length && files.length > 0) throw new Error("all uploads failed");
   return { success, failed, files: uploadedFiles };
+}
+
+async function uploadContractFilesDirectly(
+  files: File[],
+  metadata: { recordType: "dispatchContract"; recordId: string; dispatchId: string; vehicleNumber: string },
+  onProgress?: (progress: UploadProgressState) => void
+) {
+  const label = uploadProgressLabel(files);
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("file", file);
+  }
+  formData.append("metadata", JSON.stringify({
+    ...metadata,
+    uploadedAt: new Date().toISOString(),
+  }));
+
+  const response = await fetch("/api/contract-upload", {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json() as { success?: boolean; files?: unknown[] };
+  if (!data.success) throw new Error("contract drive upload failed");
+  const success = Array.isArray(data.files) ? data.files.length : files.length;
+  onProgress?.({ completed: success, total: files.length, failed: 0, label });
+  return { success, failed: 0 };
 }
 
 async function createImageThumbnail(file: File) {

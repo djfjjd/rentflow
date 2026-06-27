@@ -59,6 +59,11 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           file_url = ?,
           document_url = ?,
           drive_file_id = ?,
+          drive_folder_id = ?,
+          drive_folder_url = ?,
+          contract_drive_file_id = ?,
+          contract_drive_folder_id = ?,
+          contract_drive_url = ?,
           uploaded_at = ?,
           uploaded_by = ?,
           memo = ?,
@@ -70,6 +75,11 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         safeNullableText(body.fileUrl),
         safeNullableText(body.fileUrl || body.documentUrl),
         safeNullableText(body.driveFileId),
+        safeNullableText(body.driveFolderId),
+        safeNullableText(body.driveFolderUrl),
+        safeNullableText(body.contractDriveFileId || body.driveFileId),
+        safeNullableText(body.contractDriveFolderId || body.driveFolderId),
+        safeNullableText(body.contractDriveUrl || body.driveUrl || body.fileUrl || body.documentUrl),
         safeText(body.uploadedAt || new Date().toISOString()),
         safeNullableText(body.uploadedBy),
         safeNullableText(body.memo),
@@ -88,13 +98,18 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
           file_url,
           document_url,
           drive_file_id,
+          drive_folder_id,
+          drive_folder_url,
+          contract_drive_file_id,
+          contract_drive_folder_id,
+          contract_drive_url,
           uploaded_at,
           uploaded_by,
           memo,
           status,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `).bind(
         id,
         recordId,
@@ -105,6 +120,11 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
         safeNullableText(body.fileUrl),
         safeNullableText(body.fileUrl || body.documentUrl),
         safeNullableText(body.driveFileId),
+        safeNullableText(body.driveFolderId),
+        safeNullableText(body.driveFolderUrl),
+        safeNullableText(body.contractDriveFileId || body.driveFileId),
+        safeNullableText(body.contractDriveFolderId || body.driveFolderId),
+        safeNullableText(body.contractDriveUrl || body.driveUrl || body.fileUrl || body.documentUrl),
         safeText(body.uploadedAt || new Date().toISOString()),
         safeNullableText(body.uploadedBy),
         safeNullableText(body.memo),
@@ -120,7 +140,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
   }
 }
 
-async function ensureContractsSchema(env: Env) {
+export async function ensureContractsSchema(env: Env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS contracts (
       id TEXT PRIMARY KEY,
@@ -141,6 +161,11 @@ async function ensureContractsSchema(env: Env) {
     { name: "file_name", definition: "TEXT" },
     { name: "file_url", definition: "TEXT" },
     { name: "drive_file_id", definition: "TEXT" },
+    { name: "drive_folder_id", definition: "TEXT" },
+    { name: "drive_folder_url", definition: "TEXT" },
+    { name: "contract_drive_file_id", definition: "TEXT" },
+    { name: "contract_drive_folder_id", definition: "TEXT" },
+    { name: "contract_drive_url", definition: "TEXT" },
     { name: "uploaded_at", definition: "DATETIME" },
     { name: "uploaded_by", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
@@ -167,6 +192,16 @@ function mapContract(row: any) {
     document_url: row.document_url,
     driveFileId: row.drive_file_id,
     drive_file_id: row.drive_file_id,
+    driveFolderId: row.drive_folder_id,
+    drive_folder_id: row.drive_folder_id,
+    driveFolderUrl: row.drive_folder_url,
+    drive_folder_url: row.drive_folder_url,
+    contractDriveFileId: row.contract_drive_file_id || row.drive_file_id,
+    contract_drive_file_id: row.contract_drive_file_id || row.drive_file_id,
+    contractDriveFolderId: row.contract_drive_folder_id || row.drive_folder_id,
+    contract_drive_folder_id: row.contract_drive_folder_id || row.drive_folder_id,
+    contractDriveUrl: row.contract_drive_url || row.file_url || row.document_url,
+    contract_drive_url: row.contract_drive_url || row.file_url || row.document_url,
     uploadedAt: row.uploaded_at || row.created_at,
     uploaded_at: row.uploaded_at || row.created_at,
     uploadedBy: row.uploaded_by,

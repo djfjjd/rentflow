@@ -222,6 +222,12 @@ function mapDispatch(row: any) {
     isCompleted: Boolean(row.is_completed),
     returnCompleted: Boolean(row.return_completed),
     returnAt: row.return_at,
+    contractDriveFileId: row.contract_drive_file_id,
+    contract_drive_file_id: row.contract_drive_file_id,
+    contractDriveFolderId: row.contract_drive_folder_id,
+    contract_drive_folder_id: row.contract_drive_folder_id,
+    contractDriveUrl: row.contract_drive_url,
+    contract_drive_url: row.contract_drive_url,
     notes: memo,
     status: row.status,
     intakeType: row.intake_type,
@@ -284,5 +290,8 @@ async function ensureDispatchSchema(env: Env) {
     { name: "fuel_level_text", definition: "TEXT" },
     { name: "vehicle_color", definition: "TEXT" },
     { name: "memo", definition: "TEXT" },
+    { name: "contract_drive_file_id", definition: "TEXT" },
+    { name: "contract_drive_folder_id", definition: "TEXT" },
+    { name: "contract_drive_url", definition: "TEXT" },
   ]);
 }
