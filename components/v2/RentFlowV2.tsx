@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -19,8 +20,10 @@ import {
   Info,
   MapPin,
   PackageSearch,
+  Paperclip,
   Phone,
   Plus,
+  QrCode,
   Search,
   Settings,
   Trash2,
@@ -72,6 +75,26 @@ type PageKind =
 
 type ReloadHandler<T> = (items?: T[]) => void | Promise<void>;
 
+type ContractV2 = {
+  id: string;
+  recordId?: string;
+  record_id?: string;
+  recordType?: string;
+  record_type?: string;
+  vehicleNumber?: string;
+  fileName?: string;
+  file_name?: string;
+  fileUrl?: string;
+  file_url?: string;
+  documentUrl?: string;
+  document_url?: string;
+  driveFileId?: string;
+  drive_file_id?: string;
+  uploadedAt?: string;
+  uploaded_at?: string;
+  memo?: string;
+};
+
 const appActions = [
   { href: "/app/dispatch", label: "배차", icon: Car, primary: true },
   { href: "/app/return", label: "회차", icon: Check, primary: true },
@@ -89,6 +112,7 @@ const adminItems = [
   { href: "/admin/vehicles", label: "차량수정", icon: Car },
   { href: "/admin/receivables", label: "미수금", icon: CreditCard },
   { href: "/admin/stats", label: "통계", icon: BarChart3 },
+  { href: "/admin/install", label: "설치 안내", icon: QrCode },
 ];
 
 const dispatchBoardColumns = [
@@ -151,6 +175,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [reservations, setReservations] = useState<ReservationV2[]>([]);
   const [dispatches, setDispatches] = useState<DispatchV2[]>([]);
   const [returns, setReturns] = useState<ReturnV2[]>([]);
+  const [contracts, setContracts] = useState<ContractV2[]>([]);
   const [accidents, setAccidents] = useState<IncidentRecordV2[]>([]);
   const [maintenance, setMaintenance] = useState<IncidentRecordV2[]>([]);
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
@@ -179,6 +204,10 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
     setReturns(await fetchJson<ReturnV2[]>("/api/returns", []));
   }
 
+  async function reloadContracts() {
+    setContracts(await fetchJson<ContractV2[]>("/api/contracts?recordType=dispatchContract", []));
+  }
+
   async function reloadAccidents() {
     setAccidents(await fetchJson<IncidentRecordV2[]>("/api/accident-histories", []));
   }
@@ -197,14 +226,16 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
       fetchJson<ReservationV2[]>("/api/reservations", []),
       fetchJson<DispatchV2[]>("/api/dispatches", []),
       fetchJson<ReturnV2[]>("/api/returns", []),
+      fetchJson<ContractV2[]>("/api/contracts?recordType=dispatchContract", []),
       fetchJson<IncidentRecordV2[]>("/api/accident-histories", []),
       fetchJson<IncidentRecordV2[]>("/api/maintenance-histories", []),
       fetchJson<LostItemV2[]>("/api/lost-items", []),
-    ]).then(([v, r, d, ret, acc, maint, lost]) => {
+    ]).then(([v, r, d, ret, c, acc, maint, lost]) => {
       setVehicles(v);
       setReservations(r);
       setDispatches(d);
       setReturns(ret);
+      setContracts(c);
       setAccidents(acc);
       setMaintenance(maint);
       setLostItems(lost);
@@ -260,7 +291,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={reloadReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
-        {kind === "billing" ? <BillingForm dispatches={dispatches} /> : null}
+        {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} /> : null}
         {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
@@ -269,7 +300,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
         {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
-        {kind === "admin-dispatches" ? <DispatchAdmin dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
+        {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
         {kind === "admin-billing" ? <BillingAdmin /> : null}
         {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
         {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -821,7 +852,7 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 
 function AdminNav() {
   const pathname = usePathname();
-  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
+  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles" || item.href === "/admin/install");
   return (
     <nav className="flex w-full items-center justify-between gap-2 pb-2">
       {visibleItems.map((item) => {
@@ -1180,34 +1211,208 @@ function IncidentForm({
   );
 }
 
-function BillingForm({ dispatches }: { dispatches: DispatchV2[] }) {
-  const [recordId, setRecordId] = useState(() => createId("billing"));
-  const [dispatchId, setDispatchId] = useState(dispatches[0]?.id || "");
-  const selectedDispatch = dispatches.find((dispatch) => dispatch.id === dispatchId);
-  useEffect(() => {
-    if (!dispatchId && dispatches[0]?.id) setDispatchId(dispatches[0].id);
-  }, [dispatchId, dispatches]);
+function BillingForm({ contracts, dispatches, onContracts }: { contracts: ContractV2[]; dispatches: DispatchV2[]; onContracts: ReloadHandler<ContractV2> }) {
+  const pendingDispatches = dispatches.filter((dispatch) => !dispatch.isCompleted);
+  const [dispatchId, setDispatchId] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState<UploadProgressState | null>(null);
+  const [toast, setToast] = useState("");
+  const [saving, setSaving] = useState(false);
+  const selectedDispatch = pendingDispatches.find((dispatch) => dispatch.id === dispatchId);
+  const existingContract = selectedDispatch ? contractForRecord(contracts, selectedDispatch.id) : undefined;
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2500);
+  }
+
+  async function saveContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedDispatch || !files.length) {
+      showToast("계약서 저장에 실패했습니다.");
+      return;
+    }
+    if (existingContract && !confirm("이미 계약서가 등록되어 있습니다.\n새 파일로 교체하시겠습니까?")) return;
+
+    const label = uploadProgressLabel(files);
+    setProgress({ completed: 0, total: files.length, failed: 0, label });
+    setSaving(true);
+    try {
+      const uploaded = await uploadSelectedFiles(files, {
+        recordType: "dispatchContract",
+        recordId: selectedDispatch.id,
+        vehicleNumber: selectedDispatch.rentalCarNumber || "",
+      }, setProgress);
+      const contractFile = uploaded.files[0];
+      if (!contractFile) throw new Error("contract upload missing");
+      await sendJson("/api/contracts", {
+        recordId: selectedDispatch.id,
+        recordType: "dispatchContract",
+        dispatchId: selectedDispatch.id,
+        vehicleNumber: selectedDispatch.rentalCarNumber || "",
+        fileName: fileName(contractFile),
+        fileUrl: fileUrl(contractFile),
+        driveFileId: (contractFile as UploadedFileV2 & { drive_file_id?: string }).driveFileId || (contractFile as UploadedFileV2 & { drive_file_id?: string }).drive_file_id || "",
+        uploadedAt: new Date().toISOString(),
+      });
+      setProgress({ completed: uploaded.success, total: files.length, failed: uploaded.failed, label, done: true });
+      await onContracts();
+      setFiles([]);
+      setDispatchId("");
+      showToast("계약서가 저장되었습니다.");
+    } catch (error) {
+      console.error("contract save failed", error);
+      setProgress({ completed: 0, total: files.length, failed: files.length, label, done: true });
+      showToast("계약서 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <DataForm
-      endpoint="/api/billings"
-      buildPayload={(data) => Object.fromEntries(data.entries())}
-      afterReset={() => {
-        setRecordId(createId("billing"));
-        setDispatchId(dispatches[0]?.id || "");
-      }}
-    >
-      <input name="id" type="hidden" value={recordId} readOnly />
+    <form className="panel space-y-3" onSubmit={saveContract}>
       <label className="label">
         배차건 선택
         <select className="field min-h-12" name="dispatchId" value={dispatchId} onChange={(event) => setDispatchId(event.target.value)}>
-          {dispatches.map((dispatch) => (
-            <option key={dispatch.id} value={dispatch.id}>{dispatch.rentalCarNumber} · {dispatch.customerName}</option>
+          <option value="">{pendingDispatches.length ? "배차건을 선택하세요." : "처리할 미정리 배차건이 없습니다."}</option>
+          {pendingDispatches.map((dispatch) => (
+            <option key={dispatch.id} value={dispatch.id}>{formatBillingDispatchOption(dispatch)}</option>
           ))}
         </select>
       </label>
-      <PhotoUploadButton recordId={recordId} recordType="billing" vehicleNumber={selectedDispatch?.rentalCarNumber || ""} />
-    </DataForm>
+      <ContractUploadPicker files={files} onFiles={setFiles} progress={progress} />
+      {existingContract ? (
+        <a className="small-btn w-full" href={contractUrl(existingContract)} rel="noreferrer" target="_blank">
+          <Paperclip size={16} />
+          기존 계약서 보기
+        </a>
+      ) : null}
+      <button className="primary-btn w-full disabled:opacity-50" type="submit" disabled={saving || !selectedDispatch || !files.length}>{saving ? "저장 중" : "저장"}</button>
+      {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
+    </form>
   );
+}
+
+function ContractUploadPicker({ files, onFiles, progress }: { files: File[]; onFiles: (files: File[]) => void; progress: UploadProgressState | null }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function chooseFiles(nextFiles: FileList | File[]) {
+    onFiles(Array.from(nextFiles));
+  }
+
+  return (
+    <div className="space-y-3">
+      <button className="primary-btn w-full" type="button" onClick={() => inputRef.current?.click()}>
+        <Camera size={20} />
+        사진업로드
+      </button>
+      <input
+        ref={inputRef}
+        className="sr-only"
+        type="file"
+        accept=".jpg,.jpeg,.png,.heic,.webp,.pdf,image/jpeg,image/png,image/heic,image/webp,application/pdf"
+        multiple
+        onChange={(event) => chooseFiles(event.target.files || [])}
+      />
+      <button
+        className={`min-h-36 w-full rounded-lg border-2 border-dashed p-4 text-center transition ${dragging ? "border-[#116149] bg-[#e8f4ef]" : "border-[#cfd8d1] bg-[#f8faf7]"}`}
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          chooseFiles(event.dataTransfer.files);
+        }}
+      >
+        <span className="block text-base font-black text-[#16211d]">계약서 사진을 여기에 끌어다 놓거나</span>
+        <span className="mt-1 block text-sm font-bold text-[#68746d]">사진업로드 버튼을 눌러 선택하세요.</span>
+      </button>
+      {files.length ? (
+        <div className="grid gap-2">
+          {files.map((file, index) => (
+            <ContractFilePreview
+              file={file}
+              key={`${file.name}-${file.size}-${index}`}
+              onRemove={() => onFiles(files.filter((_, fileIndex) => fileIndex !== index))}
+            />
+          ))}
+        </div>
+      ) : null}
+      {progress ? <UploadProgressView progress={progress} tone={progress.failed ? "error" : progress.done ? "success" : "info"} /> : null}
+    </div>
+  );
+}
+
+function ContractFilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [previewUrl, setPreviewUrl] = useState("");
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) {
+      setPreviewUrl("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-[#d8ded8] bg-white p-3">
+      <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-md bg-[#eef2ee] text-xs font-black text-[#68746d]">
+        {previewUrl ? <img alt={file.name} className="h-full w-full object-cover" src={previewUrl} /> : "PDF"}
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <p className="truncate text-sm font-black text-[#16211d]">{file.name}</p>
+        <p className="mt-1 text-xs font-bold text-[#68746d]">{formatFileSize(file.size)}</p>
+      </div>
+      <button className="danger-btn min-h-9 px-3" type="button" onClick={onRemove}>
+        <Trash2 size={14} />
+        삭제
+      </button>
+    </div>
+  );
+}
+
+function ContractClip({ contract }: { contract?: ContractV2 }) {
+  const url = contract ? contractUrl(contract) : "";
+  if (!url) return <span className="text-[#9ca3af]">-</span>;
+  return (
+    <a
+      className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-[#116149] hover:bg-[#e6f1ec]"
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+      title="계약서 보기"
+      aria-label="계약서 보기"
+    >
+      <Paperclip size={18} />
+    </a>
+  );
+}
+
+function contractForRecord(contracts: ContractV2[], recordId: string) {
+  return contracts.find((contract) => {
+    const type = clean(contract.recordType || contract.record_type);
+    const id = clean(contract.recordId || contract.record_id);
+    return id === recordId && type === "dispatchContract";
+  });
+}
+
+function contractUrl(contract: ContractV2) {
+  return clean(contract.fileUrl || contract.file_url || contract.documentUrl || contract.document_url);
+}
+
+function formatBillingDispatchOption(dispatch: DispatchV2) {
+  return `${clean(dispatch.rentalCarNumber || dispatch.vehicleNumber) || "-"} · ${firstText(dispatch.orderedBy, dispatch.orderer, dispatch.customerName, dispatch.repairShop) || "-"}`;
 }
 
 function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
@@ -2281,32 +2486,27 @@ function CalendarSubscribeBox() {
       </button>
       {open ? (
       <>
-      <div className="mx-auto flex max-w-3xl flex-col items-stretch justify-center gap-2 sm:flex-row">
+      <div className="mx-auto flex max-w-4xl flex-col items-stretch justify-center gap-2 sm:flex-row">
         <button className="small-btn inline-flex w-full items-center justify-center sm:w-auto" type="button" onClick={() => copyUrl(iphoneUrl)}>
           아이폰 캘린더 URL 복사
         </button>
         <button className="small-btn inline-flex w-full items-center justify-center sm:w-auto" type="button" onClick={() => copyUrl(webcalUrl)}>
-          구글·갤럭시·MS Outlook URL 복사
+          구글·갤럭시 URL 복사
         </button>
+        <a className="small-btn inline-flex w-full items-center justify-center sm:w-auto" href="https://f-droid.org/packages/at.bitfire.icsdroid/" target="_blank" rel="noreferrer">
+          ICSx 설치링크
+        </a>
       </div>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
       <div data-horizontal-scroll="true" className="mt-3 w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <div className="grid min-w-[1040px] grid-cols-[repeat(4,minmax(260px,1fr))] gap-2">
+        <div className="grid min-w-[1320px] grid-cols-[300px_1fr] gap-2">
           <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">아이폰</strong>
             설정 &gt; 캘린더 &gt; 캘린더계정 &gt; 계정추가 &gt; 다른계정추가 &gt; 구독캘린더
           </div>
           <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">갤럭시 + 구글</strong>
-            PC에서 구글캘린더 접속 &gt; Other 캘린더 +버튼 &gt; From url
-          </div>
-          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
-            <strong className="mb-1 block text-[13px] text-[#16211d]">MS Outlook</strong>
-            일정 추가 &gt; 웹에서 구독
-          </div>
-          <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
-            <strong className="mb-1 block text-[13px] text-[#16211d]">네이버</strong>
-            실시간 연동 미지원
+            ICSx.apk 설치 및 열기 &gt; +누르고 입력창에 URL 붙여넣기 &gt; 맨위에 두개항목 허용하기 &gt; 우측상단 Sync interval 15분 설정 &gt; 구글캘린 설정 &gt; 계정관리 &gt; 캘린더구독 체크하기 &gt; 구글캘린더 첫 화면으로 나와서 좌측 점 세개 눌러서 RentFlow 체크
           </div>
         </div>
       </div>
@@ -2433,12 +2633,14 @@ function ReservationAdmin({ reservations, onReservations }: { reservations: Rese
 }
 
 function DispatchAdmin({
+  contracts,
   dispatches,
   returns,
   vehicles,
   onDispatches,
   onReturns,
 }: {
+  contracts: ContractV2[];
   dispatches: DispatchV2[];
   returns: ReturnV2[];
   vehicles: VehicleV2[];
@@ -2470,9 +2672,10 @@ function DispatchAdmin({
         <Segmented value={filter} values={["미정리", "정리완료", "전체기록"]} onChange={setFilter} />
       </div>
       <div data-horizontal-scroll="true" className="admin-table-wrapper w-full overflow-x-auto">
-        <table className="admin-table w-full min-w-[1680px] table-fixed text-left text-sm">
+        <table className="admin-table w-full min-w-[1740px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
+            <col className="w-[60px]" />
             <col className="w-[130px]" />
             <col className="w-[100px]" />
             <col className="w-[70px]" />
@@ -2486,7 +2689,7 @@ function DispatchAdmin({
             <col className="w-[220px]" />
             <col className="w-[120px]" />
           </colgroup>
-          <thead><tr className="border-b"><th>정리완료</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
+          <thead><tr className="border-b"><th>정리완료</th><th className="text-center">계약서</th><th>날짜</th><th>차량번호</th><th>구분</th><th>상태</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>연락처</th><th>메모</th><th>접수번호/면허정보</th></tr></thead>
           <tbody>{paginate(rows, page).map((row) => {
             const dispatch = row.kind === "배차" ? row.dispatch : undefined;
             const ret = row.kind === "회차" ? row.returnItem : undefined;
@@ -2495,9 +2698,11 @@ function DispatchAdmin({
             const linkedDispatch = dispatch || findLinkedDispatchForReturn(ret, dispatches);
             const returnSnapshot = ret ? getReturnDispatchDisplay(ret, linkedDispatch) : null;
             const status = dispatch ? dispatchAdminDispatchStatus(dispatch) : dispatchAdminReturnStatus(ret, dispatches);
+            const contract = contractForRecord(contracts, row.id);
             return (
               <tr className="border-b" key={`${row.kind}-${row.id}`}>
                 <td className="h-11 whitespace-nowrap"><input type="checkbox" checked={row.completed} onChange={(event) => toggle(row, event.target.checked)} /></td>
+                <td className="h-11 whitespace-nowrap px-1 text-center align-middle"><ContractClip contract={contract} /></td>
                 <TruncatedCell value={formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)} />
                 <TruncatedCell className={getVehicleNumberClass(vehicle?.companyType)} value={plate} />
                 <TruncatedCell value={row.kind} />
@@ -3882,6 +4087,7 @@ async function uploadSelectedFiles(
 ) {
   let success = 0;
   let failed = 0;
+  const uploadedFiles: UploadedFileV2[] = [];
   const label = uploadProgressLabel(files);
   for (const file of files) {
     const createdAt = new Date().toISOString();
@@ -3907,6 +4113,7 @@ async function uploadSelectedFiles(
       if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
       const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
       await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
+      uploadedFiles.push({ ...fileMetadata, ...uploaded } as unknown as UploadedFileV2);
       success += 1;
     } catch (error) {
       failed += 1;
@@ -3915,7 +4122,7 @@ async function uploadSelectedFiles(
     onProgress?.({ completed: success, total: files.length, failed, label });
   }
   if (failed === files.length && files.length > 0) throw new Error("all uploads failed");
-  return { success, failed };
+  return { success, failed, files: uploadedFiles };
 }
 
 async function createImageThumbnail(file: File) {
@@ -3960,6 +4167,12 @@ function fileCountLabel(files: File[]) {
 function fileName(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { file_name?: string };
   return raw.fileName || raw.file_name || "파일";
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function fileUrl(file: UploadedFileV2) {

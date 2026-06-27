@@ -28,7 +28,7 @@ const adminNavGroups: Array<{ title: string; labels: string[] }> = [
     ],
   },
   { title: "거래처/보험", labels: ["거래처관리", "보험사관리"] },
-  { title: "시스템", labels: ["알림센터"] },
+  { title: "시스템", labels: ["알림센터", "설치 안내"] },
 ];
 
 export function AdminShell({

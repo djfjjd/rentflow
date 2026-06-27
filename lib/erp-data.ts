@@ -11,6 +11,7 @@ import {
   Handshake,
   Home,
   Inbox,
+  QrCode,
   ReceiptText,
   Search,
   Settings,
@@ -280,6 +281,7 @@ export const adminNavItems = [
   { href: "/admin/corporate-cards", label: "법인카드 관리", icon: CreditCard },
   { href: "/admin/revenue", label: "차량별 매출분석", icon: BarChart3 },
   { href: "/admin/notifications", label: "알림센터", icon: Bell },
+  { href: "/admin/install", label: "설치 안내", icon: QrCode },
 ];
 
 export const vehicleStatuses: VehicleStatus[] = [

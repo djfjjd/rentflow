@@ -15,7 +15,7 @@ const PHOTO_CAPTURE_WHERE = `
       OR lower(COALESCE(file_name, '')) LIKE '%.mov'
       OR lower(COALESCE(file_name, '')) LIKE '%.heic'
     )
-    AND lower(COALESCE(record_type, '')) NOT IN ('contract', 'contracts', 'billing', 'billings', 'document', 'documents')
+    AND lower(COALESCE(record_type, '')) NOT IN ('contract', 'contracts', 'dispatchcontract', 'billing', 'billings', 'document', 'documents')
     AND COALESCE(file_type, '') NOT LIKE '%계약%'
     AND COALESCE(file_type, '') NOT LIKE '%청구%'
     AND COALESCE(file_type, '') NOT LIKE '%정산%'
