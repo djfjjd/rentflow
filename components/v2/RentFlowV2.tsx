@@ -134,6 +134,7 @@ const dispatchBoardColumns = [
   { label: "주유량", width: "w-[80px]" },
   { label: "수리처", width: "w-[160px]" },
   { label: "메모", width: "w-[220px]" },
+  { label: "계약서", width: "w-[60px]" },
   { label: "사진링크", width: "w-[80px]" },
   { label: "사진추가업로드", width: "w-[100px]" },
   { label: "수정", width: "w-[70px]" },
@@ -295,7 +296,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {isAdmin ? <AdminNav /> : null}
 
         {kind === "home" ? <HomeScreen /> : null}
-        {kind === "dispatch" ? <DispatchForm vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
+        {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
         {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={reloadReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
@@ -879,7 +880,7 @@ function AdminNav() {
   );
 }
 
-function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
+function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contracts: ContractV2[]; vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
@@ -976,7 +977,7 @@ function DispatchForm({ vehicles, dispatches, onDispatches }: { vehicles: Vehicl
         <Textarea name="notes" label="특이사항" />
         <PhotoUploadButton key={`dispatch-upload-${resetKey}`} recordId={recordId} recordType="dispatch" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
-      <DispatchBoard dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
+      <DispatchBoard contracts={contracts} dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
     </section>
   );
 }
@@ -2875,7 +2876,7 @@ function DispatchAdmin({
   );
 }
 
-function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
+function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { contracts: ContractV2[]; dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [memo, setMemo] = useState("");
@@ -2914,13 +2915,14 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
         </div>
       </div>
       <div data-horizontal-scroll="true" className="dispatch-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[1640px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[1700px] table-fixed text-left text-sm">
           <colgroup>
             {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
           </colgroup>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th className="text-center">계약서</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+            const contract = contractForRecord(contracts, item.id);
             return (
               <tr className="border-b" key={item.id}>
                 <TruncatedCell value={formatBoardDateTime(item.date, item.time, item.createdAt)} />
@@ -2933,6 +2935,7 @@ function DispatchBoard({ dispatches, vehicles, onDispatches }: { dispatches: Dis
                 <TruncatedCell value={clean(item.fuelDisplay)} />
                 <TruncatedCell value={clean(item.repairShop)} />
                 <MemoCell value={item.notes} onOpen={setMemo} />
+                <td className="h-11 whitespace-nowrap px-1 text-center align-middle"><ContractClip contract={contract} /></td>
                 <td className="h-11 whitespace-nowrap">
                   <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
                 </td>
@@ -3537,6 +3540,7 @@ function StatusBoard({ labels }: { labels: string[] }) {
 
 type VehicleDashboardRow = {
   key: string;
+  vehicle: VehicleV2;
   vehicleNumber: string;
   companyType?: string;
   model: string;
@@ -3580,6 +3584,7 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
           <colgroup>
             <col className="w-[100px]" />
             <col className="w-[52px]" />
+            <col className="w-[52px]" />
             <col className="w-[120px]" />
             <col className="w-[90px]" />
             <col className="w-[96px]" />
@@ -3588,10 +3593,11 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
             <col className="w-[190px]" />
             <col className="w-[150px]" />
           </colgroup>
-          <thead><tr className="border-b"><th>차량번호</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
+          <thead><tr className="border-b"><th>차량번호</th><th className="text-center">등록증</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>
               <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
+              <td className="text-center"><VehicleRegistrationLink vehicle={row.vehicle} /></td>
               <td><VehicleModelSummary color={row.color} model={row.model} onOpen={setModelDetail} /></td>
               <td className="whitespace-nowrap">{isDispatchStatus(row.statusLabel) ? <PhoneCell phone={row.contactPhone} /> : "-"}</td>
               <td><StatusPill status={row.statusLabel} /></td>
@@ -4900,6 +4906,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
     if (latestReturn && returnTime >= dispatchTime) {
       return {
         key: vehicle.id,
+        vehicle,
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
@@ -4918,6 +4925,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       const statusLabel = normalizeDispatchStatus(firstText(latestDispatch.dispatchType, latestDispatch.businessType, latestDispatch.status));
       return {
         key: vehicle.id,
+        vehicle,
         vehicleNumber,
         companyType: vehicle.companyType,
         model: vehicle.model,
@@ -4936,6 +4944,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
 
     return {
       key: vehicle.id,
+      vehicle,
       vehicleNumber,
       companyType: vehicle.companyType,
       model: vehicle.model,
