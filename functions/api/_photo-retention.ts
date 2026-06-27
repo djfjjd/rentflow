@@ -1,4 +1,4 @@
-export const PHOTO_CAPTURE_RETENTION_DAYS = 31;
+export const PHOTO_CAPTURE_RETENTION_DAYS = 14;
 
 const PHOTO_CAPTURE_WHERE = `
   (
