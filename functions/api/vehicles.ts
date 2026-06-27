@@ -42,7 +42,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
     
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, company_type, location, status, sort_order, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, company_type, location, status, sort_order, memo, registration_file_url, registration_drive_file_id, registration_file_name, registration_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(vehicle.id),
       safeText(vehicle.plateNumber),
@@ -57,7 +57,11 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeText(vehicle.location || "본사 주차장"),
       safeText(vehicle.status || "대기중"),
       safeNumber(vehicle.sortOrder) ?? (Number(maxSortOrder) + 1),
-      safeText(vehicle.memo)
+      safeText(vehicle.memo),
+      safeNullableText(vehicle.registrationFileUrl ?? vehicle.registration_file_url),
+      safeNullableText(vehicle.registrationDriveFileId ?? vehicle.registration_drive_file_id),
+      safeNullableText(vehicle.registrationFileName ?? vehicle.registration_file_name),
+      safeNullableText(vehicle.registrationUploadedAt ?? vehicle.registration_uploaded_at)
     ).run();
 
     return Response.json({ success: true });
@@ -96,6 +100,10 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (updates.activeSummary !== undefined) { fields.push("active_summary = ?"); values.push(safeText(updates.activeSummary)); }
     if (updates.sortOrder !== undefined) { fields.push("sort_order = ?"); values.push(safeNumber(updates.sortOrder) || 0); }
     if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(safeText(updates.memo)); }
+    if (updates.registrationFileUrl !== undefined || updates.registration_file_url !== undefined) { fields.push("registration_file_url = ?"); values.push(safeNullableText(updates.registrationFileUrl ?? updates.registration_file_url)); }
+    if (updates.registrationDriveFileId !== undefined || updates.registration_drive_file_id !== undefined) { fields.push("registration_drive_file_id = ?"); values.push(safeNullableText(updates.registrationDriveFileId ?? updates.registration_drive_file_id)); }
+    if (updates.registrationFileName !== undefined || updates.registration_file_name !== undefined) { fields.push("registration_file_name = ?"); values.push(safeNullableText(updates.registrationFileName ?? updates.registration_file_name)); }
+    if (updates.registrationUploadedAt !== undefined || updates.registration_uploaded_at !== undefined) { fields.push("registration_uploaded_at = ?"); values.push(safeNullableText(updates.registrationUploadedAt ?? updates.registration_uploaded_at)); }
     
     if (fields.length === 0) return Response.json({ success: true });
     
@@ -147,6 +155,14 @@ function mapVehicle(row: any) {
     activeSummary: row.active_summary,
     sortOrder: row.sort_order,
     memo: row.memo,
+    registrationFileUrl: row.registration_file_url,
+    registration_file_url: row.registration_file_url,
+    registrationDriveFileId: row.registration_drive_file_id,
+    registration_drive_file_id: row.registration_drive_file_id,
+    registrationFileName: row.registration_file_name,
+    registration_file_name: row.registration_file_name,
+    registrationUploadedAt: row.registration_uploaded_at,
+    registration_uploaded_at: row.registration_uploaded_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -160,5 +176,9 @@ async function ensureVehicleSchema(env: Env) {
     { name: "company_type", definition: "TEXT" },
     { name: "damage_vehicle", definition: "TEXT" },
     { name: "active_summary", definition: "TEXT" },
+    { name: "registration_file_url", definition: "TEXT" },
+    { name: "registration_drive_file_id", definition: "TEXT" },
+    { name: "registration_file_name", definition: "TEXT" },
+    { name: "registration_uploaded_at", definition: "TEXT" },
   ]);
 }

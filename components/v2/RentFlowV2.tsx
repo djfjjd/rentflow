@@ -1390,6 +1390,83 @@ function ContractFilePreview({ file, onRemove }: { file: File; onRemove: () => v
   );
 }
 
+function VehicleRegistrationUploadPicker({ files, onFiles, progress }: { files: File[]; onFiles: (files: File[]) => void; progress: UploadProgressState | null }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function chooseFiles(nextFiles: FileList | File[]) {
+    onFiles(Array.from(nextFiles).slice(0, 1));
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-black text-[#16211d]">자동차등록증</p>
+      <button className="primary-btn w-full" type="button" onClick={() => inputRef.current?.click()}>
+        <Camera size={20} />
+        등록증 업로드
+      </button>
+      <input
+        ref={inputRef}
+        className="sr-only"
+        type="file"
+        accept=".jpg,.jpeg,.png,.heic,.webp,.pdf,image/jpeg,image/png,image/heic,image/webp,application/pdf"
+        onChange={(event) => chooseFiles(event.target.files || [])}
+      />
+      <button
+        className={`min-h-36 w-full rounded-lg border-2 border-dashed p-4 text-center transition ${dragging ? "border-[#116149] bg-[#e8f4ef]" : "border-[#cfd8d1] bg-[#f8faf7]"}`}
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          chooseFiles(event.dataTransfer.files);
+        }}
+      >
+        <span className="block text-base font-black text-[#16211d]">자동차등록증 사진을 여기에 끌어다 놓거나</span>
+        <span className="mt-1 block text-sm font-bold text-[#68746d]">등록증 업로드 버튼을 눌러 선택하세요.</span>
+      </button>
+      {files.length ? (
+        <div className="grid gap-2">
+          {files.map((file, index) => (
+            <ContractFilePreview
+              file={file}
+              key={`${file.name}-${file.size}-${index}`}
+              onRemove={() => onFiles([])}
+            />
+          ))}
+        </div>
+      ) : null}
+      {progress ? <UploadProgressView progress={progress} tone={progress.failed ? "error" : progress.done ? "success" : "info"} /> : null}
+    </div>
+  );
+}
+
+function VehicleRegistrationLink({ vehicle }: { vehicle: VehicleV2 }) {
+  const url = clean(vehicle.registrationFileUrl || vehicle.registration_file_url);
+  if (!url) return <span className="text-[#9ca3af]">-</span>;
+  return (
+    <a
+      className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-[#116149] hover:bg-[#e6f1ec]"
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+      title="자동차등록증 보기"
+      aria-label="자동차등록증 보기"
+    >
+      <FileText size={18} />
+    </a>
+  );
+}
+
 function ContractClip({ contract }: { contract?: ContractV2 }) {
   const url = contract ? contractUrl(contract) : "";
   if (!url) return <span className="text-[#9ca3af]">-</span>;
@@ -1530,7 +1607,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
     .filter((folder) => folder.files.length > 0);
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
   const visibleArchiveIds = useMemo(
-    () => filteredFolders.flatMap((folder) => folder.files.map((file) => Number(file.id)).filter((id) => Number.isFinite(id))),
+    () => filteredFolders.flatMap((folder) => folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id))),
     [filteredFolders]
   );
   const selectedArchiveBatches = useMemo(
@@ -1538,7 +1615,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
       .map((folder) => ({
         key: folder.key,
         label: folder.folderName,
-        fileIds: folder.files.map((file) => Number(file.id)).filter((id) => Number.isFinite(id) && selectedArchiveIds.has(id)),
+        fileIds: folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id) && selectedArchiveIds.has(id)),
       }))
       .filter((batch) => batch.fileIds.length > 0),
     [filteredFolders, selectedArchiveIds]
@@ -1628,7 +1705,7 @@ function PhotosPage({ admin }: { admin: boolean }) {
           const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;
           const videoCount = folder.files.filter(isVideoFile).length;
           const coverUrl = folderCoverThumbnailUrl(folder);
-          const folderFileIds = folder.files.map((file) => Number(file.id)).filter((id) => Number.isFinite(id));
+          const folderFileIds = folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id));
           const checked = folderFileIds.length > 0 && folderFileIds.every((id) => selectedArchiveIds.has(id));
           const archivedCount = folder.files.filter(isDriveArchived).length;
           function toggleFolder(checked: boolean) {
@@ -2563,10 +2640,19 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
   const [editing, setEditing] = useState<VehicleV2 | null>(null);
   const [deleting, setDeleting] = useState<VehicleV2 | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [newVehicleId, setNewVehicleId] = useState(() => createId("vehicle"));
+  const [registrationFiles, setRegistrationFiles] = useState<File[]>([]);
+  const [registrationProgress, setRegistrationProgress] = useState<UploadProgressState | null>(null);
+  const [toast, setToast] = useState("");
 
   async function persistOrder(next: VehicleV2[]) {
     onVehicles(next);
     await sendJson("/api/vehicles/reorder", { items: next.map((vehicle, index) => ({ id: vehicle.id, sortOrder: index })) }, "PATCH");
+  }
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2500);
   }
 
   return (
@@ -2574,7 +2660,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
       <DataForm
         endpoint="/api/vehicles"
         buildPayload={(data) => ({
-          id: createId("vehicle"),
+          id: newVehicleId,
           plateNumber: text(data, "plateNumber"),
           model: text(data, "model"),
           color: text(data, "color"),
@@ -2585,7 +2671,26 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           status: "주차구역표시",
           memo: text(data, "memo"),
         })}
-        onSaved={(payload) => onVehicles([payload as VehicleV2, ...vehicles])}
+        afterSave={async (payload) => {
+          let nextVehicle = payload as VehicleV2;
+          if (registrationFiles[0]) {
+            const label = uploadProgressLabel(registrationFiles);
+            setRegistrationProgress({ completed: 0, total: 1, failed: 0, label });
+            const uploaded = await uploadVehicleRegistrationDirectly(registrationFiles[0], {
+              vehicleId: newVehicleId,
+              vehicleNumber: clean(payload.plateNumber),
+            }, setRegistrationProgress);
+            nextVehicle = { ...nextVehicle, ...uploaded };
+            setRegistrationProgress({ completed: 1, total: 1, failed: 0, label, done: true });
+            showToast("자동차등록증이 저장되었습니다.");
+          }
+          onVehicles([nextVehicle, ...vehicles]);
+        }}
+        afterReset={() => {
+          setNewVehicleId(createId("vehicle"));
+          setRegistrationFiles([]);
+          setRegistrationProgress(null);
+        }}
       >
         <div className="grid gap-3 md:grid-cols-2">
           <Input name="plateNumber" label="차량번호" required />
@@ -2596,13 +2701,14 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
           <VehicleCompanySelect />
         </div>
         <Textarea name="memo" label="메모" />
+        <VehicleRegistrationUploadPicker files={registrationFiles} onFiles={setRegistrationFiles} progress={registrationProgress} />
       </DataForm>
       <section data-horizontal-scroll="true" className="panel admin-table-wrapper overflow-x-auto">
         <h2 className="mb-3 text-xl font-black">차량현황</h2>
-        <table className="admin-table w-full min-w-[900px] text-left text-sm">
+        <table className="admin-table w-full min-w-[960px] text-left text-sm">
           <thead>
             <tr className="border-b">
-              <th>드래그</th><th>차량번호</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>차량소속</th><th>수정</th><th>삭제</th>
+              <th>드래그</th><th>차량번호</th><th className="w-[60px] text-center">등록증</th><th>차종</th><th>색상</th><th>유종</th><th>총 키로수</th><th>차량소속</th><th>수정</th><th>삭제</th>
             </tr>
           </thead>
           <tbody>
@@ -2626,6 +2732,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
               >
                 <td><GripVertical className="cursor-grab text-[#6b756f]" size={20} /></td>
                 <td><VehicleNumberText vehicle={vehicle} value={vehicle.plateNumber} /></td>
+                <td className="w-[60px] text-center"><VehicleRegistrationLink vehicle={vehicle} /></td>
                 <td>{vehicle.model}</td>
                 <td>{vehicle.color}</td>
                 <td>{vehicle.fuelType}</td>
@@ -2643,6 +2750,7 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
         onVehicles(vehicles.filter((vehicle) => vehicle.id !== deleting.id));
         setDeleting(null);
       }} /> : null}
+      {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
     </section>
   );
 }
@@ -3503,6 +3611,15 @@ function VehicleModelSummary({ model, color, onOpen }: { model: string; color?: 
 function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; onClose: () => void; onSaved: (vehicle: VehicleV2) => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [registrationFiles, setRegistrationFiles] = useState<File[]>([]);
+  const [registrationProgress, setRegistrationProgress] = useState<UploadProgressState | null>(null);
+  const [toast, setToast] = useState("");
+
+  function showToast(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2500);
+  }
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
       <form
@@ -3524,8 +3641,25 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
             memo: text(data, "memo"),
           };
           try {
-            await sendJson(`/api/vehicles?id=${encodeURIComponent(vehicle.id)}`, next, "PATCH");
-            onSaved(next);
+            let savedVehicle = next;
+            if (registrationFiles[0]) {
+              const hasRegistration = clean(vehicle.registrationFileUrl || vehicle.registration_file_url);
+              if (hasRegistration && !confirm("이미 자동차등록증이 등록되어 있습니다.\n새 파일로 교체하시겠습니까?")) {
+                setSaving(false);
+                return;
+              }
+              const label = uploadProgressLabel(registrationFiles);
+              setRegistrationProgress({ completed: 0, total: 1, failed: 0, label });
+              const uploaded = await uploadVehicleRegistrationDirectly(registrationFiles[0], {
+                vehicleId: vehicle.id,
+                vehicleNumber: next.plateNumber,
+              }, setRegistrationProgress);
+              savedVehicle = { ...savedVehicle, ...uploaded };
+              setRegistrationProgress({ completed: 1, total: 1, failed: 0, label, done: true });
+              showToast("자동차등록증이 저장되었습니다.");
+            }
+            await sendJson(`/api/vehicles?id=${encodeURIComponent(vehicle.id)}`, savedVehicle, "PATCH");
+            onSaved(savedVehicle);
             onClose();
           } catch (caught) {
             const message = caught instanceof Error ? caught.message : String(caught);
@@ -3549,8 +3683,16 @@ function VehicleEditModal({ vehicle, onClose, onSaved }: { vehicle: VehicleV2; o
           <VehicleCompanySelect defaultValue={vehicle.companyType} />
         </div>
         <Textarea name="memo" label="메모" defaultValue={vehicle.memo} />
+        {clean(vehicle.registrationFileUrl || vehicle.registration_file_url) ? (
+          <a className="small-btn my-3 w-full" href={clean(vehicle.registrationFileUrl || vehicle.registration_file_url)} rel="noreferrer" target="_blank">
+            <FileText size={16} />
+            기존 자동차등록증 보기
+          </a>
+        ) : null}
+        <VehicleRegistrationUploadPicker files={registrationFiles} onFiles={setRegistrationFiles} progress={registrationProgress} />
         {error ? <p className="my-2 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p> : null}
         <button className="primary-btn w-full disabled:opacity-60" type="submit" disabled={saving}>{saving ? "저장 중" : "저장"}</button>
+        {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
       </form>
     </div>
   );
@@ -4170,6 +4312,43 @@ async function uploadContractFilesDirectly(
   const success = Array.isArray(data.files) ? data.files.length : files.length;
   onProgress?.({ completed: success, total: files.length, failed: 0, label });
   return { success, failed: 0 };
+}
+
+async function uploadVehicleRegistrationDirectly(
+  file: File,
+  metadata: { vehicleId: string; vehicleNumber: string },
+  onProgress?: (progress: UploadProgressState) => void
+) {
+  const label = uploadProgressLabel([file]);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("metadata", JSON.stringify({
+    ...metadata,
+    recordType: "vehicleRegistration",
+    uploadedAt: new Date().toISOString(),
+  }));
+
+  const response = await fetch("/api/vehicle-registration-upload", {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json() as {
+    success?: boolean;
+    registrationFileUrl?: string;
+    registrationDriveFileId?: string;
+    registrationFileName?: string;
+    registrationUploadedAt?: string;
+  };
+  if (!data.success || !data.registrationFileUrl) throw new Error("vehicle registration drive upload failed");
+  onProgress?.({ completed: 1, total: 1, failed: 0, label });
+  return {
+    registrationFileUrl: data.registrationFileUrl,
+    registrationDriveFileId: data.registrationDriveFileId,
+    registrationFileName: data.registrationFileName,
+    registrationUploadedAt: data.registrationUploadedAt,
+  };
 }
 
 async function createImageThumbnail(file: File) {

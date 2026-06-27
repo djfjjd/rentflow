@@ -14,6 +14,14 @@ export type VehicleV2 = {
   activeSummary?: string;
   sortOrder?: number;
   memo?: string;
+  registrationFileUrl?: string;
+  registration_file_url?: string;
+  registrationDriveFileId?: string;
+  registration_drive_file_id?: string;
+  registrationFileName?: string;
+  registration_file_name?: string;
+  registrationUploadedAt?: string;
+  registration_uploaded_at?: string;
   updatedAt?: string;
 };
 
