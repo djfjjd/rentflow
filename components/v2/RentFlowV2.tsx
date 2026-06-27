@@ -1321,7 +1321,10 @@ function ContractUploadPicker({ files, onFiles, progress }: { files: File[]; onF
         type="file"
         accept=".jpg,.jpeg,.png,.heic,.webp,.pdf,image/jpeg,image/png,image/heic,image/webp,application/pdf"
         multiple
-        onChange={(event) => chooseFiles(event.target.files || [])}
+        onChange={(event) => {
+          chooseFiles(event.target.files || []);
+          event.currentTarget.value = "";
+        }}
       />
       <button
         className={`min-h-36 w-full rounded-lg border-2 border-dashed p-4 text-center transition ${dragging ? "border-[#116149] bg-[#e8f4ef]" : "border-[#cfd8d1] bg-[#f8faf7]"}`}
@@ -1374,7 +1377,7 @@ function ContractFilePreview({ file, onRemove }: { file: File; onRemove: () => v
   }, [file]);
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[#d8ded8] bg-white p-3">
+    <div className="relative flex items-center gap-3 rounded-lg border border-[#d8ded8] bg-white p-3 pr-12">
       <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-md bg-[#eef2ee] text-xs font-black text-[#68746d]">
         {previewUrl ? <img alt={file.name} className="h-full w-full object-cover" src={previewUrl} /> : "PDF"}
       </div>
@@ -1382,9 +1385,14 @@ function ContractFilePreview({ file, onRemove }: { file: File; onRemove: () => v
         <p className="truncate text-sm font-black text-[#16211d]">{file.name}</p>
         <p className="mt-1 text-xs font-bold text-[#68746d]">{formatFileSize(file.size)}</p>
       </div>
-      <button className="danger-btn min-h-9 px-3" type="button" onClick={onRemove}>
-        <Trash2 size={14} />
-        삭제
+      <button
+        className="absolute right-[10px] top-[10px] grid h-8 w-8 place-items-center rounded-full border border-[#d1d5db] bg-white/95 text-base font-black leading-none text-[#16211d] shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+        type="button"
+        onClick={onRemove}
+        aria-label={`${file.name} 삭제`}
+        title="삭제"
+      >
+        ×
       </button>
     </div>
   );
