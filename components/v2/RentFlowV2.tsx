@@ -376,10 +376,12 @@ function UnreadMessagesButton({
   async function complete(kind: "배차" | "회차", id: string) {
     if (kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
+      await notifyUnreadMessagesCleared();
       await onDispatches();
       return;
     }
     await sendJson(`/api/returns?id=${encodeURIComponent(id)}`, { isCompleted: true }, "PATCH");
+    await notifyUnreadMessagesCleared();
     await onReturns();
   }
 
@@ -1263,6 +1265,7 @@ function BillingForm({
         vehicleNumber: selectedDispatch.rentalCarNumber || "",
       }, setProgress);
       await sendJson(`/api/dispatches?id=${encodeURIComponent(selectedDispatch.id)}`, { isCompleted: true }, "PATCH");
+      await notifyUnreadMessagesCleared();
       setProgress({ completed: uploaded.success, total: files.length, failed: uploaded.failed, label, done: true });
       await Promise.all([onContracts(), onDispatches()]);
       setFiles([]);
@@ -1377,19 +1380,19 @@ function ContractFilePreview({ file, onRemove }: { file: File; onRemove: () => v
   }, [file]);
 
   return (
-    <div className="relative flex items-center gap-3 rounded-lg border border-[#d8ded8] bg-white p-3 pr-12">
-      <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-md bg-[#eef2ee] text-xs font-black text-[#68746d]">
+    <div className="contract-upload-file-card rounded-lg border border-[#d8ded8] bg-white p-3">
+      <div className="contract-upload-thumb grid place-items-center overflow-hidden bg-[#eef2ee] text-xs font-black text-[#68746d]">
         {previewUrl ? <img alt={file.name} className="h-full w-full object-cover" src={previewUrl} /> : "PDF"}
       </div>
-      <div className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-black text-[#16211d]">{file.name}</p>
-        <p className="mt-1 text-xs font-bold text-[#68746d]">{formatFileSize(file.size)}</p>
+      <div className="contract-upload-file-info text-left">
+        <p className="contract-upload-file-name text-sm font-black text-[#16211d]">{file.name}</p>
+        <p className="contract-upload-file-size text-xs font-bold text-[#68746d]">{formatFileSize(file.size)}</p>
       </div>
       <button
-        className="absolute right-[10px] top-[10px] grid h-8 w-8 place-items-center rounded-full border border-[#d1d5db] bg-white/95 text-base font-black leading-none text-[#16211d] shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+        className="contract-upload-remove-btn border border-[#d1d5db] bg-white/95 text-base font-black leading-none text-[#16211d] shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
         type="button"
         onClick={onRemove}
-        aria-label={`${file.name} 삭제`}
+        aria-label="사진 제거"
         title="삭제"
       >
         ×
@@ -2794,10 +2797,12 @@ function DispatchAdmin({
   async function toggle(row: typeof rows[number], checked: boolean) {
     if (row.kind === "배차") {
       await sendJson(`/api/dispatches?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
+      if (checked) await notifyUnreadMessagesCleared();
       await onDispatches();
       return;
     }
     await sendJson(`/api/returns?id=${encodeURIComponent(row.id)}`, { isCompleted: checked }, "PATCH");
+    if (checked) await notifyUnreadMessagesCleared();
     await onReturns();
   }
 
@@ -3984,6 +3989,24 @@ async function sendPushNotification(message: { title: string; body: string; url?
   } catch (error) {
     console.error("push send request failed", error);
     throw error;
+  }
+}
+
+async function notifyUnreadMessagesCleared() {
+  try {
+    const response = await fetch("/api/unread-messages", { cache: "no-store" });
+    const data = await readJsonResponse<{ dispatches?: unknown[]; returns?: unknown[] }>(response);
+    if (!response.ok) return;
+    const remaining = (data.dispatches?.length || 0) + (data.returns?.length || 0);
+    if (remaining > 0) return;
+    await sendPushNotification({
+      title: "정리완료",
+      body: "미정리 배회차 항목이 모두 정리완료 처리되었습니다.",
+      url: "/admin/dispatches",
+      tag: "dispatch-cleanup-complete",
+    });
+  } catch (error) {
+    console.error("unread clear push failed", error);
   }
 }
 
