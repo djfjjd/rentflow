@@ -2606,7 +2606,7 @@ function CalendarSubscribeBox() {
       </div>
       {toast ? <div className="fixed bottom-5 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-[#16211d] px-4 py-3 text-sm font-black text-white shadow-2xl">{toast}</div> : null}
       <div data-horizontal-scroll="true" className="mt-3 w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <div className="grid min-w-[1320px] grid-cols-[300px_1fr] gap-2">
+        <div className="grid min-w-[1320px] grid-cols-[430px_1fr] gap-2">
           <div className="whitespace-nowrap rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-2.5 text-center text-[11px] leading-relaxed text-[#68746d]">
             <strong className="mb-1 block text-[13px] text-[#16211d]">아이폰</strong>
             설정 &gt; 캘린더 &gt; 캘린더계정 &gt; 계정추가 &gt; 다른계정추가 &gt; 구독캘린더
