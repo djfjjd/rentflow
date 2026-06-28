@@ -426,7 +426,7 @@ function UnreadMessagesButton({
                       <td>{formatBoardDateTime(dispatch?.date || ret?.date, dispatch?.time || ret?.time, dispatch?.createdAt || ret?.createdAt)}</td>
                       <td><VehicleNumberText vehicle={vehicle} value={plate} /></td>
                       <td>{row.kind}</td>
-                      <td>{ret ? clean(returnSnapshot?.carModelColor || vehicleModelColor(vehicle)) : vehicleModelColor(vehicle)}</td>
+                      <td>{ret ? firstText(vehicleModelColor(vehicle), returnSnapshot?.carModelColor) : vehicleModelColor(vehicle)}</td>
                       <td><UnreadStatusBadge status={firstText(returnSnapshot?.status, linkedDispatch?.dispatchType, linkedDispatch?.businessType, linkedDispatch?.status)} /></td>
                       <td>{ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)}</td>
                       <td>{ret ? clean(returnSnapshot?.customerCarModel) : clean(linkedDispatch?.customerCarModel)}</td>
@@ -1021,6 +1021,7 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
         fuelDisplay: text(data, "fuelDisplay"),
         fuelLevelText: text(data, "fuelDisplay"),
         dispatchId: selectedDispatch?.id || "",
+        carModelColor: vehicle ? vehicleModelColor(vehicle) : "",
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
         memo: text(data, "notes"),
