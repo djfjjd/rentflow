@@ -33,6 +33,7 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
     if (updates.vehicleNumber !== undefined) { fields.push("vehicle_number = ?"); values.push(safeNullableText(updates.vehicleNumber)); }
     if (updates.customerName !== undefined) { fields.push("customer_name = ?"); values.push(safeNullableText(updates.customerName)); }
     if (updates.customerPhone !== undefined || updates.customer_phone !== undefined || updates.phone !== undefined) { fields.push("customer_phone = ?"); values.push(safeNullableText(updates.customerPhone ?? updates.customer_phone ?? updates.phone)); }
+    if (updates.sourceDispatchId !== undefined || updates.source_dispatch_id !== undefined) { fields.push("source_dispatch_id = ?"); values.push(safeNullableText(updates.sourceDispatchId ?? updates.source_dispatch_id)); }
     if (updates.memo !== undefined) { fields.push("memo = ?"); values.push(safeNullableText(updates.memo)); }
     if (updates.date !== undefined || updates.foundDate !== undefined) { fields.push("date = ?", "found_date = ?"); values.push(safeNullableText(updates.date ?? updates.foundDate), safeNullableText(updates.date ?? updates.foundDate)); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
@@ -53,7 +54,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const date = item.date ?? item.foundDate;
     const isResolved = safeBoolInt(item.isResolved ?? item.isCompleted);
     await env.DB.prepare(
-      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, customer_phone, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, resolved_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, customer_phone, source_dispatch_id, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, resolved_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
     ).bind(
       safeText(item.id),
       safeNullableText(date),
@@ -61,6 +62,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       safeText(item.itemName || "분실물"),
       safeNullableText(item.customerName),
       safeNullableText(item.customerPhone ?? item.customer_phone ?? item.phone),
+      safeNullableText(item.sourceDispatchId ?? item.source_dispatch_id),
       safeNullableText(date),
       safeNullableText(item.foundLocation),
       safeNullableText(item.storageLocation),
@@ -85,6 +87,8 @@ function mapLostItem(row: any) {
     itemName: row.item_name,
     customerName: row.customer_name,
     customerPhone: row.customer_phone || row.phone,
+    sourceDispatchId: row.source_dispatch_id,
+    source_dispatch_id: row.source_dispatch_id,
     date: row.date || row.found_date,
     foundDate: row.date || row.found_date,
     foundLocation: row.found_location,
@@ -119,6 +123,7 @@ async function ensureLostItemsSchema(env: Env) {
     { name: "item_name", definition: "TEXT" },
     { name: "customer_name", definition: "TEXT" },
     { name: "customer_phone", definition: "TEXT" },
+    { name: "source_dispatch_id", definition: "TEXT" },
     { name: "phone", definition: "TEXT" },
     { name: "found_date", definition: "TEXT" },
     { name: "found_location", definition: "TEXT" },

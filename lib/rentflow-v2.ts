@@ -192,6 +192,8 @@ export type LostItemV2 = {
   vehicleNumber?: string;
   customerName?: string;
   customerPhone?: string;
+  sourceDispatchId?: string;
+  source_dispatch_id?: string;
   itemName?: string;
   foundDate?: string;
   date?: string;

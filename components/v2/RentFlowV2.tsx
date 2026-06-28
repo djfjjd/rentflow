@@ -301,7 +301,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
         {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
-        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
+        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
         {kind === "photos" ? <PhotosPage admin={false} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
@@ -1547,10 +1547,37 @@ function formatBillingDispatchOption(dispatch: DispatchV2) {
   return `${clean(dispatch.rentalCarNumber || dispatch.vehicleNumber) || "-"} · ${firstText(dispatch.orderedBy, dispatch.orderer, dispatch.customerName, dispatch.repairShop) || "-"}`;
 }
 
-function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV2[]; lostItems: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
+function formatLostItemDispatchOption(dispatch: DispatchV2) {
+  const date = formatBoardDateTime(dispatch.date, dispatch.time, dispatch.createdAt);
+  return [date, lostItemDispatchCustomerName(dispatch), dispatchPhone(dispatch)].filter(Boolean).join(" · ");
+}
+
+function lostItemDispatchCustomerName(dispatch: DispatchV2) {
+  return firstText(dispatch.customerName, dispatch.orderedBy, dispatch.orderer, dispatch.repairShop);
+}
+
+function LostItemForm({ vehicles, dispatches, lostItems, onLostItems }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; lostItems: LostItemV2[]; onLostItems: ReloadHandler<LostItemV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [recordId, setRecordId] = useState(() => createId("lost"));
   const [resetKey, setResetKey] = useState(0);
+  const [selectedDispatchId, setSelectedDispatchId] = useState("");
+  const recentDispatches = useMemo(() => {
+    if (!vehicle) return [];
+    return dispatches
+      .filter((dispatch) => normalizeVehicleNumber(dispatch) === vehicle.plateNumber)
+      .sort((a, b) => recordSortValue(b) - recordSortValue(a))
+      .slice(0, 3);
+  }, [dispatches, vehicle]);
+  const selectedDispatch = selectedDispatchId
+    ? recentDispatches.find((dispatch) => dispatch.id === selectedDispatchId)
+    : undefined;
+  const dispatchCustomerName = selectedDispatch ? lostItemDispatchCustomerName(selectedDispatch) : "";
+  const dispatchCustomerPhone = selectedDispatch ? dispatchPhone(selectedDispatch) : "";
+
+  useEffect(() => {
+    setSelectedDispatchId("");
+  }, [vehicle?.id]);
+
   return (
     <section className="space-y-4">
       <DataForm endpoint="/api/lost-items" buildPayload={(data) => ({
@@ -1559,6 +1586,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         itemName: text(data, "customerName") || "분실물",
         customerName: text(data, "customerName"),
         customerPhone: text(data, "customerPhone"),
+        sourceDispatchId: selectedDispatch?.id || null,
         memo: text(data, "notes"),
         foundDate: text(data, "foundDate"),
         status: "보관중",
@@ -1568,6 +1596,7 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
       onReloaded={(items) => onLostItems(items as LostItemV2[])}
       afterReset={() => {
         setVehicle(undefined);
+        setSelectedDispatchId("");
         setRecordId(createId("lost"));
         setResetKey((key) => key + 1);
       }}
@@ -1580,9 +1609,24 @@ function LostItemForm({ vehicles, lostItems, onLostItems }: { vehicles: VehicleV
         <FormBlock title="차량 선택">
           <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         </FormBlock>
+        {vehicle ? (
+          <FormBlock title="배차기록 선택">
+            <select
+              className="field min-h-12 w-full"
+              value={selectedDispatchId}
+              onChange={(event) => setSelectedDispatchId(event.target.value)}
+            >
+              <option value="">배차기록을 선택하세요.</option>
+              {recentDispatches.map((dispatch) => (
+                <option key={dispatch.id} value={dispatch.id}>{formatLostItemDispatchOption(dispatch)}</option>
+              ))}
+              <option value="manual">직접입력</option>
+            </select>
+          </FormBlock>
+        ) : null}
         <CompactRow>
-          <Input name="customerName" label="고객명" />
-          <Input name="customerPhone" label="연락처" />
+          <Input key={`lost-customer-${selectedDispatch?.id || "manual"}`} name="customerName" label="고객명" defaultValue={dispatchCustomerName} readOnly={Boolean(selectedDispatch)} className={`field min-h-12 ${selectedDispatch ? "bg-[#f6f7f4] text-[#667269]" : ""}`} />
+          <Input key={`lost-phone-${selectedDispatch?.id || "manual"}`} name="customerPhone" label="연락처" defaultValue={dispatchCustomerPhone} readOnly={Boolean(selectedDispatch)} className={`field min-h-12 ${selectedDispatch ? "bg-[#f6f7f4] text-[#667269]" : ""}`} />
           <Input name="notes" label="특이사항" />
           <Input name="foundDate" label="날짜" type="date" defaultValue={todayKorea()} />
         </CompactRow>
