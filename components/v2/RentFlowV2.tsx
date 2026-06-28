@@ -110,8 +110,8 @@ const appActions = [
   { href: "/app/dashboard", label: "차량현황판", icon: Car, emoji: "🚗" },
   { href: "/app/reservation", label: "예약일정 추가", icon: CalendarDays },
   { href: "/app/incident", label: "사고/정비 기록", icon: Wrench },
-  { href: "/app/billing", label: "계약서/청구", icon: FileText },
   { href: "/app/lost-items", label: "분실물 관리", icon: PackageSearch },
+  { href: "/app/billing", label: "계약서 업로드", icon: FileText },
 ];
 
 const adminItems = [
@@ -3439,7 +3439,11 @@ function PhotoDetailView({
       <div className="photo-detail-header mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <button className="small-btn" type="button" onClick={onBack}>← 닫기</button>
         <p className="truncate text-center text-sm font-black" title={fileName(file)}>{fileName(file)}</p>
-        {url ? <a className="small-btn" href={photoViewerUrl(file)} target="_blank">다운로드</a> : null}
+        {url ? (
+          <button className="small-btn" type="button" onClick={() => { window.location.href = photoDownloadUrl(file); }}>
+            다운로드
+          </button>
+        ) : null}
       </div>
       <p className="mb-2 text-center text-xs font-bold text-[#68746d]">{currentIndex + 1} / {files.length}</p>
       {!isVideo ? (
@@ -4443,8 +4447,13 @@ function fileUrl(file: UploadedFileV2) {
   return raw.r2Url || raw.r2_url || raw.driveUrl || raw.drive_url || "";
 }
 
-function photoViewerUrl(file: UploadedFileV2) {
-  return `/photos/view?src=${encodeURIComponent(fileUrl(file))}&name=${encodeURIComponent(fileName(file))}`;
+function photoDownloadUrl(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { r2_key?: string; drive_file_id?: string };
+  const params = new URLSearchParams();
+  if (file.id) params.set("id", String(file.id));
+  else if (raw.r2Key || raw.r2_key) params.set("key", raw.r2Key || raw.r2_key || "");
+  else if (raw.driveFileId || raw.drive_file_id) params.set("fileId", raw.driveFileId || raw.drive_file_id || "");
+  return `/api/photos/download?${params.toString()}`;
 }
 
 function fileThumbnailUrl(file: UploadedFileV2) {
