@@ -939,28 +939,24 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contr
         }}
       >
         <FormBlock title="차량 선택">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
-            <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
-            {businessType === "보험" ? (
-              <label className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
-                <input name="corporateVehicle" type="checkbox" />
-                법인차량
-              </label>
-            ) : null}
-          </div>
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
         </FormBlock>
         <DateTimeTodayField key={`dispatch-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <FormBlock title="구분">
           <Segmented value={businessType} values={["보험", "자차", "셀프"]} itemClassNames={dispatchTypeSegmentClasses} onChange={setBusinessType} />
         </FormBlock>
         {businessType === "보험" ? (
-          <CompactRow>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)_minmax(0,1fr)_7.5rem_minmax(0,1fr)]">
             <Input name="orderedBy" label="오더자" />
+            <label className="flex min-h-12 items-center justify-center gap-2 self-end rounded-lg border border-[#cfd8d1] bg-white px-3 text-sm font-black">
+              <input name="corporateVehicle" type="checkbox" />
+              법인차량
+            </label>
             <Input name="repairShop" label="수리처" />
             <Input name="customerCarModel" label="고객차종" />
             <Input name="fuelDisplay" label="배차주유량" placeholder="8/12" />
             <Input name="customerPhone" label="고객연락처" />
-          </CompactRow>
+          </div>
         ) : businessType === "자차" ? (
           <CompactRow>
             <Input name="orderedBy" label="오더자" />
