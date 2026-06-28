@@ -4022,7 +4022,7 @@ async function notifyUnreadMessagesCleared() {
     if (remaining > 0) return;
     await sendPushNotification({
       title: "정리완료",
-      body: "미정리 배회차 항목이 모두 정리완료 처리되었습니다.",
+      body: "정리완료.",
       url: "/admin/dispatches",
       tag: "dispatch-cleanup-complete",
     });
