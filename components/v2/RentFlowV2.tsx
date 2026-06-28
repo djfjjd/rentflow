@@ -3354,6 +3354,7 @@ function PhotoDetailView({
   const canPrev = currentIndex > 0;
   const canNext = currentIndex < files.length - 1;
   const isVideo = isVideoFile(file);
+  const [sharing, setSharing] = useState(false);
 
   function goTo(index: number) {
     if (index < 0 || index >= files.length) return;
@@ -3390,6 +3391,16 @@ function PhotoDetailView({
 
   function zoomBy(delta: number) {
     setZoom((value) => Math.min(4, Math.max(1, value + delta)));
+  }
+
+  async function shareCurrentPhoto() {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      await sharePhotoFile(file);
+    } finally {
+      setSharing(false);
+    }
   }
 
   function touchDistance(touches: React.TouchList) {
@@ -3440,8 +3451,8 @@ function PhotoDetailView({
         <button className="small-btn" type="button" onClick={onBack}>← 닫기</button>
         <p className="truncate text-center text-sm font-black" title={fileName(file)}>{fileName(file)}</p>
         {url ? (
-          <button className="small-btn" type="button" onClick={() => { window.location.href = photoDownloadUrl(file); }}>
-            다운로드
+          <button className="small-btn" type="button" disabled={sharing} onClick={shareCurrentPhoto}>
+            {sharing ? "준비 중" : "저장/공유"}
           </button>
         ) : null}
       </div>
@@ -4454,6 +4465,42 @@ function photoDownloadUrl(file: UploadedFileV2) {
   else if (raw.r2Key || raw.r2_key) params.set("key", raw.r2Key || raw.r2_key || "");
   else if (raw.driveFileId || raw.drive_file_id) params.set("fileId", raw.driveFileId || raw.drive_file_id || "");
   return `/api/photos/download?${params.toString()}`;
+}
+
+async function sharePhotoFile(file: UploadedFileV2) {
+  try {
+    const response = await fetch(photoDownloadUrl(file), { cache: "no-store" });
+    if (!response.ok) throw new Error(`photo download failed: ${response.status}`);
+    const blob = await response.blob();
+    const name = fileName(file) || "rentflow-photo.jpg";
+    const shareFile = new File([blob], name, { type: blob.type || "image/jpeg" });
+    const shareData = {
+      title: name,
+      text: "RentFlow 사진",
+      files: [shareFile],
+    };
+    const nav = navigator as Navigator & {
+      canShare?: (data?: ShareData) => boolean;
+      share?: (data: ShareData) => Promise<void>;
+    };
+
+    if (nav.share && (!nav.canShare || nav.canShare(shareData))) {
+      await nav.share(shareData);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    console.error("사진 공유 실패", error);
+    alert("사진 저장 또는 공유를 실행할 수 없습니다.");
+  }
 }
 
 function fileThumbnailUrl(file: UploadedFileV2) {
