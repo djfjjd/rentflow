@@ -116,6 +116,8 @@ export type DispatchV2 = {
   isCompleted?: boolean;
   returnCompleted?: boolean;
   returnAt?: string;
+  linkedReturnId?: string;
+  linked_return_id?: string;
   pickupAddress?: string;
   deliveryAddress?: string;
   fuelDisplay?: string;

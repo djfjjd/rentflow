@@ -988,10 +988,28 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
   const [time, setTime] = useState(currentTimeKorea());
   const [recordId, setRecordId] = useState(() => createId("return"));
   const [resetKey, setResetKey] = useState(0);
-  const latestDispatch = useMemo(() => {
-    if (!vehicle) return undefined;
-    return pendingDispatchesForVehicle(dispatches, vehicle.plateNumber)[0];
+  const [selectedDispatchId, setSelectedDispatchId] = useState("");
+  const activeDispatches = useMemo(() => {
+    if (!vehicle) return [];
+    return pendingDispatchesForVehicle(dispatches, vehicle.plateNumber);
   }, [dispatches, vehicle]);
+  const selectedDispatch = activeDispatches.length === 1
+    ? activeDispatches[0]
+    : activeDispatches.find((dispatch) => dispatch.id === selectedDispatchId);
+
+  useEffect(() => {
+    setSelectedDispatchId("");
+  }, [vehicle?.id]);
+
+  useEffect(() => {
+    if (activeDispatches.length === 1) {
+      setSelectedDispatchId(activeDispatches[0].id);
+      return;
+    }
+    if (activeDispatches.length > 1 && selectedDispatchId && !activeDispatches.some((dispatch) => dispatch.id === selectedDispatchId)) {
+      setSelectedDispatchId("");
+    }
+  }, [activeDispatches, selectedDispatchId]);
 
   return (
     <section className="return-page space-y-4">
@@ -1006,15 +1024,15 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
         mileage: Number(text(data, "mileage") || 0),
         fuelDisplay: text(data, "fuelDisplay"),
         fuelLevelText: text(data, "fuelDisplay"),
-        dispatchId: latestDispatch?.id || "",
+        dispatchId: selectedDispatch?.id || "",
         arrivalAddress: text(data, "location"),
         notes: text(data, "notes"),
         memo: text(data, "notes"),
         status: "회차등록",
         isCompleted: false,
       })}
-      beforeSave={() => Boolean(vehicle && latestDispatch)}
-      disabled={!vehicle || !latestDispatch}
+      beforeSave={() => Boolean(vehicle && selectedDispatch)}
+      disabled={!vehicle || !selectedDispatch}
       afterSave={async (payload) => {
         if (vehicle) {
           await sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
@@ -1040,6 +1058,7 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
         setDate(todayKorea());
         setTime(currentTimeKorea());
         setRecordId(createId("return"));
+        setSelectedDispatchId("");
         setResetKey((key) => key + 1);
       }}
     >
@@ -1049,31 +1068,40 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
       <DateTimeTodayField key={`return-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
       <div className="field-block">
         <label className="block text-sm font-bold text-[#16211d]">배차정보</label>
-        <input
-          value={latestDispatch ? formatDispatchSelectLabel(latestDispatch) : "최근 배차정보가 없습니다."}
-          readOnly
-          className="field min-h-12 w-full truncate bg-[#f8faf7] text-[#16211d]"
-        />
+        {activeDispatches.length > 1 ? (
+          <select className="field min-h-12 w-full" value={selectedDispatchId} onChange={(event) => setSelectedDispatchId(event.target.value)}>
+            <option value="">회차 처리할 배차건을 선택해주세요.</option>
+            {activeDispatches.map((dispatch) => (
+              <option key={dispatch.id} value={dispatch.id}>{formatReturnDispatchOption(dispatch)}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={selectedDispatch ? formatReturnDispatchOption(selectedDispatch) : "최근 배차정보가 없습니다."}
+            readOnly
+            className="field min-h-12 w-full truncate bg-[#f8faf7] text-[#16211d]"
+          />
+        )}
       </div>
       <CompactRow>
         <Input name="mileage" label="회차키로수" type="number" />
         <div className="grid grid-cols-2 gap-2">
           <Input
             label="배차주유량"
-            value={latestDispatch ? firstText(latestDispatch.fuelLevelText, latestDispatch.fuelDisplay) : ""}
+            value={selectedDispatch ? firstText(selectedDispatch.fuelLevelText, selectedDispatch.fuelDisplay) : ""}
             readOnly
             className="field min-h-12 bg-[#f8faf7] text-[#16211d]"
           />
           <Input name="fuelDisplay" label="회차시주유량" placeholder="7/12" />
         </div>
-        <Input name="location" label="주차구역" list="parking-locations" defaultValue={firstText(latestDispatch?.deliveryAddress, latestDispatch?.pickupAddress)} />
+        <Input key={`return-location-${selectedDispatch?.id || "none"}`} name="location" label="주차구역" list="parking-locations" defaultValue={firstText(selectedDispatch?.deliveryAddress, selectedDispatch?.pickupAddress)} />
       </CompactRow>
       <div className="grid gap-2 sm:grid-cols-3">
-        <Input label="고객차종" value={latestDispatch ? clean(latestDispatch.customerCarModel) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="연락처" value={latestDispatch ? dispatchPhone(latestDispatch) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="오더자" value={latestDispatch ? formatOrdererName(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.corporateVehicle) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="고객차종" value={selectedDispatch ? clean(selectedDispatch.customerCarModel) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="연락처" value={selectedDispatch ? dispatchPhone(selectedDispatch) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="오더자" value={selectedDispatch ? formatOrdererName(firstText(selectedDispatch.orderer, selectedDispatch.orderedBy, selectedDispatch.customerName), selectedDispatch.corporateVehicle) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
       </div>
-      <Textarea name="notes" label="특이사항" defaultValue={latestDispatch?.notes || ""} />
+      <Textarea key={`return-notes-${selectedDispatch?.id || "none"}`} name="notes" label="특이사항" defaultValue={selectedDispatch?.notes || ""} />
       <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
@@ -2980,13 +3008,52 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
-  const rows = [...returns].sort(sortDateCreatedDesc);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = normalizeSearchText(query);
+  const rows = [...returns]
+    .filter((item) => {
+      if (!normalizedQuery) return true;
+      const vehicleNumber = clean(item.rentalCarNumber);
+      return normalizeSearchText([
+        vehicleNumber,
+        vehicleNumber.slice(-4),
+        item.orderer,
+        item.ordererSnapshot,
+        item.repairShop,
+        item.repairShopSnapshot,
+        item.customerCarModel,
+        item.customerCarModelSnapshot,
+        item.parkingZone,
+        item.arrivalAddress,
+        item.notes,
+        item.memo,
+      ].join(" ")).includes(normalizedQuery);
+    })
+    .sort(sortDateCreatedDesc);
+  useEffect(() => {
+    setPage(1);
+  }, [normalizedQuery]);
   useEffect(() => {
     console.log("return board items", returns.length);
   }, [returns.length]);
   return (
     <section className="panel w-full overflow-hidden">
-      <h2 className="mb-3 text-xl font-black">회차 현황판</h2>
+      <div className="dispatch-board-header">
+        <h2 className="text-xl font-black">회차 현황판</h2>
+        <div className="dispatch-board-search">
+          <input
+            className="field min-h-10"
+            placeholder="차량번호 · 오더자 · 수리처 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query ? (
+            <button className="dispatch-board-search-clear" type="button" aria-label="검색어 지우기" onClick={() => setQuery("")}>
+              ×
+            </button>
+          ) : null}
+        </div>
+      </div>
       <div data-horizontal-scroll="true" className="return-board-wrapper return-table-wrapper return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="return-table w-full min-w-[1200px] text-left text-sm">
           <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
@@ -3010,6 +3077,7 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
             );
           })}</tbody>
         </table>
+        {!rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">검색 결과가 없습니다.</p> : null}
       </div>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
       {editing ? <ReturnEditModal record={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onReturns()} /> : null}
@@ -5051,7 +5119,7 @@ function pendingDispatchesForVehicle(dispatches: DispatchV2[], vehicleNumber: st
 }
 
 function isActiveDispatch(dispatch: DispatchV2) {
-  return dispatch.returnCompleted !== true && !clean(dispatch.returnAt);
+  return dispatch.returnCompleted !== true && !clean(dispatch.returnAt) && !clean(dispatch.linkedReturnId || dispatch.linked_return_id);
 }
 
 function isReturnedDispatch(dispatch: DispatchV2) {
@@ -5114,6 +5182,14 @@ function formatDispatchSelectLabel(dispatch: DispatchV2) {
   const place = firstText(dispatch.repairShop, dispatch.orderer, dispatch.orderedBy, dispatch.customerName);
   const fuel = firstText(dispatch.fuelLevelText, dispatch.fuelDisplay);
   return [date, place, fuel ? `주유량 ${fuel}` : ""].filter(Boolean).join(" · ");
+}
+
+function formatReturnDispatchOption(dispatch: DispatchV2) {
+  const date = formatBoardDateTime(dispatch.date, dispatch.time, dispatch.createdAt);
+  const vehicleNumber = normalizeVehicleNumber(dispatch);
+  const place = firstText(dispatch.repairShop, dispatch.orderer, dispatch.orderedBy, dispatch.customerName);
+  const fuel = firstText(dispatch.fuelLevelText, dispatch.fuelDisplay);
+  return [date, vehicleNumber, place, fuel].filter(Boolean).join(" · ");
 }
 
 function firstText(...values: unknown[]) {
