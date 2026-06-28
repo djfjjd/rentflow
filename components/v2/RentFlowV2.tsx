@@ -297,7 +297,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
         {kind === "home" ? <HomeScreen /> : null}
         {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
-        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onReturns={reloadReturns} /> : null}
+        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
         {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
@@ -982,7 +982,7 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contr
   );
 }
 
-function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onReturns: ReloadHandler<ReturnV2> }) {
+function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onDispatches: ReloadHandler<DispatchV2>; onReturns: ReloadHandler<ReturnV2> }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
@@ -990,7 +990,7 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
   const [resetKey, setResetKey] = useState(0);
   const latestDispatch = useMemo(() => {
     if (!vehicle) return undefined;
-    return latestByVehicle(dispatches, vehicle.plateNumber);
+    return pendingDispatchesForVehicle(dispatches, vehicle.plateNumber)[0];
   }, [dispatches, vehicle]);
 
   return (
@@ -1013,15 +1013,20 @@ function ReturnForm({ vehicles, dispatches, returns, onReturns }: { vehicles: Ve
         status: "회차등록",
         isCompleted: false,
       })}
-      beforeSave={() => Boolean(vehicle)}
-      disabled={!vehicle}
-      afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
-        status: "주차구역표시",
-        location: String(payload.arrivalAddress || ""),
-        fuelDisplay: String(payload.fuelDisplay || ""),
-        activeSummary: String(payload.arrivalAddress || ""),
-        mileage: Number(payload.mileage || 0),
-      }, "PATCH") : undefined}
+      beforeSave={() => Boolean(vehicle && latestDispatch)}
+      disabled={!vehicle || !latestDispatch}
+      afterSave={async (payload) => {
+        if (vehicle) {
+          await sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
+            status: "주차구역표시",
+            location: String(payload.arrivalAddress || ""),
+            fuelDisplay: String(payload.fuelDisplay || ""),
+            activeSummary: String(payload.arrivalAddress || ""),
+            mileage: Number(payload.mileage || 0),
+          }, "PATCH");
+        }
+        await onDispatches();
+      }}
       notify={(payload) => ({
         title: "새 회차 등록",
         body: `${payload.rentalCarNumber || ""} 회차\n주차구역: ${payload.arrivalAddress || ""}\n주유량: ${payload.fuelDisplay || ""}`.trim(),
@@ -2880,18 +2885,26 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [memo, setMemo] = useState("");
-  const [page, setPage] = useState(1);
+  const [tab, setTab] = useState<"active" | "history">("active");
+  const [pages, setPages] = useState<Record<"active" | "history", number>>({ active: 1, history: 1 });
   const [query, setQuery] = useState("");
   const normalizedQuery = normalizeSearchText(query);
-  const rows = [...dispatches]
+  const searchedRows = [...dispatches]
     .filter((item) => {
       if (!normalizedQuery) return true;
       const vehicleNumber = clean(item.rentalCarNumber);
       return normalizeSearchText(`${vehicleNumber} ${vehicleNumber.slice(-4)} ${item.orderer || ""} ${item.orderedBy || ""} ${item.customerName || ""} ${item.repairShop || ""}`).includes(normalizedQuery);
     })
     .sort(sortDateCreatedDesc);
+  const activeRows = searchedRows.filter(isActiveDispatch);
+  const historyRows = searchedRows.filter(isReturnedDispatch);
+  const rows = tab === "active" ? activeRows : historyRows;
+  const page = pages[tab];
+  function setTabPage(nextPage: number) {
+    setPages((current) => ({ ...current, [tab]: nextPage }));
+  }
   useEffect(() => {
-    setPage(1);
+    setPages({ active: 1, history: 1 });
   }, [normalizedQuery]);
   useEffect(() => {
     console.log("dispatch board items", dispatches.length);
@@ -2913,6 +2926,9 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
             </button>
           ) : null}
         </div>
+      </div>
+      <div className="mb-3">
+        <Segmented value={tab} values={["active", "history"]} labels={{ active: "배차중", history: "배차기록" }} onChange={(value) => setTab(value as "active" | "history")} />
       </div>
       <div data-horizontal-scroll="true" className="dispatch-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[1700px] table-fixed text-left text-sm">
@@ -2948,7 +2964,7 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
         </table>
         {!rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">검색 결과가 없습니다.</p> : null}
       </div>
-      <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
+      <Pagination page={page} totalItems={rows.length} onPageChange={setTabPage} />
       {editing ? <DispatchEditModal dispatch={editing} vehicles={vehicles} onClose={() => setEditing(null)} onSaved={() => onDispatches()} /> : null}
       {deleting ? <GenericDeleteModal label={`${deleting.rentalCarNumber || ""} 배차`} onCancel={() => setDeleting(null)} onDelete={async () => {
         await fetch(`/api/dispatches?id=${encodeURIComponent(deleting.id)}`, { method: "DELETE" });
@@ -5029,9 +5045,17 @@ function pendingDispatchesForVehicle(dispatches: DispatchV2[], vehicleNumber: st
   return dispatches
     .filter((dispatch) => {
       if (normalizeVehicleNumber(dispatch) !== vehicleNumber) return false;
-      return dispatch.returnCompleted === false || !dispatch.returnAt;
+      return isActiveDispatch(dispatch);
     })
     .sort((a, b) => recordSortValue(b) - recordSortValue(a));
+}
+
+function isActiveDispatch(dispatch: DispatchV2) {
+  return dispatch.returnCompleted !== true && !clean(dispatch.returnAt);
+}
+
+function isReturnedDispatch(dispatch: DispatchV2) {
+  return dispatch.returnCompleted === true && Boolean(clean(dispatch.returnAt));
 }
 
 function latestByVehicle<T extends { date?: string; time?: string; createdAt?: string; vehicleNumber?: string; rentalCarNumber?: string; plateNumber?: string }>(items: T[], vehicleNumber: string) {
