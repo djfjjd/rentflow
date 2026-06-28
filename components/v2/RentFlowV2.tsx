@@ -2863,6 +2863,8 @@ function DispatchAdmin({
   const [filter, setFilter] = useState("미정리");
   const [page, setPage] = useState(1);
   const [memo, setMemo] = useState("");
+  const [retentionBusy, setRetentionBusy] = useState(false);
+  const [retentionMessage, setRetentionMessage] = useState("");
   const rows = [
     ...dispatches.map((item) => ({ kind: "배차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, dispatch: item })),
     ...returns.map((item) => ({ kind: "회차" as const, id: item.id, createdAt: item.createdAt, completed: !!item.isCompleted, returnItem: item })),
@@ -2881,8 +2883,45 @@ function DispatchAdmin({
     await onReturns();
   }
 
+  async function cleanupExpiredDispatchReturns() {
+    if (retentionBusy) return;
+    setRetentionBusy(true);
+    setRetentionMessage("");
+    try {
+      const countResponse = await fetch("/api/dispatch-return-retention", { cache: "no-store" });
+      const counts = await readJsonResponse<{ dispatches?: number; returns?: number; total?: number }>(countResponse);
+      if (!countResponse.ok) throw new Error("정리 대상 조회에 실패했습니다.");
+      const total = Number(counts.total || 0);
+      if (total <= 0) {
+        setRetentionMessage("1년 초과 배회차 기록이 없습니다.");
+        return;
+      }
+      const confirmed = confirm(`1년 초과 배회차 기록 ${total}건을 정리하시겠습니까?\n배차 ${counts.dispatches || 0}건, 회차 ${counts.returns || 0}건`);
+      if (!confirmed) {
+        setRetentionMessage(`정리 대상 ${total}건이 있습니다.`);
+        return;
+      }
+      const archiveResponse = await fetch("/api/dispatch-return-retention", { method: "POST" });
+      const result = await readJsonResponse<{ archived?: { dispatches?: number; returns?: number }; total?: number }>(archiveResponse);
+      if (!archiveResponse.ok) throw new Error("배회차 기록 정리에 실패했습니다.");
+      await Promise.all([onDispatches(), onReturns()]);
+      setRetentionMessage(`정리 완료: 배차 ${result.archived?.dispatches || 0}건, 회차 ${result.archived?.returns || 0}건`);
+    } catch (error) {
+      setRetentionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRetentionBusy(false);
+    }
+  }
+
   return (
     <section className="panel space-y-3 overflow-hidden">
+      <div className="flex flex-col gap-2 rounded-lg border border-[#d8ded8] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-bold text-[#68746d]">배차/회차 DB 기록은 1년 초과분만 정리됩니다.</p>
+        <button className="small-btn shrink-0" type="button" disabled={retentionBusy} onClick={cleanupExpiredDispatchReturns}>
+          {retentionBusy ? "확인 중" : "배회차 1년 초과 기록 정리"}
+        </button>
+      </div>
+      {retentionMessage ? <p className="rounded-lg bg-[#f6f7f4] px-3 py-2 text-sm font-black text-[#116149]">{retentionMessage}</p> : null}
       <div className="sticky top-0 z-10 rounded-lg bg-[#eef4ed] p-1.5">
         <Segmented value={filter} values={["미정리", "정리완료", "전체기록"]} onChange={setFilter} />
       </div>

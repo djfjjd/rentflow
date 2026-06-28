@@ -10,6 +10,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     const { results } = await env.DB.prepare(`
       SELECT *
       FROM dispatches
+      WHERE retention_archived_at IS NULL
       ORDER BY
         COALESCE(date, '') DESC,
         COALESCE(time, '') DESC,
@@ -293,5 +294,7 @@ async function ensureDispatchSchema(env: Env) {
     { name: "contract_drive_file_id", definition: "TEXT" },
     { name: "contract_drive_folder_id", definition: "TEXT" },
     { name: "contract_drive_url", definition: "TEXT" },
+    { name: "retention_archived_at", definition: "DATETIME" },
+    { name: "retention_archived_reason", definition: "TEXT" },
   ]);
 }

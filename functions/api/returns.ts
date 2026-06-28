@@ -10,6 +10,7 @@ export async function onRequestGet({ env }: { env: Env }) {
     const { results } = await env.DB.prepare(`
       SELECT *
       FROM returns
+      WHERE retention_archived_at IS NULL
       ORDER BY
         COALESCE(date, '') DESC,
         COALESCE(time, '') DESC,
@@ -283,6 +284,8 @@ async function ensureReturnSchema(env: Env) {
     { name: "is_corporate_vehicle_snapshot", definition: "INTEGER DEFAULT 0" },
     { name: "created_at", definition: "DATETIME" },
     { name: "updated_at", definition: "DATETIME" },
+    { name: "retention_archived_at", definition: "DATETIME" },
+    { name: "retention_archived_reason", definition: "TEXT" },
   ]);
 }
 
