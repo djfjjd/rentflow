@@ -20,6 +20,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       email: session.email,
       role: session.role,
       isDeveloper,
+      displayName: session.displayName,
+      position: session.position,
       canAccessSettings: session.role === "super_admin",
     },
   });

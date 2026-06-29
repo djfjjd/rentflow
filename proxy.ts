@@ -5,10 +5,15 @@ import { getProtectedRoute } from "./lib/auth/protected-routes";
 import { hasSettings2faAccess, isDeveloperSettingsBypass, isSettingsEmailAllowed } from "./lib/settings-2fa";
 
 export async function proxy(request: NextRequest) {
+  const session = await verifyAuthToken(request.cookies.get(authCookieName)?.value, process.env.JWT_SECRET || "");
+  const isDeviceAuthPath = ["/auth/register-device", "/auth/pending", "/auth/verify-email"].some((path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(`${path}/`));
+  if (isDeviceAuthPath && session?.isDeveloper) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
   const route = getProtectedRoute(request.nextUrl.pathname);
   if (!route) return NextResponse.next();
 
-  const session = await verifyAuthToken(request.cookies.get(authCookieName)?.value, process.env.JWT_SECRET || "");
   if (!session) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
@@ -48,5 +53,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/app/:path*", "/admin/:path*", "/dispatch", "/return", "/partners", "/repairs", "/lost-items", "/contracts", "/reservations"],
+  matcher: ["/", "/app/:path*", "/admin/:path*", "/auth/register-device/:path*", "/auth/pending/:path*", "/auth/verify-email/:path*", "/dispatch", "/return", "/partners", "/repairs", "/lost-items", "/contracts", "/reservations"],
 };

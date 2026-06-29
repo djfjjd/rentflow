@@ -11,11 +11,16 @@ type Env = {
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
   const url = new URL(request.url);
+  const token = readCookie(request.headers.get("Cookie"), authCookieName);
+  const session = await verifyAuthToken(token, env.JWT_SECRET || "");
+  const isDeviceAuthPath = ["/auth/register-device", "/auth/pending", "/auth/verify-email"].some((path) => url.pathname === path || url.pathname.startsWith(`${path}/`));
+  if (isDeviceAuthPath && session?.isDeveloper) {
+    return Response.redirect(new URL("/admin", url.origin).toString(), 302);
+  }
+
   const route = getProtectedRoute(url.pathname);
   if (!route) return next();
 
-  const token = readCookie(request.headers.get("Cookie"), authCookieName);
-  const session = await verifyAuthToken(token, env.JWT_SECRET || "");
   if (!session) {
     const authUrl = new URL("/auth", url.origin);
     authUrl.searchParams.set("next", route.nextPath || `${url.pathname}${url.search}`);

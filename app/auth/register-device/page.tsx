@@ -1,7 +1,7 @@
 "use client";
 
 import { Home } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 const initialForm = {
   name: "",
@@ -20,6 +20,21 @@ export default function RegisterDevicePage() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    const userAgent = navigator.userAgent || "";
+    setForm((current) => ({
+      ...current,
+      deviceAlias: current.deviceAlias || defaultDeviceAlias(userAgent),
+      deviceModel: current.deviceModel || guessDeviceModel(userAgent),
+    }));
+    fetch("/api/auth/me")
+      .then((response) => response.ok ? response.json() as Promise<{ user?: { isDeveloper?: boolean } }> : null)
+      .then((data) => {
+        if (data?.user?.isDeveloper) window.location.replace("/admin");
+      })
+      .catch(() => undefined);
+  }, []);
+
   async function requestCode() {
     setBusy(true);
     setMessage("");
@@ -33,7 +48,7 @@ export default function RegisterDevicePage() {
       if (!response.ok) throw new Error(data.error || "인증코드 요청에 실패했습니다.");
       setRequested(true);
       setDevCode(data.devCode || "");
-      setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : "이메일 연동 전입니다. 개발 환경에서는 서버 로그를 확인하세요.");
+      setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : data.devCode ? "이메일 연동 전입니다. 아래 개발용 인증코드로 테스트하세요." : "이메일 연동 전입니다. 서버 로그를 확인하세요.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -102,4 +117,23 @@ export default function RegisterDevicePage() {
 
 function Field({ label, value, onChange, type = "text", inputMode, maxLength }: { label: string; value: string; onChange: (value: string) => void; type?: string; inputMode?: "numeric"; maxLength?: number }) {
   return <label className="label">{label}<input className="field" type={type} value={value} inputMode={inputMode} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} required /></label>;
+}
+
+function defaultDeviceAlias(userAgent: string) {
+  if (/iPhone/i.test(userAgent)) return "iPhone";
+  if (/iPad/i.test(userAgent)) return "iPad";
+  if (/Android/i.test(userAgent)) return "Android 기기";
+  if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
+  if (/Windows/i.test(userAgent)) return "Windows PC";
+  return "업무용 기기";
+}
+
+function guessDeviceModel(userAgent: string) {
+  if (/iPhone/i.test(userAgent)) return "iPhone";
+  if (/iPad/i.test(userAgent)) return "iPad";
+  const android = userAgent.match(/Android[^;)]*(?:;\s*([^;)]+))?/i);
+  if (android?.[1]) return android[1].trim();
+  if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
+  if (/Windows/i.test(userAgent)) return "Windows PC";
+  return "알 수 없음";
 }

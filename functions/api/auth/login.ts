@@ -39,8 +39,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: "ADMIN_EMAIL is not configured." }, { status: 500 });
   }
 
-  const device = await getDeviceByDeviceId(env.DB, deviceId);
   const url = new URL(request.url);
+  if (account.isDeveloper) {
+    const token = await createAuthToken({ email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, jwtSecret);
+    await recordLoginLog(env, request, { email: account.email, role: account.role, status: "success", message: "developer login success" });
+    return Response.json(
+      { user: { email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, redirectTo: account.redirectTo },
+      { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
+    );
+  }
+
+  const device = await getDeviceByDeviceId(env.DB, deviceId);
   if (!device || device.status === "승인대기") {
     return Response.json(
       { requiresDeviceRegistration: true, redirectTo: "/auth/register-device", deviceId },
@@ -73,7 +82,7 @@ function getPasswordAccount(accountType: string, env: Env): { password: string; 
     return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: firstTeamLeadEmail(env), isDeveloper: false };
   }
   if (accountType === "developer") {
-    return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin/settings", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true };
+    return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true };
   }
   if (accountType === "manager") {
     return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard", email: "", isDeveloper: false };

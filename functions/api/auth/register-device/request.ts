@@ -4,6 +4,8 @@ import { normalizeEmail } from "../../../../lib/auth/jwt";
 type Env = {
   JWT_SECRET?: string;
   EMAIL_API_KEY?: string;
+  NODE_ENV?: string;
+  SHOW_DEV_VERIFICATION_CODE?: string;
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -17,10 +19,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   console.log("device registration code", { email, code });
   const url = new URL(request.url);
   const hasEmailProvider = Boolean(env.EMAIL_API_KEY);
+  const showDevCode = String(env.SHOW_DEV_VERIFICATION_CODE || "").toLowerCase() === "true" || String(env.NODE_ENV || "production") !== "production" || isDevCodeVisible(request, hasEmailProvider);
   return Response.json(
     {
       ok: true,
-      devCode: isDevCodeVisible(request, hasEmailProvider) ? code : undefined,
+      devCode: showDevCode ? code : undefined,
       emailReady: hasEmailProvider,
     },
     { headers: { "Set-Cookie": buildSettingsCookie(deviceRegistrationChallengeCookieName, cookie, url.protocol === "https:", settingsChallengeMaxAgeSeconds) } },
