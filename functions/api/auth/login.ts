@@ -24,10 +24,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: "인증 정보가 올바르지 않습니다." }, { status: 401 });
   }
 
-  const token = await createAuthToken({ email, role }, jwtSecret);
+  const isDeveloper = email === normalizeEmail(env.ADMIN_EMAIL || "");
+  const token = await createAuthToken({ email, role, isDeveloper }, jwtSecret);
   const url = new URL(request.url);
   return Response.json(
-    { user: { email, role } },
+    { user: { email, role, isDeveloper } },
     { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
   );
 };

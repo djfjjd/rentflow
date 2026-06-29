@@ -16,10 +16,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const session = await verifyAuthToken(token, env.JWT_SECRET || "");
   if (!session) return Response.json({ user: null }, { status: 401 });
   const settingsEmails = emailsFromEnv(env, ["ADMIN_EMAIL", "TEAM_LEAD_EMAILS"]);
+  const isDeveloper = Boolean(session.isDeveloper) || session.email.toLowerCase() === String(env.ADMIN_EMAIL || "").trim().toLowerCase();
   return Response.json({
     user: {
       email: session.email,
       role: session.role,
+      isDeveloper,
       canAccessSettings: settingsEmails.includes(session.email.toLowerCase()),
     },
   });

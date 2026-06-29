@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { DeviceRoleTable } from "./DeviceRoleTable";
+import { DeviceManagement } from "./DeviceManagement";
 import { RolePermissionCards } from "./RolePermissionCards";
+import { StaffManagement } from "./StaffManagement";
 
 type SettingsSection = "staff" | "roles" | "devices" | "logins";
 
@@ -62,43 +63,10 @@ export function SettingsDashboard() {
         </div>
       </section>
 
-      {active === "staff" ? <StaffSection /> : null}
+      {active === "staff" ? <StaffManagement /> : null}
       {active === "roles" ? <RolePermissionCards /> : null}
-      {active === "devices" ? <DeviceSection /> : null}
+      {active === "devices" ? <DeviceManagement /> : null}
       {active === "logins" ? <LoginHistorySection /> : null}
-    </section>
-  );
-}
-
-function StaffSection() {
-  return (
-    <section className="grid gap-3 md:grid-cols-2">
-      <article className="panel min-h-32">
-        <h3 className="text-lg font-black">직원 계정 등록</h3>
-        <p className="mt-2 text-sm font-bold text-[#68746d]">이메일 OTP, Magic Link, 관리자 승인 흐름을 연결할 자리입니다.</p>
-      </article>
-      <article className="panel min-h-32">
-        <h3 className="text-lg font-black">퇴사 처리</h3>
-        <p className="mt-2 text-sm font-bold text-[#68746d]">세션 만료, 기기 해제, 권한 회수를 한 번에 처리하는 구조로 확장합니다.</p>
-      </article>
-    </section>
-  );
-}
-
-function DeviceSection() {
-  return (
-    <section className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
-        <article className="panel min-h-32">
-          <h3 className="text-lg font-black">기기 승인</h3>
-          <p className="mt-2 text-sm font-bold text-[#68746d]">직원별 승인 기기와 1인 1기기 제한 정책을 붙일 영역입니다.</p>
-        </article>
-        <article className="panel min-h-32">
-          <h3 className="text-lg font-black">기기 차단</h3>
-          <p className="mt-2 text-sm font-bold text-[#68746d]">등록되지 않은 기기의 직접 URL, QR 접근 차단 규칙을 확장합니다.</p>
-        </article>
-      </div>
-      <DeviceRoleTable />
     </section>
   );
 }

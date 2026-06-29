@@ -7,6 +7,7 @@ const tokenTtlSeconds = 60 * 60 * 24 * 7;
 export type AuthSession = {
   email: string;
   role: Role;
+  isDeveloper?: boolean;
   iat: number;
   exp: number;
 };
@@ -30,10 +31,10 @@ async function importSigningKey(secret: string) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-export async function createAuthToken(input: { email: string; role: Role }, secret: string) {
+export async function createAuthToken(input: { email: string; role: Role; isDeveloper?: boolean }, secret: string) {
   const now = Math.floor(Date.now() / 1000);
   const header = encodeBase64Url(JSON.stringify({ alg: jwtAlgorithm, typ: "JWT" }));
-  const payload = encodeBase64Url(JSON.stringify({ email: input.email, role: input.role, iat: now, exp: now + tokenTtlSeconds }));
+  const payload = encodeBase64Url(JSON.stringify({ email: input.email, role: input.role, isDeveloper: Boolean(input.isDeveloper), iat: now, exp: now + tokenTtlSeconds }));
   const data = `${header}.${payload}`;
   const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await importSigningKey(secret), new TextEncoder().encode(data)));
   return `${data}.${encodeBase64Url(signature)}`;

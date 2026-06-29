@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { OverlayModal } from "@/components/OverlayModal";
 import { Pagination } from "@/components/Pagination";
+import { DeveloperBadge } from "@/components/DeveloperBadge";
 import { RepairShopMapPage } from "@/components/repair-shops/RepairShopMapPage";
 import { SettingsDashboard } from "@/app/admin/settings/components/SettingsDashboard";
 import {
@@ -278,6 +279,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
             </div>
             <div className="header-right">
               <QuickMenu />
+              <DeveloperBadge enabled={isAdmin} />
               <div className="desktop-calendar-button">
                 <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
               </div>
