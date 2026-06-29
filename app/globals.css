@@ -68,9 +68,31 @@ input[type="date"],
 input[type="time"] {
   display: block;
   width: 100%;
+  inline-size: 100%;
   min-width: 0;
+  min-inline-size: 0;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.rf-mobile-date-time-field {
+  width: 100%;
+  inline-size: 100%;
+  min-width: 0;
+  min-inline-size: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+
+.rf-mobile-date-time-field::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.rf-mobile-date-time-field::-webkit-calendar-picker-indicator {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .app-header {
@@ -163,6 +185,9 @@ input[type="time"] {
 
   .label {
     @apply grid gap-1 text-sm font-black text-[#25342e];
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .primary-btn {

@@ -4283,6 +4283,7 @@ function DateTimeTodayField({
         name="date"
         label="날짜"
         type="date"
+        className="rf-mobile-date-time-field"
         value={date}
         onChange={(event) => {
           onDateChange(event.target.value);
@@ -4293,6 +4294,7 @@ function DateTimeTodayField({
         name="time"
         label="시간"
         type="time"
+        className="rf-mobile-date-time-field"
         value={time}
         onChange={(event) => {
           onTimeChange(event.target.value);
