@@ -2,9 +2,12 @@ export type ProtectedRoute = {
   path: string;
   mode?: "exact" | "prefix";
   requiredRole?: "super_admin";
+  nextPath?: string;
+  authenticatedRedirectTo?: string;
 };
 
 export const protectedRoutes: ProtectedRoute[] = [
+  { path: "/", nextPath: "/app", authenticatedRedirectTo: "/app" },
   { path: "/app", mode: "prefix" },
   { path: "/admin", mode: "prefix", requiredRole: "super_admin" },
   { path: "/dispatch" },

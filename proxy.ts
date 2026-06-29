@@ -11,8 +11,12 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
     url.search = "";
-    url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    url.searchParams.set("next", route.nextPath || `${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
+  }
+
+  if (route.authenticatedRedirectTo) {
+    return NextResponse.redirect(new URL(route.authenticatedRedirectTo, request.url));
   }
 
   if (route.requiredRole && session.role !== route.requiredRole) {
@@ -23,5 +27,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/admin/:path*", "/dispatch", "/return", "/partners", "/repairs", "/lost-items", "/contracts", "/reservations"],
+  matcher: ["/", "/app/:path*", "/admin/:path*", "/dispatch", "/return", "/partners", "/repairs", "/lost-items", "/contracts", "/reservations"],
 };

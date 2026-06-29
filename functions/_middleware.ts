@@ -14,8 +14,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
   const session = await verifyAuthToken(token, env.JWT_SECRET || "");
   if (!session) {
     const authUrl = new URL("/auth", url.origin);
-    authUrl.searchParams.set("next", `${url.pathname}${url.search}`);
+    authUrl.searchParams.set("next", route.nextPath || `${url.pathname}${url.search}`);
     return Response.redirect(authUrl.toString(), 302);
+  }
+
+  if (route.authenticatedRedirectTo) {
+    return Response.redirect(new URL(route.authenticatedRedirectTo, url.origin).toString(), 302);
   }
 
   if (route.requiredRole && session.role !== route.requiredRole) {
