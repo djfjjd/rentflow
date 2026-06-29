@@ -5195,10 +5195,8 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
 function formatOrdererName(orderer: unknown, isCorporateVehicle: unknown) {
   const name = clean(orderer).trim();
   const isCorporate = Boolean(isCorporateVehicle);
-  if (name.toLowerCase() === "mot") {
-    return isCorporate ? "MOT(법인)" : "MOT";
-  }
-  return name;
+  if (!name) return "";
+  return isCorporate ? `${name}(법인)` : name;
 }
 
 function pendingDispatchesForVehicle(dispatches: DispatchV2[], vehicleNumber: string) {
