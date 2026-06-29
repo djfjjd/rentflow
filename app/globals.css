@@ -59,6 +59,18 @@ input,
 textarea,
 select {
   font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+input[type="date"],
+input[type="time"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .app-header {
@@ -144,6 +156,9 @@ select {
 
   .field {
     @apply w-full rounded-lg border border-[#cfd8d1] bg-white px-3 py-2 text-base font-bold outline-none transition focus:border-[#116149] focus:ring-2 focus:ring-[#116149]/20;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .label {
@@ -511,7 +526,9 @@ select {
 .dispatch-page,
 .return-page,
 .schedule-page,
-.reservation-page {
+.reservation-page,
+.incident-page,
+.lost-items-page {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
@@ -738,7 +755,9 @@ select {
   .dispatch-page,
   .return-page,
   .schedule-page,
-  .reservation-page {
+  .reservation-page,
+  .incident-page,
+  .lost-items-page {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -747,22 +766,32 @@ select {
   .dispatch-page *,
   .return-page *,
   .schedule-page *,
-  .reservation-page * {
+  .reservation-page *,
+  .incident-page *,
+  .lost-items-page * {
     box-sizing: border-box;
   }
 
-  .dispatch-page input,
+  .dispatch-page input:not([type="checkbox"]):not([type="radio"]),
+  .dispatch-page select,
   .dispatch-page textarea,
-  .dispatch-page button,
-  .return-page input,
+  .return-page input:not([type="checkbox"]):not([type="radio"]),
+  .return-page select,
   .return-page textarea,
-  .return-page button,
-  .schedule-page input,
+  .schedule-page input:not([type="checkbox"]):not([type="radio"]),
+  .schedule-page select,
   .schedule-page textarea,
-  .schedule-page button,
-  .reservation-page input,
+  .reservation-page input:not([type="checkbox"]):not([type="radio"]),
+  .reservation-page select,
   .reservation-page textarea,
-  .reservation-page button {
+  .incident-page input:not([type="checkbox"]):not([type="radio"]),
+  .incident-page select,
+  .incident-page textarea,
+  .lost-items-page input:not([type="checkbox"]):not([type="radio"]),
+  .lost-items-page select,
+  .lost-items-page textarea {
+    width: 100%;
+    min-width: 0;
     max-width: 100%;
   }
 

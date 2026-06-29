@@ -199,6 +199,10 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         ? "return-page"
         : kind === "reservation"
           ? "schedule-page reservation-page"
+          : kind === "incident"
+            ? "incident-page"
+            : kind === "lost-items"
+              ? "lost-items-page"
           : "";
 
   async function reloadReservations() {
@@ -4232,8 +4236,8 @@ async function notifyDriveArchiveResult(result: DriveArchiveResult, setPushNotic
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  const { label, ...rest } = props;
-  return <label className="label">{label}<input className="field min-h-12" {...rest} /></label>;
+  const { label, className, ...rest } = props;
+  return <label className="label min-w-0 max-w-full">{label}<input className={`field min-h-12 min-w-0 max-w-full ${className || ""}`} {...rest} /></label>;
 }
 
 function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {
@@ -4242,11 +4246,11 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { l
 }
 
 function FormBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div><p className="mb-1 text-sm font-black">{title}</p>{children}</div>;
+  return <div className="min-w-0 max-w-full"><p className="mb-1 text-sm font-black">{title}</p>{children}</div>;
 }
 
 function CompactRow({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-2 sm:grid-flow-col sm:auto-cols-fr">{children}</div>;
+  return <div className="grid min-w-0 max-w-full gap-2 sm:grid-flow-col sm:auto-cols-fr">{children}</div>;
 }
 
 function DateTimeTodayField({
@@ -4266,7 +4270,7 @@ function DateTimeTodayField({
     onTimeChange(currentTimeKorea());
   }
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_8rem]">
+    <div className="grid w-full min-w-0 max-w-full gap-2 overflow-hidden sm:grid-cols-[minmax(0,1fr)_9rem_8rem]">
       <Input
         name="date"
         label="날짜"
