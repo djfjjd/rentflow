@@ -905,7 +905,8 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 
 function AdminNav() {
   const pathname = usePathname();
-  const showSettingsButton = pathname === "/admin";
+  const normalizedPathname = normalizeRoutePath(pathname);
+  const showSettingsButton = normalizedPathname === "/admin";
   const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
 
   return (
@@ -913,7 +914,7 @@ function AdminNav() {
       <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2">
         {visibleItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active = normalizedPathname === item.href || normalizedPathname.startsWith(`${item.href}/`);
           return (
             <Fragment key={item.href}>
               <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href}>
@@ -931,6 +932,11 @@ function AdminNav() {
       </div>
     </nav>
   );
+}
+
+function normalizeRoutePath(pathname: string) {
+  if (!pathname || pathname === "/") return "/";
+  return pathname.replace(/\/+$/, "") || "/";
 }
 
 function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contracts: ContractV2[]; vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
