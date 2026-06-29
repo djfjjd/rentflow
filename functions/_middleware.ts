@@ -1,7 +1,7 @@
 import { authCookieName, readCookie, verifyAuthToken } from "../lib/auth/jwt";
 import { isRouteAllowedForSession } from "../lib/auth/access";
 import { getProtectedRoute } from "../lib/auth/protected-routes";
-import { isSettingsEmailAllowed, settings2faCookieName, verifySettings2faCookie } from "../lib/settings-2fa";
+import { hasSettings2faAccess, isDeveloperSettingsBypass, isSettingsEmailAllowed } from "../lib/settings-2fa";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -42,7 +42,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    const settingsVerified = await verifySettings2faCookie(readCookie(request.headers.get("Cookie"), settings2faCookieName), session.email, env.JWT_SECRET || "");
+    const settingsVerified = await hasSettings2faAccess(request.headers.get("Cookie"), session, env);
+    if (isVerifyPath && isDeveloperSettingsBypass(session, env)) {
+      return Response.redirect(new URL("/admin/settings", url.origin).toString(), 302);
+    }
     if (!settingsVerified && !isVerifyPath) {
       const verifyUrl = new URL("/admin/settings/verify", url.origin);
       verifyUrl.searchParams.set("next", `${url.pathname}${url.search}`);

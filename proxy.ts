@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authCookieName, verifyAuthToken } from "./lib/auth/jwt";
 import { isRouteAllowedForSession } from "./lib/auth/access";
 import { getProtectedRoute } from "./lib/auth/protected-routes";
-import { isSettingsEmailAllowed, settings2faCookieName, verifySettings2faCookie } from "./lib/settings-2fa";
+import { hasSettings2faAccess, isDeveloperSettingsBypass, isSettingsEmailAllowed } from "./lib/settings-2fa";
 
 export async function proxy(request: NextRequest) {
   const route = getProtectedRoute(request.nextUrl.pathname);
@@ -31,7 +31,10 @@ export async function proxy(request: NextRequest) {
     if (!isSettingsEmailAllowed(session, process.env)) {
       return new NextResponse("권한이 없습니다.", { status: 403 });
     }
-    const settingsVerified = await verifySettings2faCookie(request.cookies.get(settings2faCookieName)?.value, session.email, process.env.JWT_SECRET || "");
+    const settingsVerified = await hasSettings2faAccess(request.headers.get("Cookie"), session, process.env);
+    if (isVerifyPath && isDeveloperSettingsBypass(session, process.env)) {
+      return NextResponse.redirect(new URL("/admin/settings", request.url));
+    }
     if (!settingsVerified && !isVerifyPath) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/settings/verify";

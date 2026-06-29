@@ -1,5 +1,5 @@
 import { authCookieName, readCookie, verifyAuthToken } from "../../../lib/auth/jwt";
-import { isSettingsEmailAllowed, settings2faCookieName, verifySettings2faCookie } from "../../../lib/settings-2fa";
+import { hasSettings2faAccess, isSettingsEmailAllowed } from "../../../lib/settings-2fa";
 
 export type AdminApiEnv = {
   ADMIN_EMAIL?: string;
@@ -19,7 +19,7 @@ export async function requireAdminSession(request: Request, env: AdminApiEnv, _a
     if (!isSettingsEmailAllowed(session, env)) {
       return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }) };
     }
-    const verified = await verifySettings2faCookie(readCookie(request.headers.get("Cookie"), settings2faCookieName), session.email, env.JWT_SECRET || "");
+    const verified = await hasSettings2faAccess(request.headers.get("Cookie"), session, env);
     if (!verified) {
       return { response: Response.json({ error: "설정센터 2단계 인증이 필요합니다.", code: "settings_2fa_required" }, { status: 403 }) };
     }

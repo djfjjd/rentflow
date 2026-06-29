@@ -26,6 +26,16 @@ export function isSettingsEmailAllowed(session: AuthSession, env: SettingsEnv) {
   return emailsFromEnv(env, ["ADMIN_EMAIL", "TEAM_LEAD_EMAILS"]).includes(normalizeEmail(session.email));
 }
 
+export function isDeveloperSettingsBypass(session: AuthSession, env: SettingsEnv) {
+  if (session.role !== "super_admin") return false;
+  return Boolean(session.isDeveloper) || normalizeEmail(session.email) === normalizeEmail(String(env.ADMIN_EMAIL || ""));
+}
+
+export async function hasSettings2faAccess(cookieHeader: string | null | undefined, session: AuthSession, env: SettingsEnv) {
+  if (isDeveloperSettingsBypass(session, env)) return true;
+  return verifySettings2faCookie(readCookie(cookieHeader, settings2faCookieName), session.email, String(env.JWT_SECRET || ""));
+}
+
 export async function createSettingsChallenge(email: string, secret: string) {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const exp = Math.floor(Date.now() / 1000) + codeTtlSeconds;
