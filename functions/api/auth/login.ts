@@ -1,17 +1,16 @@
-import { buildSessionCookie, createAuthToken, normalizeEmail } from "../../../lib/auth/jwt";
+import { buildSessionCookie, createAuthToken, normalizeEmail, readCookie } from "../../../lib/auth/jwt";
 import { ensureStaffDeviceSchema } from "../admin/staff";
 import type { Role } from "../../../lib/auth/roles";
 import { writeAuditLog } from "../../../lib/audit-logs";
+import { safeText } from "../_d1-utils";
 
 type Env = {
   ADMIN_EMAIL?: string;
   TEAM_LEAD_EMAILS?: string;
-  ADMIN_LOGIN_ID?: string;
-  ADMIN_LOGIN_PASSWORD?: string;
-  MANAGER_LOGIN_ID?: string;
-  MANAGER_LOGIN_PASSWORD?: string;
-  STAFF_LOGIN_ID?: string;
-  STAFF_LOGIN_PASSWORD?: string;
+  DEVELOPER_PASSWORD?: string;
+  ADMIN_PASSWORD?: string;
+  MANAGER_PASSWORD?: string;
+  STAFF_PASSWORD?: string;
   JWT_SECRET?: string;
   DB: any;
 };
@@ -26,40 +25,77 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: "Auth environment variables are not configured." }, { status: 500 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { accountType?: string; email?: string; loginId?: string; login_id?: string; password?: string; deviceId?: string; device_id?: string };
+  const body = (await request.json().catch(() => ({}))) as { accountType?: string; password?: string; deviceId?: string; device_id?: string };
   const accountType = String(body.accountType || "");
-  const email = normalizeEmail(String(body.email || ""));
-  const loginId = String(body.loginId || body.login_id || "");
   const password = String(body.password || "");
-  const deviceId = String(body.deviceId || body.device_id || "");
+  const deviceId = String(body.deviceId || body.device_id || readCookie(request.headers.get("Cookie"), "rentflow_device_id") || crypto.randomUUID());
   const account = getPasswordAccount(accountType, env);
-  if (!email || !account || loginId !== account.loginId || password !== account.password) {
-    await recordLoginLog(env, request, { email, loginId, deviceId, status: "failure", message: "invalid credentials" });
+  let email = account?.email || "";
+  if (!account || !account.password || password !== account.password) {
+    await recordLoginLog(env, request, { email, deviceId, status: "failure", message: "invalid credentials" });
     return Response.json({ error: "인증 정보가 올바르지 않습니다." }, { status: 401 });
   }
+  if (account.isDeveloper && !account.email) {
+    return Response.json({ error: "ADMIN_EMAIL is not configured." }, { status: 500 });
+  }
 
-  const isDeveloper = email === normalizeEmail(env.ADMIN_EMAIL || "");
+  const device = await getDeviceByDeviceId(env.DB, deviceId);
+  const url = new URL(request.url);
+  if (!device || device.status === "승인대기") {
+    return Response.json(
+      { requiresDeviceRegistration: true, redirectTo: "/auth/register-device", deviceId },
+      { status: 202, headers: { "Set-Cookie": buildDeviceCookie(deviceId, url.protocol === "https:") } },
+    );
+  }
+  if (device?.status === "차단") {
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "blocked device" });
+    return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
+  }
+
+  email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
+  const isDeveloper = account.isDeveloper;
   const role = account.role;
   const token = await createAuthToken({ email, role, isDeveloper }, jwtSecret);
-  await recordLoginLog(env, request, { email, loginId, role, deviceId, status: "success", message: "login success" });
-  const url = new URL(request.url);
+  await recordLoginLog(env, request, { email, role, deviceId, status: "success", message: "login success" });
   return Response.json(
     { user: { email, role, isDeveloper }, redirectTo: account.redirectTo },
-    { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
+    {
+      headers: [
+        ["Set-Cookie", buildSessionCookie(token, url.protocol === "https:")],
+        ["Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:")],
+      ],
+    },
   );
 };
 
-function getPasswordAccount(accountType: string, env: Env): { loginId: string; password: string; role: Role; redirectTo: string } | null {
+function getPasswordAccount(accountType: string, env: Env): { password: string; role: Role; redirectTo: string; email: string; isDeveloper: boolean } | null {
   if (accountType === "admin") {
-    return { loginId: String(env.ADMIN_LOGIN_ID || ""), password: String(env.ADMIN_LOGIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin" };
+    return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: firstTeamLeadEmail(env), isDeveloper: false };
+  }
+  if (accountType === "developer") {
+    return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin/settings", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true };
   }
   if (accountType === "manager") {
-    return { loginId: String(env.MANAGER_LOGIN_ID || ""), password: String(env.MANAGER_LOGIN_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard" };
+    return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard", email: "", isDeveloper: false };
   }
   if (accountType === "staff") {
-    return { loginId: String(env.STAFF_LOGIN_ID || ""), password: String(env.STAFF_LOGIN_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard" };
+    return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard", email: "", isDeveloper: false };
   }
   return null;
+}
+
+function firstTeamLeadEmail(env: Env) {
+  return normalizeEmail(String(env.TEAM_LEAD_EMAILS || "").split(/[,\s;]+/).find(Boolean) || "");
+}
+
+async function getDeviceByDeviceId(db: any, deviceId: string) {
+  if (!db) return null;
+  await ensureStaffDeviceSchema(db);
+  return db.prepare("SELECT id, status, email FROM devices WHERE device_id = ?").bind(safeText(deviceId)).first();
+}
+
+function buildDeviceCookie(deviceId: string, secure: boolean) {
+  return `rentflow_device_id=${deviceId}; Path=/; Max-Age=${60 * 60 * 24 * 365}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 }
 
 async function recordLoginLog(

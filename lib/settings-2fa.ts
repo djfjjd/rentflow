@@ -3,6 +3,7 @@ import { authCookieName, normalizeEmail, readCookie, verifyAuthToken, type AuthS
 
 export const settings2faCookieName = "settings_2fa";
 export const settings2faChallengeCookieName = "settings_2fa_challenge";
+export const deviceRegistrationChallengeCookieName = "device_registration_challenge";
 
 const codeTtlSeconds = 10 * 60;
 const verifiedTtlSeconds = 60 * 60;
