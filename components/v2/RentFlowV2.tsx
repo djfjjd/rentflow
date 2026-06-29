@@ -524,10 +524,11 @@ export function VehicleSearchCombobox({
 }: {
   vehicles: VehicleV2[];
   value?: string;
-  onChange: (vehicle: VehicleV2) => void;
+  onChange: (vehicle: VehicleV2 | null) => void;
 }) {
   const [query, setQuery] = useState(value || "");
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return vehicles;
@@ -539,9 +540,23 @@ export function VehicleSearchCombobox({
       });
   }, [query, vehicles]);
 
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
+
+  function clearVehicleSelection() {
+    setQuery("");
+    onChange(null);
+    setOpen(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }
+
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         className="field min-h-12 w-full"
         placeholder="차량번호 4자리 또는 차종 검색"
         value={query}
@@ -552,6 +567,18 @@ export function VehicleSearchCombobox({
         }}
         onFocus={() => setOpen(true)}
       />
+      {query ? (
+        <button
+          className="dispatch-board-search-clear"
+          type="button"
+          aria-label="선택 차량 지우기"
+          onMouseDown={(event) => event.preventDefault()}
+          onTouchStart={(event) => event.preventDefault()}
+          onClick={clearVehicleSelection}
+        >
+          ×
+        </button>
+      ) : null}
       {open ? (
         <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-[#d8ded8] bg-white shadow-xl">
           {results.length ? (
@@ -947,7 +974,7 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contr
         }}
       >
         <FormBlock title="차량 선택">
-          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={(next) => setVehicle(next || undefined)} />
         </FormBlock>
         <DateTimeTodayField key={`dispatch-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <FormBlock title="구분">
@@ -1068,7 +1095,7 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
       }}
     >
       <FormBlock title="차량 선택">
-        <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
+        <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={(next) => setVehicle(next || undefined)} />
       </FormBlock>
       <DateTimeTodayField key={`return-date-${resetKey}`} date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
       <div className="field-block">
@@ -1248,7 +1275,7 @@ function IncidentForm({
       >
         <Segmented value={type} values={["사고", "정비"]} onChange={changeType} />
         <FormBlock title="차량 선택">
-          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={(next) => setVehicle(next || undefined)} />
         </FormBlock>
         <Input name="recordDate" label="날짜" type="date" defaultValue={todayKorea()} />
         <Input name="content" label={type === "사고" ? "사고부위" : "정비내용"} required />
@@ -1616,7 +1643,7 @@ function LostItemForm({ vehicles, dispatches, lostItems, onLostItems }: { vehicl
       })}
       >
         <FormBlock title="차량 선택">
-          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={setVehicle} />
+          <VehicleSearchCombobox key={resetKey} vehicles={vehicles} onChange={(next) => setVehicle(next || undefined)} />
         </FormBlock>
         {vehicle ? (
           <FormBlock title="배차기록 선택">
@@ -3235,7 +3262,7 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
         await onSaved();
         onClose();
       }} className="space-y-3">
-        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={dispatch.rentalCarNumber} onChange={(next) => setSelected(next || undefined)} /></FormBlock>
         <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <FormBlock title="구분">
           <Segmented value={businessType} values={["보험", "자차", "셀프"]} itemClassNames={dispatchTypeSegmentClasses} onChange={setBusinessType} />
@@ -3280,7 +3307,7 @@ function ReturnEditModal({ record, vehicles, onClose, onSaved }: { record: Retur
         await onSaved();
         onClose();
       }} className="space-y-3">
-        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={setSelected} /></FormBlock>
+        <FormBlock title="차량번호"><VehicleSearchCombobox vehicles={vehicles} value={record.rentalCarNumber} onChange={(next) => setSelected(next || undefined)} /></FormBlock>
         <DateTimeTodayField date={date} time={time} onDateChange={setDate} onTimeChange={setTime} />
         <Input name="mileage" label="회차키로수" type="number" defaultValue={record.mileage} />
         <Input name="fuelDisplay" label="회차주유량" defaultValue={record.fuelDisplay} />
@@ -3315,9 +3342,24 @@ function IncidentBoard({
     .sort((a, b) => new Date((b.item.accidentDate || b.item.foundDate || b.item.createdAt || 0) as string).getTime() - new Date((a.item.accidentDate || a.item.foundDate || a.item.createdAt || 0) as string).getTime());
   useEffect(() => setPage(1), [tab]);
   async function toggle(row: typeof rows[number], checked: boolean) {
+    const wasCompleted = isIncidentCompleted(row.item);
     await sendJson(`${row.endpoint}?id=${encodeURIComponent(row.item.id)}`, { isCompleted: checked, completed: checked, repaired: checked, completedAt: checked ? new Date().toISOString() : null }, "PATCH");
     if (row.type === "사고") await onAccidents();
     else await onMaintenance();
+    if (!wasCompleted && checked) {
+      const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
+      const body = `${clean(row.item.plateNumber)} 수리완료 처리되었습니다.${content ? `\n${clean(content)}` : ""}${clean(row.item.memo || row.item.description) ? `\n${clean(row.item.memo || row.item.description)}` : ""}`;
+      try {
+        await sendPushNotification({
+          title: "RentFlow 수리완료",
+          body,
+          url: "/app/incident",
+          tag: `repair-completed-${row.item.id}`,
+        });
+      } catch (error) {
+        console.warn("repair completion push failed", error);
+      }
+    }
   }
   return (
     <section data-horizontal-scroll="true" className="panel overflow-x-auto">
@@ -3348,8 +3390,23 @@ function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; 
     .sort((a, b) => new Date(b.foundDate || b.createdAt || 0).getTime() - new Date(a.foundDate || a.createdAt || 0).getTime());
   useEffect(() => setPage(1), [tab]);
   async function toggle(id: string, checked: boolean) {
+    const current = items.find((item) => item.id === id);
+    const wasCompleted = current ? isLostItemCompleted(current) : false;
     await sendJson(`/api/lost-items?id=${encodeURIComponent(id)}`, { isCompleted: checked, isResolved: checked, completed: checked, resolved: checked, resolvedAt: checked ? new Date().toISOString() : null }, "PATCH");
     await onLostItems();
+    if (!wasCompleted && checked && current) {
+      const body = `${clean(current.vehicleNumber)} 분실물 정리완료 처리되었습니다.${clean(current.customerName) ? `\n${clean(current.customerName)}` : ""}${clean(current.memo) ? `\n${clean(current.memo)}` : ""}`;
+      try {
+        await sendPushNotification({
+          title: "RentFlow 분실물 정리완료",
+          body,
+          url: "/app/lost-items",
+          tag: `lost-item-completed-${id}`,
+        });
+      } catch (error) {
+        console.warn("lost item completion push failed", error);
+      }
+    }
   }
   return (
     <section data-horizontal-scroll="true" className="panel overflow-x-auto">
