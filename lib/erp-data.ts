@@ -105,6 +105,9 @@ export type ReturnRecord = {
 export type Reservation = {
   id: string;
   date: string;
+  startDate?: string;
+  endDate?: string;
+  durationDays?: number;
   time: string;
   endTime?: string;
   vehicleNumber: string;

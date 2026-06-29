@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS vehicles (
 CREATE TABLE IF NOT EXISTS dispatches (
   id TEXT PRIMARY KEY,
   date TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  duration_days INTEGER DEFAULT 1,
   time TEXT,
   claim_number TEXT,
   customer_name TEXT NOT NULL,

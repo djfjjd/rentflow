@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders } from "./_d1-utils";
+import { addDays, parseReservationDateRange } from "../../lib/reservation-date-range";
 
 type Env = {
   DB: any;
@@ -8,7 +9,7 @@ export async function onRequestGet({ env }: { env: Env }) {
   try {
     await ensureReservationSchema(env);
     const { results } = await env.DB.prepare(
-      `SELECT id, date, reservation_text, reserver_name, created_at, updated_at
+      `SELECT id, date, start_date, end_date, duration_days, reservation_text, reserver_name, created_at, updated_at
        FROM reservations
        WHERE date IS NOT NULL AND date != ''
        ORDER BY date ASC, COALESCE(updated_at, created_at, '') ASC`
@@ -25,8 +26,11 @@ export async function onRequestGet({ env }: { env: Env }) {
       "X-WR-TIMEZONE:Asia/Seoul",
       ...(results || []).flatMap((row: any) => {
         const summary = escapeIcs(row.reservation_text || row.reserver_name || "예약내용 없음");
-        const start = toIcsDate(row.date);
-        const end = addOneDayIcs(row.date);
+        const range = row.start_date && row.end_date
+          ? { startDate: row.start_date, endDate: row.end_date, durationDays: Number(row.duration_days || 1) }
+          : parseReservationDateRange(row.date, row.reservation_text || "");
+        const start = toIcsDate(range.startDate);
+        const end = toIcsDate(addDays(range.endDate, 1));
         return [
           "BEGIN:VEVENT",
           `UID:${escapeIcs(row.id || `${row.date}-${summary}`)}@rentflow`,
@@ -58,6 +62,9 @@ async function ensureReservationSchema(env: Env) {
     CREATE TABLE IF NOT EXISTS reservations (
       id TEXT PRIMARY KEY,
       date TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      duration_days INTEGER DEFAULT 1,
       reservation_text TEXT,
       reserver_name TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -66,6 +73,9 @@ async function ensureReservationSchema(env: Env) {
   `).run();
   await ensureColumns(env.DB, "reservations", [
     { name: "date", definition: "TEXT" },
+    { name: "start_date", definition: "TEXT" },
+    { name: "end_date", definition: "TEXT" },
+    { name: "duration_days", definition: "INTEGER DEFAULT 1" },
     { name: "reservation_text", definition: "TEXT" },
     { name: "reserver_name", definition: "TEXT" },
     { name: "created_at", definition: "DATETIME" },
@@ -75,12 +85,6 @@ async function ensureReservationSchema(env: Env) {
 
 function toIcsDate(date: string) {
   return date.replaceAll("-", "").slice(0, 8);
-}
-
-function addOneDayIcs(date: string) {
-  const parsed = new Date(`${date}T00:00:00+09:00`);
-  parsed.setUTCDate(parsed.getUTCDate() + 1);
-  return parsed.toISOString().slice(0, 10).replaceAll("-", "");
 }
 
 function toIcsDateTime(date: Date) {

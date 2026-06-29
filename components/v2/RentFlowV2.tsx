@@ -34,6 +34,7 @@ import { Pagination } from "@/components/Pagination";
 import { DeveloperBadge } from "@/components/DeveloperBadge";
 import { RepairShopMapPage } from "@/components/repair-shops/RepairShopMapPage";
 import { SettingsDashboard } from "@/app/admin/settings/components/SettingsDashboard";
+import { eachDateInRange, formatReservationDurationLabel, formatReservationRangeLabel, normalizeReservationRange } from "@/lib/reservation-date-range";
 import {
   createId,
   fetchJson,
@@ -469,7 +470,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
   const first = new Date(`${monthStart}T00:00:00`);
   const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   const offset = first.getDay();
-  const byDate = useMemo(() => groupBy(reservations, (item) => item.date), [reservations]);
+  const byDate = useMemo(() => groupReservationsByCoveredDate(reservations), [reservations]);
   const selectedItems = byDate[selected] || [];
 
   return (
@@ -493,40 +494,85 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
                 다음
               </button>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#657268]">
-              {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
-                <span key={day}>{day}</span>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {Array.from({ length: offset }).map((_, index) => (
-                <span key={`blank-${index}`} />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, index) => {
-                const day = String(index + 1).padStart(2, "0");
-                const date = `${selected.slice(0, 7)}-${day}`;
-                const hasItems = (byDate[date] || []).length > 0;
-                return (
-                  <button
-                    className={`relative min-h-12 rounded-lg border text-center text-sm font-black ${date === selected ? "border-[#116149] bg-[#e3f3eb]" : "border-[#edf0ec] bg-[#fafbf9]"}`}
-                    key={date}
-                    title={(byDate[date] || []).map(scheduleText).join("\n")}
-                    type="button"
-                    onClick={() => setSelected(date)}
-                  >
-                    {index + 1}
-                    {hasItems ? <span className="absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#c4492d]" /> : null}
-                  </button>
-                );
-              })}
-            </div>
+            <ReservationMonthGrid
+              byDate={byDate}
+              daysInMonth={daysInMonth}
+              month={selected.slice(0, 7)}
+              offset={offset}
+              selected={selected}
+              today={today}
+              onSelect={setSelected}
+            />
             <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
               <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
-              {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)}</p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+              {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)} <span className="text-[#68746d]">({reservationRangeText(item)})</span></p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
             </div>
         </OverlayModal>
       ) : null}
     </div>
+  );
+}
+
+function ReservationMonthGrid({
+  byDate,
+  daysInMonth,
+  month,
+  offset,
+  selected,
+  today,
+  onSelect,
+}: {
+  byDate: Record<string, ReservationV2[]>;
+  daysInMonth: number;
+  month: string;
+  offset: number;
+  selected: string;
+  today: string;
+  onSelect: (date: string) => void;
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#657268]">
+        {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+          <span key={day}>{day}</span>
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-7 gap-1">
+        {Array.from({ length: offset }).map((_, index) => (
+          <span key={`blank-${index}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, index) => {
+          const day = String(index + 1).padStart(2, "0");
+          const date = `${month}-${day}`;
+          const items = byDate[date] || [];
+          const hasItems = items.length > 0;
+          const hasOverlap = items.length > 1;
+          const hasRange = items.some((item) => {
+            const range = normalizeReservationRange(item);
+            return range.durationDays > 1 && date >= range.startDate && date <= range.endDate;
+          });
+          const hasDot = items.some((item) => {
+            const range = normalizeReservationRange(item);
+            return date === range.startDate || date === range.endDate || range.durationDays === 1;
+          });
+          const indicatorColor = hasOverlap ? "bg-[#ef4444]" : "bg-[#116149]";
+          return (
+            <button
+              className={`relative min-h-12 overflow-hidden rounded-lg border text-center text-sm font-black ${date === selected ? "border-[#116149] bg-[#e3f3eb]" : date === today ? "border-[#c7d7c9] bg-[#f0f7f1]" : "border-[#edf0ec] bg-[#fafbf9]"}`}
+              key={date}
+              title={items.map((item) => `${scheduleText(item)} (${reservationRangeText(item)})`).join("\n")}
+              type="button"
+              onClick={() => onSelect(date)}
+            >
+              <span className="relative z-10">{index + 1}</span>
+              {hasRange ? <span className={`absolute bottom-2 left-0 right-0 h-[3px] sm:h-1 ${indicatorColor}`} /> : null}
+              {hasDot ? <span className={`absolute bottom-[5px] left-1/2 h-2 w-2 -translate-x-1/2 rounded-full ring-2 ring-white ${indicatorColor}`} /> : null}
+              {!hasRange && hasItems && !hasDot ? <span className={`absolute bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full ${indicatorColor}`} /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -2698,17 +2744,35 @@ function PartnerModal({ partner, onClose, onSaved }: { partner: PartnerAddressV2
 }
 
 function CalendarPage({ reservations }: { reservations: ReservationV2[] }) {
-  const grouped = groupBy(reservations, (item) => item.date);
+  const [selected, setSelected] = useState(todayKorea());
+  const monthStart = `${selected.slice(0, 7)}-01`;
+  const first = new Date(`${monthStart}T00:00:00`);
+  const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const offset = first.getDay();
+  const grouped = useMemo(() => groupReservationsByCoveredDate(reservations), [reservations]);
+  const selectedItems = grouped[selected] || [];
   return (
     <section className="panel space-y-4">
       <CalendarSubscribeBox />
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {Object.keys(grouped).sort().map((date) => (
-          <article className="rounded-lg border border-[#d8ded8] bg-white p-4" key={date}>
-            <h2 className="mb-2 text-lg font-black">{formatDateDot(date)}</h2>
-            {grouped[date].map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)}</p>)}
-          </article>
-        ))}
+      <div className="rounded-lg border border-[#d8ded8] bg-white p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <button className="small-btn" onClick={() => setSelected(shiftMonth(selected, -1))} type="button">이전</button>
+          <strong className="text-lg font-black">{selected.slice(0, 7)}</strong>
+          <button className="small-btn" onClick={() => setSelected(shiftMonth(selected, 1))} type="button">다음</button>
+        </div>
+        <ReservationMonthGrid
+          byDate={grouped}
+          daysInMonth={daysInMonth}
+          month={selected.slice(0, 7)}
+          offset={offset}
+          selected={selected}
+          today={todayKorea()}
+          onSelect={setSelected}
+        />
+        <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
+          <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
+          {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)} <span className="text-[#68746d]">({reservationRangeText(item)})</span></p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+        </div>
       </div>
     </section>
   );
@@ -2770,7 +2834,10 @@ function CalendarSubscribeBox() {
 function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: VehicleV2[]; reservations: ReservationV2[]; dispatches: DispatchV2[]; returns: ReturnV2[] }) {
   const today = todayKorea();
   const dashboardRows = buildVehicleDashboardRows(vehicles, dispatches, returns);
-  const todayReservationsCount = reservations.filter((reservation) => normalizeReservationDate(reservation.date) === today).length;
+  const todayReservationsCount = reservations.filter((reservation) => {
+    const range = normalizeReservationRange(reservation);
+    return range.startDate <= today && today <= range.endDate;
+  }).length;
   const [searchTerm, setSearchTerm] = useState("");
   const kpis = [
     ["전체차량", vehicles.length],
@@ -4080,12 +4147,12 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
   const today = todayKorea();
   const rows = [...reservations]
     .filter((item) => {
-      const date = normalizeReservationDate(item.date);
-      return tab === "upcoming" ? date >= today : date < today;
+      const range = normalizeReservationRange(item);
+      return tab === "upcoming" ? range.endDate >= today : range.endDate < today;
     })
     .sort((a, b) => {
-      const left = normalizeReservationDate(a.date);
-      const right = normalizeReservationDate(b.date);
+      const left = normalizeReservationRange(a).startDate;
+      const right = normalizeReservationRange(b).startDate;
       return tab === "upcoming" ? left.localeCompare(right) : right.localeCompare(left);
     });
   useEffect(() => setPage(1), [tab]);
@@ -4105,7 +4172,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
       <div data-horizontal-scroll="true" className="reservation-table-wrap schedule-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[980px] table-fixed text-left text-sm">
           <colgroup>
-            <col className="w-[90px]" />
+            <col className="w-[145px]" />
             <col className="w-[110px]" />
             <col />
             <col className="w-[80px]" />
@@ -4119,7 +4186,10 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
               const reservationText = reservation.reservationText || reservation.memo || "";
               return (
                 <tr className="border-b [&>td]:whitespace-nowrap [&>td]:align-middle" key={reservation.id}>
-                  <td>{reservation.date}</td>
+                  <td>
+                    <div className="font-black">{reservationRangeText(reservation)}</div>
+                    {reservationDurationText(reservation) ? <div className="text-xs font-bold text-[#68746d]">{reservationDurationText(reservation)}</div> : null}
+                  </td>
                   <td className="font-black">
                     <div className="reservation-name-cell">
                       <span className="reservation-name-text" title={reservation.customerName}>{reservation.customerName}</span>
@@ -4177,7 +4247,8 @@ function ReservationDetailModal({ reservation, onClose }: { reservation: Reserva
   return (
     <ModalShell title="예약 상세내용" onClose={onClose}>
       <div className="grid gap-3 text-sm font-bold text-[#16211d]">
-        <p><span className="text-[#667269]">예약일</span><br />{reservation.date || "-"}</p>
+        <p><span className="text-[#667269]">예약일</span><br />{reservationRangeText(reservation) || "-"}</p>
+        {reservationDurationText(reservation) ? <p><span className="text-[#667269]">기간</span><br />{reservationDurationText(reservation)}</p> : null}
         <p><span className="text-[#667269]">예약자</span><br />{reservation.customerName || reservation.reserverName || "-"}</p>
         <p className="whitespace-pre-wrap break-words"><span className="text-[#667269]">예약내용</span><br />{reservation.reservationText || reservation.memo || "-"}</p>
       </div>
@@ -5001,6 +5072,31 @@ function groupBy<T>(items: T[], key: (item: T) => string) {
 
 function scheduleText(item: ReservationV2) {
   return firstText(item.reservationText, item.reserverName, item.customerName, "예약내용 없음");
+}
+
+function reservationRangeText(item: ReservationV2) {
+  return formatReservationRangeLabel(normalizeReservationRange(item));
+}
+
+function reservationDurationText(item: ReservationV2) {
+  return formatReservationDurationLabel(normalizeReservationRange(item));
+}
+
+function groupReservationsByCoveredDate(items: ReservationV2[]) {
+  return items.reduce<Record<string, ReservationV2[]>>((acc, item) => {
+    const range = normalizeReservationRange(item);
+    for (const date of eachDateInRange(range.startDate, range.endDate)) {
+      acc[date] = acc[date] || [];
+      acc[date].push(item);
+    }
+    return acc;
+  }, {});
+}
+
+function shiftMonth(date: string, amount: number) {
+  const parsed = new Date(`${date.slice(0, 7)}-01T00:00:00`);
+  parsed.setMonth(parsed.getMonth() + amount);
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 function newest(files: UploadedFileV2[]) {

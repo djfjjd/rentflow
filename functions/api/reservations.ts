@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
+import { parseReservationDateRange } from "../../lib/reservation-date-range";
 
 type Env = {
   DB: any;
@@ -21,11 +22,15 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureReservationSchema(env);
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
+    const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
     await env.DB.prepare(
-      "INSERT INTO reservations (id, date, time, end_time, vehicle_number, rent_car_number, customer_name, reserver_name, reservation_text, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO reservations (id, date, start_date, end_date, duration_days, time, end_time, vehicle_number, rent_car_number, customer_name, reserver_name, reservation_text, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(r.id),
-      safeText(r.date),
+      range.startDate,
+      range.startDate,
+      range.endDate,
+      range.durationDays,
       safeText(r.time || "09:00"),
       safeNullableText(r.endTime),
       safeNullableText(r.vehicleNumber),
@@ -61,9 +66,10 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
+    const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
     await env.DB.prepare(
-      "UPDATE reservations SET date = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).bind(...safeBindValues([safeText(r.date), safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
+      "UPDATE reservations SET date = ?, start_date = ?, end_date = ?, duration_days = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).bind(...safeBindValues([range.startDate, range.startDate, range.endDate, range.durationDays, safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation update failed", { error: error instanceof Error ? error.message : String(error) });
@@ -94,12 +100,13 @@ export async function onRequestPut({ request, env }: { request: Request, env: En
     
     if (reservations.length > 0) {
       const stmt = env.DB.prepare(
-        "INSERT INTO reservations (id, date, time, end_time, vehicle_number, rent_car_number, customer_name, customer_car_number, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO reservations (id, date, start_date, end_date, duration_days, time, end_time, vehicle_number, rent_car_number, customer_name, customer_car_number, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       
-      const batch = reservations.map(r => 
-        stmt.bind(...safeBindValues([r.id, r.date, r.time, r.endTime || null, r.vehicleNumber, r.rentCarNumber || null, r.customerName, r.customerCarNumber || null, r.factoryName || null, r.pickupLocation || null, r.deliveryLocation || null, r.orderPerson || null, r.memo || null, r.route, r.repairShopPartnerId || null, r.status]))
-      );
+      const batch = reservations.map(r => {
+        const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
+        return stmt.bind(...safeBindValues([r.id, range.startDate, range.startDate, range.endDate, range.durationDays, r.time, r.endTime || null, r.vehicleNumber, r.rentCarNumber || null, r.customerName, r.customerCarNumber || null, r.factoryName || null, r.pickupLocation || null, r.deliveryLocation || null, r.orderPerson || null, r.memo || null, r.route, r.repairShopPartnerId || null, r.status]));
+      });
       
       await env.DB.batch(batch);
     }
@@ -115,6 +122,9 @@ function mapReservation(row: any) {
   return {
     id: row.id,
     date: row.date,
+    startDate: row.start_date || row.date,
+    endDate: row.end_date || row.date,
+    durationDays: row.duration_days || 1,
     time: row.time,
     endTime: row.end_time,
     vehicleNumber: row.vehicle_number,
@@ -141,6 +151,9 @@ async function ensureReservationSchema(env: Env) {
     CREATE TABLE IF NOT EXISTS reservations (
       id TEXT PRIMARY KEY,
       date TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      duration_days INTEGER DEFAULT 1,
       reservation_text TEXT,
       reserver_name TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -149,6 +162,9 @@ async function ensureReservationSchema(env: Env) {
   `).run();
   await ensureColumns(env.DB, "reservations", [
     { name: "date", definition: "TEXT" },
+    { name: "start_date", definition: "TEXT" },
+    { name: "end_date", definition: "TEXT" },
+    { name: "duration_days", definition: "INTEGER DEFAULT 1" },
     { name: "time", definition: "TEXT" },
     { name: "end_time", definition: "TEXT" },
     { name: "vehicle_number", definition: "TEXT" },

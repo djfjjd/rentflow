@@ -28,6 +28,9 @@ export type VehicleV2 = {
 export type ReservationV2 = {
   id: string;
   date: string;
+  startDate?: string;
+  endDate?: string;
+  durationDays?: number;
   time: string;
   endTime?: string;
   vehicleNumber?: string;
