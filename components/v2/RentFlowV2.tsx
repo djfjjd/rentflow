@@ -2710,6 +2710,7 @@ function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: 
   const today = todayKorea();
   const dashboardRows = buildVehicleDashboardRows(vehicles, dispatches, returns);
   const todayReservationsCount = reservations.filter((reservation) => normalizeReservationDate(reservation.date) === today).length;
+  const [searchTerm, setSearchTerm] = useState("");
   const kpis = [
     ["전체차량", vehicles.length],
     ["보험", dashboardRows.filter((row) => row.statusLabel === "보험").length],
@@ -2720,12 +2721,30 @@ function Dashboard({ vehicles, reservations, dispatches, returns }: { vehicles: 
     ["오늘 회차", returns.filter((r) => r.createdAt?.startsWith(today)).length],
     ["오늘 예약일정", `${todayReservationsCount}건`],
   ];
+
+  function handleStatusCardClick(label: string) {
+    if (label === "전체차량") {
+      setSearchTerm("");
+      return;
+    }
+    if (["보험", "자차", "셀프", "삼실"].includes(label)) {
+      setSearchTerm(label);
+    }
+  }
+
   return (
     <section className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {kpis.map(([label, value]) => <Kpi label={String(label)} value={String(value)} key={String(label)} />)}
+        {kpis.map(([label, value]) => (
+          <Kpi
+            label={String(label)}
+            value={String(value)}
+            key={String(label)}
+            onClick={["전체차량", "보험", "자차", "셀프", "삼실"].includes(String(label)) ? () => handleStatusCardClick(String(label)) : undefined}
+          />
+        ))}
       </div>
-      <VehicleStatusBoard rows={dashboardRows} />
+      <VehicleStatusBoard rows={dashboardRows} query={searchTerm} onQueryChange={setSearchTerm} />
     </section>
   );
 }
@@ -3745,8 +3764,7 @@ type VehicleDashboardRow = {
   updatedAt?: string;
 };
 
-function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
-  const [query, setQuery] = useState("");
+function VehicleStatusBoard({ rows, query, onQueryChange }: { rows: VehicleDashboardRow[]; query: string; onQueryChange: (value: string) => void }) {
   const [modelDetail, setModelDetail] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredRows = normalizedQuery
@@ -3767,8 +3785,13 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
             className="field min-h-10"
             placeholder="차량번호 4자리, 오더자, 수리처, 상태 검색"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => onQueryChange(event.target.value)}
           />
+          {query ? (
+            <button className="dispatch-board-search-clear" type="button" aria-label="검색어 지우기" onClick={() => onQueryChange("")}>
+              ×
+            </button>
+          ) : null}
         </div>
       </div>
       <div data-horizontal-scroll="true" className="vehicle-status-table-wrapper">
@@ -4809,7 +4832,15 @@ function FilterBar({ query, onQuery, placeholder }: { query: string; onQuery: (q
   return <label className="relative block min-w-0 flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#68746d]" size={18} /><input className="field min-h-12 w-full pl-10" placeholder={placeholder} value={query} onChange={(event) => onQuery(event.target.value)} /></label>;
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+  if (onClick) {
+    return (
+      <button className="rounded-lg border border-[#d8ded8] bg-white p-4 text-left transition hover:border-[#116149] hover:bg-[#f4fbf7]" type="button" onClick={onClick}>
+        <p className="text-sm font-black text-[#68746d]">{label}</p>
+        <p className="mt-1 text-2xl font-black">{value}</p>
+      </button>
+    );
+  }
   return <article className="rounded-lg border border-[#d8ded8] bg-white p-4"><p className="text-sm font-black text-[#68746d]">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></article>;
 }
 
