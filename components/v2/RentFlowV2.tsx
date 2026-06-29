@@ -265,6 +265,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
           <div className="header-top-row">
             <div className="header-left">
               <HeaderLogo isAdmin={isAdmin} />
+              <DeveloperBadge enabled />
             </div>
             <div className="header-center">
               <UnreadMessagesButton
@@ -279,7 +280,6 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
             </div>
             <div className="header-right">
               <QuickMenu />
-              <DeveloperBadge enabled={isAdmin} />
               <div className="desktop-calendar-button">
                 <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
               </div>
