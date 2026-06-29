@@ -3752,7 +3752,8 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
   const filteredRows = normalizedQuery
     ? rows.filter((row) => {
       const vehicleNumber = row.vehicleNumber || "";
-      const haystack = `${vehicleNumber} ${vehicleNumber.slice(-4)} ${row.ordererRepairShop}`.toLowerCase();
+      const statusAliases = row.statusLabel === "주차구역표시" ? "삼실" : "";
+      const haystack = `${vehicleNumber} ${vehicleNumber.slice(-4)} ${row.ordererRepairShop} ${row.statusLabel} ${statusAliases}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     })
     : rows;
@@ -3764,7 +3765,7 @@ function VehicleStatusBoard({ rows }: { rows: VehicleDashboardRow[] }) {
         <div className="vehicle-board-search">
           <input
             className="field min-h-10"
-            placeholder="차량번호 4자리, 오더자, 수리처 검색"
+            placeholder="차량번호 4자리, 오더자, 수리처, 상태 검색"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
