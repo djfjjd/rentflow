@@ -1,5 +1,6 @@
 import { safeBindValues, safeNullableText, safeText } from "../_d1-utils";
 import { requireAdminSession, type AdminApiEnv } from "./_auth";
+import { ensureAuditLogSchema, writeAuditLog } from "../../../lib/audit-logs";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -34,6 +35,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         now,
         now,
       ])).run();
+      await writeAuditLog(env.DB, { event: "staff_created", actorEmail: auth.session.email, targetId: id, metadata: { role: body.role, position: body.position } });
       return Response.json({ user: await getUser(env.DB, id) });
     }
 
@@ -48,6 +50,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
 
       if (action === "retire") {
         await retireUser(env.DB, id);
+        await writeAuditLog(env.DB, { event: "staff_resigned", actorEmail: auth.session.email, targetId: id });
         return Response.json({ user: await getUser(env.DB, id) });
       }
 
@@ -68,7 +71,11 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       values.push(new Date().toISOString(), id);
       await env.DB.prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
 
-      if (safeText(body.status) === "퇴사") await retireUser(env.DB, id);
+      if (body.role !== undefined) await writeAuditLog(env.DB, { event: "role_changed", actorEmail: auth.session.email, targetId: id, metadata: { role: body.role } });
+      if (safeText(body.status) === "퇴사") {
+        await retireUser(env.DB, id);
+        await writeAuditLog(env.DB, { event: "staff_resigned", actorEmail: auth.session.email, targetId: id });
+      }
       return Response.json({ user: await getUser(env.DB, id) });
     }
 
@@ -80,6 +87,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
       await retireUser(env.DB, id);
       await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(safeText(id)).run();
+      await writeAuditLog(env.DB, { event: "staff_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });
     }
 
@@ -134,6 +142,21 @@ export async function ensureStaffDeviceSchema(db: any) {
       FOREIGN KEY (device_id) REFERENCES devices(id)
     )`,
   ).run();
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS login_logs (
+      id TEXT PRIMARY KEY,
+      email TEXT,
+      login_id TEXT,
+      role TEXT,
+      device_id TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      status TEXT NOT NULL,
+      message TEXT,
+      created_at TEXT NOT NULL
+    )`,
+  ).run();
+  await ensureAuditLogSchema(db);
 }
 
 async function getUser(db: any, id: string) {

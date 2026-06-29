@@ -62,6 +62,8 @@ export function StaffManagement() {
   }
 
   async function patchUser(user: StaffUser, payload: Record<string, unknown>, doneMessage: string) {
+    if (payload.role !== undefined && !confirm(`${user.name} 직원의 권한을 변경하시겠습니까?`)) return;
+    if (payload.action === "retire" && !confirm(`${user.name} 직원을 퇴사 처리하시겠습니까? 모든 기기와 세션이 차단됩니다.`)) return;
     const response = await fetch(`/api/admin/staff?id=${encodeURIComponent(user.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

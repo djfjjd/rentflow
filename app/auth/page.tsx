@@ -17,6 +17,9 @@ function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/app";
+  const [accountType, setAccountType] = useState<"admin" | "manager" | "staff">("admin");
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,13 +32,16 @@ function AuthForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ accountType, loginId, password, email }),
       });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; user?: { role?: string }; redirectTo?: string };
       if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || "로그인에 실패했습니다.");
       }
-      router.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/app");
+      const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "";
+      const fallback = data.redirectTo || "/app/dashboard";
+      const target = safeNext && (data.user?.role === "super_admin" || !safeNext.startsWith("/admin")) ? safeNext : fallback;
+      router.replace(target);
       router.refresh();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : String(loginError));
@@ -47,6 +53,22 @@ function AuthForm() {
   return (
     <AuthShell>
         <form className="grid gap-3" onSubmit={login}>
+          <label className="label">
+            역할 선택
+            <select className="field" value={accountType} onChange={(event) => setAccountType(event.target.value as "admin" | "manager" | "staff")}>
+              <option value="admin">관리자</option>
+              <option value="manager">실장님</option>
+              <option value="staff">직원</option>
+            </select>
+          </label>
+          <label className="label">
+            아이디
+            <input className="field" type="text" value={loginId} onChange={(event) => setLoginId(event.target.value)} autoComplete="username" required />
+          </label>
+          <label className="label">
+            비밀번호
+            <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+          </label>
           <label className="label">
             이메일
             <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />

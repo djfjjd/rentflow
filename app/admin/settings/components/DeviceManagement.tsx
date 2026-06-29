@@ -24,6 +24,8 @@ export function DeviceManagement() {
   }, []);
 
   async function patchDevice(device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) {
+    if (payload.action === "block" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 차단하시겠습니까? 해당 기기의 세션이 종료됩니다.`)) return;
+    if (payload.action === "approve" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 승인하시겠습니까?`)) return;
     const response = await fetch(`/api/admin/devices?id=${encodeURIComponent(device.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

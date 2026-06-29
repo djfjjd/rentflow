@@ -1,6 +1,7 @@
 import { safeBindValues, safeNullableText, safeText } from "../_d1-utils";
 import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureStaffDeviceSchema } from "./staff";
+import { writeAuditLog } from "../../../lib/audit-logs";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -58,6 +59,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (action === "approve") {
         fields.push("status = ?");
         values.push("승인");
+        await writeAuditLog(env.DB, { event: "device_approved", actorEmail: auth.session.email, targetId: id });
         if (body.userId || body.user_id) {
           fields.push("user_id = ?");
           values.push(safeText(body.userId || body.user_id));
@@ -66,6 +68,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         fields.push("status = ?");
         values.push("차단");
         await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        await writeAuditLog(env.DB, { event: "device_blocked", actorEmail: auth.session.email, targetId: id });
       }
 
       if (body.userId !== undefined || body.user_id !== undefined) { fields.push("user_id = ?"); values.push(safeNullableText(body.userId ?? body.user_id)); }
@@ -92,6 +95,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
       await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ?").bind(safeText(id)).run();
       await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(safeText(id)).run();
+      await writeAuditLog(env.DB, { event: "device_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });
     }
 

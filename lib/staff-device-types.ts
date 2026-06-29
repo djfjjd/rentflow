@@ -48,3 +48,16 @@ export type LoginSession = {
   createdAt: string;
   expiresAt: string;
 };
+
+export type LoginLog = {
+  id: string;
+  email: string;
+  loginId: string;
+  role: string;
+  deviceId: string;
+  ip: string;
+  userAgent: string;
+  status: "success" | "failure" | string;
+  message: string;
+  createdAt: string;
+};

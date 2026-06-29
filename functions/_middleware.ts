@@ -1,6 +1,7 @@
 import { authCookieName, readCookie, verifyAuthToken } from "../lib/auth/jwt";
 import { isRouteAllowedForSession } from "../lib/auth/access";
 import { getProtectedRoute } from "../lib/auth/protected-routes";
+import { isSettingsEmailAllowed, settings2faCookieName, verifySettings2faCookie } from "../lib/settings-2fa";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -30,6 +31,23 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
       status: 403,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
+  }
+
+  const isSettingsPath = url.pathname === "/admin/settings" || url.pathname.startsWith("/admin/settings/");
+  const isVerifyPath = url.pathname === "/admin/settings/verify" || url.pathname.startsWith("/admin/settings/verify/");
+  if (isSettingsPath) {
+    if (!isSettingsEmailAllowed(session, env)) {
+      return new Response("권한이 없습니다.", {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+    const settingsVerified = await verifySettings2faCookie(readCookie(request.headers.get("Cookie"), settings2faCookieName), session.email, env.JWT_SECRET || "");
+    if (!settingsVerified && !isVerifyPath) {
+      const verifyUrl = new URL("/admin/settings/verify", url.origin);
+      verifyUrl.searchParams.set("next", `${url.pathname}${url.search}`);
+      return Response.redirect(verifyUrl.toString(), 302);
+    }
   }
 
   return next();

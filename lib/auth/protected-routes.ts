@@ -10,7 +10,7 @@ export type ProtectedRoute = {
 export const protectedRoutes: ProtectedRoute[] = [
   { path: "/", nextPath: "/app", authenticatedRedirectTo: "/app" },
   { path: "/app", mode: "prefix" },
-  { path: "/admin/settings", mode: "prefix", allowedEmailEnvKeys: ["ADMIN_EMAIL", "TEAM_LEAD_EMAILS"] },
+  { path: "/admin/settings", mode: "prefix", requiredRole: "super_admin" },
   { path: "/admin", mode: "prefix", requiredRole: "super_admin" },
   { path: "/dispatch" },
   { path: "/return" },
