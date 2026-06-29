@@ -14,7 +14,7 @@ export function roleForLoginEmail(email: string, env: AuthEnv): Role | null {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
   if (normalizeEmail(envString(env.ADMIN_EMAIL) || "") === normalized) return "super_admin";
-  if (emailsFromEnv(env, [teamLeadEmailEnvKey]).includes(normalized)) return "manager";
+  if (emailsFromEnv(env, [teamLeadEmailEnvKey]).includes(normalized)) return "super_admin";
   return null;
 }
 

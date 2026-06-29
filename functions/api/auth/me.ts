@@ -1,6 +1,9 @@
 import { authCookieName, readCookie, verifyAuthToken } from "../../../lib/auth/jwt";
+import { emailsFromEnv } from "../../../lib/auth/access";
 
 type Env = {
+  ADMIN_EMAIL?: string;
+  TEAM_LEAD_EMAILS?: string;
   JWT_SECRET?: string;
 };
 
@@ -12,5 +15,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const token = readCookie(request.headers.get("Cookie"), authCookieName);
   const session = await verifyAuthToken(token, env.JWT_SECRET || "");
   if (!session) return Response.json({ user: null }, { status: 401 });
-  return Response.json({ user: { email: session.email, role: session.role } });
+  const settingsEmails = emailsFromEnv(env, ["ADMIN_EMAIL", "TEAM_LEAD_EMAILS"]);
+  return Response.json({
+    user: {
+      email: session.email,
+      role: session.role,
+      canAccessSettings: settingsEmails.includes(session.email.toLowerCase()),
+    },
+  });
 };
