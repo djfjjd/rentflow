@@ -39,6 +39,13 @@ export function parseReservationDateRange(inputStartDate: string, reservationTex
   return normalizeRange(fallbackStart, fallbackStart);
 }
 
+export function resolveReservationDateRange(input: { startDate?: string; endDate?: string; date?: string; reservationText?: string; memo?: string }) {
+  const startDate = input.startDate || input.date || "";
+  const explicitEndDate = normalizeDate(input.endDate || "");
+  if (explicitEndDate) return normalizeRange(startDate, explicitEndDate);
+  return parseReservationDateRange(startDate, input.reservationText || input.memo || "");
+}
+
 export function normalizeReservationRange(input: { date?: string; startDate?: string; endDate?: string; durationDays?: number; reservationText?: string; memo?: string }) {
   if (input.startDate && input.endDate && input.durationDays) {
     return normalizeRange(input.startDate, input.endDate);

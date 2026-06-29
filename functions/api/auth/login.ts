@@ -11,6 +11,7 @@ type Env = {
   ADMIN_PASSWORD?: string;
   MANAGER_PASSWORD?: string;
   STAFF_PASSWORD?: string;
+  BYPASS_DEVICE_APPROVAL?: string;
   JWT_SECRET?: string;
   DB: any;
 };
@@ -49,6 +50,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
+  // 임시 운영 모드이며 정식 운영 전 BYPASS_DEVICE_APPROVAL=false로 변경해야 함.
+  if (isDeviceApprovalBypassed(env)) {
+    email = temporarySessionEmail(accountType, account);
+    const token = await createAuthToken({ email, role: account.role, isDeveloper: false, displayName: account.displayName, position: account.position }, jwtSecret);
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "success", message: "temporary bypass login success" });
+    return Response.json(
+      { user: { email, role: account.role, isDeveloper: false, displayName: account.displayName, position: account.position }, redirectTo: account.redirectTo },
+      { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
+    );
+  }
+
   const device = await getDeviceByDeviceId(env.DB, deviceId);
   if (!device || device.status === "승인대기") {
     return Response.json(
@@ -77,20 +89,28 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   );
 };
 
-function getPasswordAccount(accountType: string, env: Env): { password: string; role: Role; redirectTo: string; email: string; isDeveloper: boolean } | null {
+function getPasswordAccount(accountType: string, env: Env): { password: string; role: Role; redirectTo: string; email: string; isDeveloper: boolean; displayName: string; position: string } | null {
   if (accountType === "admin") {
-    return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: firstTeamLeadEmail(env), isDeveloper: false };
+    return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: firstTeamLeadEmail(env), isDeveloper: false, displayName: "관리자", position: "관리자" };
   }
   if (accountType === "developer") {
-    return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true };
+    return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true, displayName: "개발자", position: "개발자" };
   }
   if (accountType === "manager") {
-    return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard", email: "", isDeveloper: false };
+    return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard", email: "", isDeveloper: false, displayName: "실장님", position: "실장" };
   }
   if (accountType === "staff") {
-    return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard", email: "", isDeveloper: false };
+    return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard", email: "", isDeveloper: false, displayName: "직원", position: "직원" };
   }
   return null;
+}
+
+function isDeviceApprovalBypassed(env: Env) {
+  return String(env.BYPASS_DEVICE_APPROVAL || "").toLowerCase() === "true";
+}
+
+function temporarySessionEmail(accountType: string, account: { email: string }) {
+  return account.email || `${accountType}@rentflow.local`;
 }
 
 function firstTeamLeadEmail(env: Env) {

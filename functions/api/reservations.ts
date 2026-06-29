@@ -1,5 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
-import { parseReservationDateRange } from "../../lib/reservation-date-range";
+import { resolveReservationDateRange } from "../../lib/reservation-date-range";
 
 type Env = {
   DB: any;
@@ -22,7 +22,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureReservationSchema(env);
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
-    const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
+    const range = resolveReservationDateRange({ startDate: safeText(r.startDate || r.date), endDate: safeText(r.endDate), reservationText: safeText(r.reservationText || r.memo) });
     await env.DB.prepare(
       "INSERT INTO reservations (id, date, start_date, end_date, duration_days, time, end_time, vehicle_number, rent_car_number, customer_name, reserver_name, reservation_text, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
@@ -66,7 +66,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
-    const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
+    const range = resolveReservationDateRange({ startDate: safeText(r.startDate || r.date), endDate: safeText(r.endDate), reservationText: safeText(r.reservationText || r.memo) });
     await env.DB.prepare(
       "UPDATE reservations SET date = ?, start_date = ?, end_date = ?, duration_days = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     ).bind(...safeBindValues([range.startDate, range.startDate, range.endDate, range.durationDays, safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
@@ -104,7 +104,7 @@ export async function onRequestPut({ request, env }: { request: Request, env: En
       );
       
       const batch = reservations.map(r => {
-        const range = parseReservationDateRange(safeText(r.date), safeText(r.reservationText || r.memo));
+        const range = resolveReservationDateRange({ startDate: safeText(r.startDate || r.date), endDate: safeText(r.endDate), reservationText: safeText(r.reservationText || r.memo) });
         return stmt.bind(...safeBindValues([r.id, range.startDate, range.startDate, range.endDate, range.durationDays, r.time, r.endTime || null, r.vehicleNumber, r.rentCarNumber || null, r.customerName, r.customerCarNumber || null, r.factoryName || null, r.pickupLocation || null, r.deliveryLocation || null, r.orderPerson || null, r.memo || null, r.route, r.repairShopPartnerId || null, r.status]));
       });
       

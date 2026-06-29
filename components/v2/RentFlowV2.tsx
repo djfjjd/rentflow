@@ -34,7 +34,7 @@ import { Pagination } from "@/components/Pagination";
 import { DeveloperBadge } from "@/components/DeveloperBadge";
 import { RepairShopMapPage } from "@/components/repair-shops/RepairShopMapPage";
 import { SettingsDashboard } from "@/app/admin/settings/components/SettingsDashboard";
-import { eachDateInRange, formatReservationDurationLabel, formatReservationRangeLabel, normalizeReservationRange } from "@/lib/reservation-date-range";
+import { eachDateInRange, formatReservationDurationLabel, formatReservationRangeLabel, normalizeReservationRange, parseReservationDateRange } from "@/lib/reservation-date-range";
 import {
   createId,
   fetchJson,
@@ -1224,11 +1224,24 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
 
 function ReservationForm({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   const [draft, setDraft] = useState("");
+  const [startDate, setStartDate] = useState(todayKorea());
+  const [endDate, setEndDate] = useState(todayKorea());
+  const [startTouched, setStartTouched] = useState(false);
+  const [endTouched, setEndTouched] = useState(false);
   const [recordId, setRecordId] = useState(() => createId("reservation"));
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressState | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const parsed = useMemo(() => parseReservationText(draft), [draft]);
+  useEffect(() => {
+    const parsedRange = parseReservationDateRange(startDate, draft);
+    if (!startTouched && parsedRange.startDate) {
+      setStartDate(parsedRange.startDate);
+    }
+    if (!endTouched) {
+      setEndDate(parsedRange.endDate || parsedRange.startDate || startDate);
+    }
+  }, [draft, endTouched, startDate, startTouched]);
   return (
     <section className="schedule-page reservation-page space-y-4">
       <CalendarSubscribeBox />
@@ -1237,7 +1250,9 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
         buttonLabel="예약일정 추가"
         buildPayload={(data) => ({
           id: recordId,
-          date: text(data, "date") || parsed.date,
+          date: text(data, "startDate") || startDate || parsed.date,
+          startDate: text(data, "startDate") || startDate || parsed.date,
+          endDate: text(data, "endDate") || text(data, "startDate") || startDate || parsed.date,
           time: parsed.time || "09:00",
           endTime: "",
           customerName: text(data, "customerName") || parsed.customerName || "예약",
@@ -1262,6 +1277,10 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
         onReloaded={(items) => onReservations(items as ReservationV2[])}
         afterReset={() => {
           setDraft("");
+          setStartDate(todayKorea());
+          setEndDate(todayKorea());
+          setStartTouched(false);
+          setEndTouched(false);
           setPendingFiles([]);
           setRecordId(createId("reservation"));
           setResetKey((key) => key + 1);
@@ -1284,7 +1303,30 @@ function ReservationForm({ reservations, onReservations }: { reservations: Reser
           className="field min-h-[10.5rem]"
         />
         <div className="reservation-date-name-row">
-          <Input key={parsed.date} name="date" label="날짜 선택" type="date" defaultValue={parsed.date} required />
+          <Input
+            name="startDate"
+            label="시작날짜"
+            type="date"
+            value={startDate}
+            onChange={(event) => {
+              const next = event.target.value;
+              setStartTouched(true);
+              setStartDate(next);
+              if (!endTouched || endDate < next) setEndDate(next);
+            }}
+            required
+          />
+          <Input
+            name="endDate"
+            label="종료날짜"
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(event) => {
+              setEndTouched(true);
+              setEndDate(event.target.value || startDate);
+            }}
+          />
           <Input key={parsed.customerName} name="customerName" label="예약자명" defaultValue={parsed.customerName} />
         </div>
         <PendingPhotoPicker key={`reservation-upload-${resetKey}`} files={pendingFiles} onFiles={setPendingFiles} progress={uploadProgress} />
@@ -4257,6 +4299,7 @@ function ReservationDetailModal({ reservation, onClose }: { reservation: Reserva
 }
 
 function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: ReservationV2; onClose: () => void; onSaved: ReloadHandler<ReservationV2> }) {
+  const range = normalizeReservationRange(reservation);
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/30 p-0 sm:place-items-center sm:p-4">
       <form
@@ -4266,7 +4309,9 @@ function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: 
           const data = new FormData(event.currentTarget);
           const next = {
             ...reservation,
-            date: text(data, "date"),
+            date: text(data, "startDate"),
+            startDate: text(data, "startDate"),
+            endDate: text(data, "endDate") || text(data, "startDate"),
             customerName: text(data, "customerName"),
             reservationText: text(data, "reservationText"),
             memo: text(data, "reservationText"),
@@ -4280,7 +4325,10 @@ function ReservationEditModal({ reservation, onClose, onSaved }: { reservation: 
           <h2 className="text-xl font-black">예약 수정</h2>
           <button className="small-btn" type="button" onClick={onClose}>닫기</button>
         </div>
-        <Input name="date" label="날짜" type="date" defaultValue={reservation.date} required />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input name="startDate" label="시작날짜" type="date" defaultValue={range.startDate} required />
+          <Input name="endDate" label="종료날짜" type="date" defaultValue={range.endDate} min={range.startDate} />
+        </div>
         <Input name="customerName" label="예약자명" defaultValue={reservation.customerName} />
         <Input name="reservationText" label="예약내용" defaultValue={reservation.reservationText || reservation.memo} />
         <button className="primary-btn mt-3 w-full" type="submit">저장</button>
