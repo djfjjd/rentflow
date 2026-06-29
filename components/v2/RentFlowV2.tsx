@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FormEvent } from "react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -906,31 +906,35 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 function AdminNav() {
   const pathname = usePathname();
   const normalizedPathname = normalizeRoutePath(pathname);
-  const showSettingsButton = normalizedPathname === "/admin";
-  const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
+  const showSettingsButton = normalizedPathname === "/admin" || normalizedPathname === "/admin/dispatches" || normalizedPathname === "/admin/vehicles";
+  const dispatchItem = adminItems.find((item) => item.href === "/admin/dispatches");
+  const vehiclesItem = adminItems.find((item) => item.href === "/admin/vehicles");
 
   return (
-    <nav className="flex w-full items-center gap-2 pb-2">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-start gap-2">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          const active = normalizedPathname === item.href || normalizedPathname.startsWith(`${item.href}/`);
-          return (
-            <Fragment key={item.href}>
-              <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href}>
-                <Icon size={16} />
-                {item.label}
-              </Link>
-              {showSettingsButton && item.href === "/admin/vehicles" ? (
-                <Link className="quick-btn h-11 min-h-11 w-11 shrink-0 px-0" href="/admin/settings" title="시스템 설정" aria-label="시스템 설정">
-                  <Settings size={17} />
-                </Link>
-              ) : null}
-            </Fragment>
-          );
-        })}
+    <nav className="flex w-full items-center justify-between gap-3 pb-2">
+      <div className="flex min-w-0 flex-1 items-center justify-start">
+        {dispatchItem ? <AdminNavLink item={dispatchItem} pathname={normalizedPathname} /> : null}
+      </div>
+      <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
+        {vehiclesItem ? <AdminNavLink item={vehiclesItem} pathname={normalizedPathname} /> : null}
+        {showSettingsButton ? (
+          <Link className="quick-btn h-11 min-h-11 w-11 shrink-0 px-0" href="/admin/settings" title="시스템 설정" aria-label="시스템 설정">
+            <Settings size={17} />
+          </Link>
+        ) : null}
       </div>
     </nav>
+  );
+}
+
+function AdminNavLink({ item, pathname }: { item: (typeof adminItems)[number]; pathname: string }) {
+  const Icon = item.icon;
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  return (
+    <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href}>
+      <Icon size={16} />
+      {item.label}
+    </Link>
   );
 }
 
