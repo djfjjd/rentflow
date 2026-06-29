@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authCookieName, verifyAuthToken } from "./lib/auth/jwt";
+import { isRouteAllowedForSession } from "./lib/auth/access";
 import { getProtectedRoute } from "./lib/auth/protected-routes";
 
 export async function proxy(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(route.authenticatedRedirectTo, request.url));
   }
 
-  if (route.requiredRole && session.role !== route.requiredRole) {
+  if (!isRouteAllowedForSession(route, session, process.env)) {
     return new NextResponse("권한이 없습니다.", { status: 403 });
   }
 

@@ -905,6 +905,7 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
 
 function AdminNav() {
   const pathname = usePathname();
+  const showSettingsButton = pathname === "/admin";
   const visibleItems = adminItems.filter((item) => item.href === "/admin/dispatches" || item.href === "/admin/vehicles");
   return (
     <nav className="flex w-full items-center justify-between gap-2 pb-2">
@@ -917,9 +918,11 @@ function AdminNav() {
               <Icon size={16} />
               {item.label}
             </Link>
-            <Link className="quick-btn h-11 min-h-11 w-11 px-0" href="/admin/settings" title={`${item.label} 설정`} aria-label={`${item.label} 설정`}>
-              <Settings size={17} />
-            </Link>
+            {showSettingsButton ? (
+              <Link className="quick-btn h-11 min-h-11 w-11 px-0" href="/admin/settings" title={`${item.label} 설정`} aria-label={`${item.label} 설정`}>
+                <Settings size={17} />
+              </Link>
+            ) : null}
           </div>
         );
       })}
@@ -3820,7 +3823,7 @@ function SettingsAdmin() {
             <h2 className="text-xl font-black">관리자 설정센터</h2>
             <p className="text-sm font-bold text-[#68746d]">직원 계정, 역할, 기기, 로그인 기록 확장을 위한 기본 구조입니다.</p>
           </div>
-          <span className="inline-flex min-h-10 items-center rounded-lg bg-[#116149] px-3 text-sm font-black text-white">super_admin 전용</span>
+          <span className="inline-flex min-h-10 items-center rounded-lg bg-[#116149] px-3 text-sm font-black text-white">소장님 / 팀장님 전용</span>
         </div>
       </div>
       <div className="sticky top-[74px] z-20 rounded-lg bg-[#eef4ed] p-1.5">
@@ -3873,16 +3876,52 @@ function RoleSettingsPanel() {
 }
 
 function DeviceSettingsPanel() {
+  const deviceRoleRows = [
+    { device: "사무실 PC", owner: "관리자", role: "super_admin", status: "승인됨" },
+    { device: "팀장님 휴대폰", owner: "팀장님", role: "manager", status: "등록 대기" },
+    { device: "현장 직원 기기", owner: "직원", role: "staff", status: "승인 대기" },
+  ];
+
   return (
-    <section className="grid gap-3 md:grid-cols-2">
-      <article className="panel min-h-32">
-        <h3 className="text-lg font-black">기기 등록</h3>
-        <p className="mt-2 text-sm font-bold text-[#68746d]">직원별 승인 기기와 1인 1기기 제한 정책을 붙일 영역입니다.</p>
-      </article>
-      <article className="panel min-h-32">
-        <h3 className="text-lg font-black">QR 접근 제어</h3>
-        <p className="mt-2 text-sm font-bold text-[#68746d]">등록되지 않은 기기의 직접 URL, QR 접근 차단 규칙을 확장합니다.</p>
-      </article>
+    <section className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <article className="panel min-h-32">
+          <h3 className="text-lg font-black">기기 등록</h3>
+          <p className="mt-2 text-sm font-bold text-[#68746d]">직원별 승인 기기와 1인 1기기 제한 정책을 붙일 영역입니다.</p>
+        </article>
+        <article className="panel min-h-32">
+          <h3 className="text-lg font-black">QR 접근 제어</h3>
+          <p className="mt-2 text-sm font-bold text-[#68746d]">등록되지 않은 기기의 직접 URL, QR 접근 차단 규칙을 확장합니다.</p>
+        </article>
+      </div>
+      <section className="panel overflow-hidden">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-black">기기별 역할 설정</h3>
+          <button className="small-btn" type="button" disabled>기기 등록(준비중)</button>
+        </div>
+        <div data-horizontal-scroll="true" className="overflow-x-auto">
+          <table className="admin-table w-full min-w-[860px] text-left text-sm">
+            <thead><tr className="border-b"><th>기기</th><th>사용자</th><th>Role</th><th>상태</th><th>권한 변경</th></tr></thead>
+            <tbody>
+              {deviceRoleRows.map((row) => (
+                <tr className="border-b" key={row.device}>
+                  <td>{row.device}</td>
+                  <td>{row.owner}</td>
+                  <td>
+                    <select className="field min-h-10 py-1 text-sm" defaultValue={row.role} disabled>
+                      <option value="super_admin">super_admin</option>
+                      <option value="manager">manager</option>
+                      <option value="staff">staff</option>
+                    </select>
+                  </td>
+                  <td>{row.status}</td>
+                  <td><button className="small-btn" type="button" disabled>저장(준비중)</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }

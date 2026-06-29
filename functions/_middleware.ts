@@ -1,7 +1,10 @@
 import { authCookieName, readCookie, verifyAuthToken } from "../lib/auth/jwt";
+import { isRouteAllowedForSession } from "../lib/auth/access";
 import { getProtectedRoute } from "../lib/auth/protected-routes";
 
 type Env = {
+  ADMIN_EMAIL?: string;
+  TEAM_LEAD_EMAILS?: string;
   JWT_SECRET?: string;
 };
 
@@ -22,7 +25,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
     return Response.redirect(new URL(route.authenticatedRedirectTo, url.origin).toString(), 302);
   }
 
-  if (route.requiredRole && session.role !== route.requiredRole) {
+  if (!isRouteAllowedForSession(route, session, env)) {
     return new Response("권한이 없습니다.", {
       status: 403,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
