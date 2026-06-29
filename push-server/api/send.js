@@ -3,6 +3,7 @@ import webpush from "web-push";
 const {
   VAPID_PUBLIC_KEY,
   VAPID_PRIVATE_KEY,
+  VAPID_SUBJECT,
   PUSH_SERVER_SECRET
 } = process.env;
 
@@ -11,9 +12,10 @@ const DEFAULT_PUSH_SERVER_SECRET = "CxeF2nKAOY-7--VrDZAIpT0iTCDF7SW9IVoQ4A5F3KA"
 function configureVapid(vapid = {}) {
   const publicKey = VAPID_PUBLIC_KEY || vapid.publicKey;
   const privateKey = VAPID_PRIVATE_KEY || vapid.privateKey;
+  const subject = VAPID_SUBJECT || vapid.subject || "mailto:admin@example.com";
   if (!publicKey || !privateKey) return false;
   webpush.setVapidDetails(
-    "mailto:djfjjd@gmail.com",
+    subject,
     publicKey,
     privateKey
   );

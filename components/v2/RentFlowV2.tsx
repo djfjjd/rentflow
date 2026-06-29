@@ -18,6 +18,7 @@ import {
   GripVertical,
   Home,
   Info,
+  LogOut,
   MapPin,
   PackageSearch,
   Paperclip,
@@ -31,6 +32,7 @@ import {
 import { OverlayModal } from "@/components/OverlayModal";
 import { Pagination } from "@/components/Pagination";
 import { RepairShopMapPage } from "@/components/repair-shops/RepairShopMapPage";
+import { roleDefinitions } from "@/lib/auth/roles";
 import {
   createId,
   fetchJson,
@@ -339,6 +341,11 @@ function HeaderLogo({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function QuickMenu() {
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.href = "/auth";
+  }
+
   return (
     <nav className="flex max-w-full flex-nowrap items-center justify-end gap-2">
       <PushPermissionButton />
@@ -350,6 +357,10 @@ function QuickMenu() {
         <MapPin size={17} />
         <span className="hidden sm:inline">거래처주소</span>
       </Link>
+      <button className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3" type="button" onClick={logout} title="로그아웃" aria-label="로그아웃">
+        <LogOut size={17} />
+        <span className="hidden sm:inline">로그아웃</span>
+      </button>
     </nav>
   );
 }
@@ -901,10 +912,15 @@ function AdminNav() {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href} key={item.href}>
-            <Icon size={16} />
-            {item.label}
-          </Link>
+          <div className="flex min-w-0 shrink-0 items-center gap-1" key={item.href}>
+            <Link className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-black ${active ? "border-[#116149] bg-[#116149] text-white" : "border-[#d8ded8] bg-white text-gray-700"}`} href={item.href}>
+              <Icon size={16} />
+              {item.label}
+            </Link>
+            <Link className="quick-btn h-11 min-h-11 w-11 px-0" href="/admin/settings" title={`${item.label} 설정`} aria-label={`${item.label} 설정`}>
+              <Settings size={17} />
+            </Link>
+          </div>
         );
       })}
     </nav>
@@ -3794,7 +3810,99 @@ function IncidentsAdmin() {
 }
 
 function SettingsAdmin() {
-  return <StatusBoard labels={["회사정보", "차량 주차구역 목록", "네이버지도 API 키", "R2 설정", "권한 설정", "OCR/AI 확장 슬롯"]} />;
+  const [tab, setTab] = useState("직원 관리");
+  const tabs = ["직원 관리", "역할(Role) 관리", "기기 등록", "로그인 기록"];
+  return (
+    <section className="space-y-4">
+      <div className="panel">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black">관리자 설정센터</h2>
+            <p className="text-sm font-bold text-[#68746d]">직원 계정, 역할, 기기, 로그인 기록 확장을 위한 기본 구조입니다.</p>
+          </div>
+          <span className="inline-flex min-h-10 items-center rounded-lg bg-[#116149] px-3 text-sm font-black text-white">super_admin 전용</span>
+        </div>
+      </div>
+      <div className="sticky top-[74px] z-20 rounded-lg bg-[#eef4ed] p-1.5">
+        <Segmented value={tab} values={tabs} onChange={setTab} />
+      </div>
+      {tab === "직원 관리" ? <StaffSettingsPanel /> : null}
+      {tab === "역할(Role) 관리" ? <RoleSettingsPanel /> : null}
+      {tab === "기기 등록" ? <DeviceSettingsPanel /> : null}
+      {tab === "로그인 기록" ? <LoginHistoryPanel /> : null}
+    </section>
+  );
+}
+
+function StaffSettingsPanel() {
+  return (
+    <section className="grid gap-3 md:grid-cols-2">
+      <article className="panel min-h-32">
+        <h3 className="text-lg font-black">직원 등록 대기</h3>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">이메일 OTP, Magic Link, 관리자 승인 흐름을 연결할 자리입니다.</p>
+      </article>
+      <article className="panel min-h-32">
+        <h3 className="text-lg font-black">퇴사 처리</h3>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">세션 만료, 기기 해제, 권한 회수를 한 번에 처리하는 구조로 확장합니다.</p>
+      </article>
+    </section>
+  );
+}
+
+function RoleSettingsPanel() {
+  return (
+    <section className="grid gap-3 lg:grid-cols-3">
+      {roleDefinitions.map((role) => (
+        <article className="panel min-h-48" key={role.role}>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black">{role.role}</h3>
+              <p className="text-sm font-black text-[#116149]">{role.label}</p>
+            </div>
+            <span className="rounded-lg bg-[#eef4ed] px-2 py-1 text-xs font-black text-[#116149]">{role.description}</span>
+          </div>
+          <ul className="grid gap-2 text-sm font-bold text-[#25342e]">
+            {role.permissions.map((permission) => (
+              <li className="rounded-lg border border-[#d8ded8] bg-[#f6f7f4] px-3 py-2" key={permission}>{permission}</li>
+            ))}
+          </ul>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function DeviceSettingsPanel() {
+  return (
+    <section className="grid gap-3 md:grid-cols-2">
+      <article className="panel min-h-32">
+        <h3 className="text-lg font-black">기기 등록</h3>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">직원별 승인 기기와 1인 1기기 제한 정책을 붙일 영역입니다.</p>
+      </article>
+      <article className="panel min-h-32">
+        <h3 className="text-lg font-black">QR 접근 제어</h3>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">등록되지 않은 기기의 직접 URL, QR 접근 차단 규칙을 확장합니다.</p>
+      </article>
+    </section>
+  );
+}
+
+function LoginHistoryPanel() {
+  return (
+    <section className="panel overflow-hidden">
+      <h3 className="mb-3 text-lg font-black">로그인 기록</h3>
+      <div data-horizontal-scroll="true" className="overflow-x-auto">
+        <table className="admin-table w-full min-w-[760px] text-left text-sm">
+          <thead><tr className="border-b"><th>시간</th><th>이메일</th><th>Role</th><th>기기</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr className="border-b">
+              <td>준비중</td><td>직원 계정 연동 후 표시</td><td>-</td><td>-</td><td>구조 준비</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function StatsAdmin({ vehicles, dispatches }: { vehicles: VehicleV2[]; dispatches: DispatchV2[] }) {
