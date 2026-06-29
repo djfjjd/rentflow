@@ -917,7 +917,11 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contr
           isCompleted: false,
         })}
         beforeSave={() => {
-          if (!vehicle || pendingDispatchCount === 0) return true;
+          if (!vehicle?.plateNumber) {
+            alert("차량번호를 먼저 선택해주세요.");
+            return false;
+          }
+          if (pendingDispatchCount === 0) return true;
           return confirm("이 차량은 아직 회차 처리되지 않은 배차건이 있습니다.\n기존 배차건을 먼저 회차 처리하거나 그래도 새 배차를 등록할 수 있습니다.\n\n[확인] 그래도 배차 등록\n[취소] 기존 배차 확인");
         }}
         afterSave={(payload) => vehicle ? sendJson(`/api/vehicles?plateNumber=${encodeURIComponent(vehicle.plateNumber)}`, {
@@ -3184,13 +3188,17 @@ function DispatchEditModal({ dispatch, vehicles, onClose, onSaved }: { dispatch:
     <ModalShell title="배차 수정" onClose={onClose}>
       <form onSubmit={async (event) => {
         event.preventDefault();
+        if (!selected?.plateNumber) {
+          alert("차량번호를 먼저 선택해주세요.");
+          return;
+        }
         const data = new FormData(event.currentTarget);
         const next = {
           ...dispatch,
           date,
           time,
-          rentalCarNumber: selected?.plateNumber || dispatch.rentalCarNumber,
-          vehicleColor: selected?.color || dispatch.vehicleColor || "",
+          rentalCarNumber: selected.plateNumber,
+          vehicleColor: selected.color || dispatch.vehicleColor || "",
           businessType,
           dispatchType: businessType,
           status: businessType,
