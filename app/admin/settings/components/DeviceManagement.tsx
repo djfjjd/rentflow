@@ -61,16 +61,6 @@ export function DeviceManagement() {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2">
-        <article className="panel min-h-32">
-          <h3 className="text-lg font-black">기기 승인</h3>
-          <p className="mt-2 text-sm font-bold text-[#68746d]">승인대기 기기는 기존 직원 목록에서 연결할 직원을 선택한 뒤 승인합니다.</p>
-        </article>
-        <article className="panel min-h-32">
-          <h3 className="text-lg font-black">퇴사 연동 차단</h3>
-          <p className="mt-2 text-sm font-bold text-[#68746d]">직원 퇴사 처리 시 연결된 모든 기기와 로그인 세션이 자동 차단됩니다.</p>
-        </article>
-      </div>
       {message ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">{message}</p> : null}
       <div className="flex flex-wrap gap-2">
         <button className={activeTab === "personal" ? "primary-btn" : "small-btn"} type="button" onClick={() => setActiveTab("personal")}>개인 기기</button>

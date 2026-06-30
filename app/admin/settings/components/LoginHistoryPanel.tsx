@@ -46,8 +46,15 @@ function formatDateTime(value: string) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.replace("T", " ").slice(0, 16);
-  const pad = (num: number) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date).replace(/\.\s?/g, ".").replace(/\.$/, "").replace(/\s+/, " ");
 }
 
 function userLabel(log: LoginLog) {
