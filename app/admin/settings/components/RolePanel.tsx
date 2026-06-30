@@ -1,4 +1,4 @@
-import { RolePermissionCards } from "./RolePermissionCards";
+import { PermissionMatrix } from "./PermissionMatrix";
 
 export function RolePanel() {
   return (
@@ -9,7 +9,7 @@ export function RolePanel() {
           직책(Position)은 조직 내 직위이고, 권한(Role)은 시스템 접근 권한입니다. 두 값은 독립적으로 관리되어야 합니다.
         </p>
       </article>
-      <RolePermissionCards />
+      <PermissionMatrix />
     </section>
   );
 }

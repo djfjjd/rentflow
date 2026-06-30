@@ -87,3 +87,151 @@ export const rolePermissions: Record<Role, string[]> = {
 export function hasPermission(role: Role, key: PermissionKey) {
   return Boolean(rolePermissionMap[role]?.[key]);
 }
+
+export const matrixSubjects = [
+  { label: "배회차관리", key: "dispatch.manage" },
+  { label: "차량수정", key: "vehicles.edit" },
+  { label: "사진촬영본", key: "photos.manage" },
+  { label: "안 읽은 메시지", key: "messages.manage" },
+  { label: "차량현황판", key: "vehicle_board.manage" },
+  { label: "계약서 업로드", key: "contracts.upload" },
+  { label: "예약일정", key: "reservations.view" },
+  { label: "사고정비기록", key: "repairs.view" },
+  { label: "분실물관리", key: "lost_items.view" },
+  { label: "거래처주소", key: "partners_address.view" },
+  { label: "보험사", key: "insurers.view" },
+  { label: "공업사", key: "repair_shops.view" },
+  { label: "거래처", key: "partners.view" },
+  { label: "배차기록", key: "dispatch_logs.view" },
+  { label: "회차기록", key: "return_logs.view" },
+  { label: "매출통계", key: "revenue.view" },
+  { label: "미수금", key: "receivables.view" },
+  { label: "세금계산서", key: "tax_invoices.view" },
+  { label: "결제내역", key: "payments.view" },
+  { label: "법인카드", key: "corporate_cards.view" },
+  { label: "알림", key: "notifications.view" },
+  { label: "검색", key: "search.view" },
+  { label: "관리자 설정센터", key: "settings.view" },
+  { label: "직원 등록", key: "staff.create" },
+  { label: "직원 수정", key: "staff.update" },
+  { label: "직원 삭제", key: "staff.delete" },
+  { label: "퇴사 처리", key: "staff.resign" },
+  { label: "권한 변경", key: "roles.update" },
+  { label: "기기 승인", key: "devices.approve" },
+  { label: "기기 차단", key: "devices.block" },
+  { label: "원격 로그아웃", key: "devices.remote_logout" },
+  { label: "시스템 설정", key: "system.settings" },
+  { label: "백업 관리", key: "backup.manage" },
+  { label: "회사 정보 수정", key: "company.update" },
+] as const;
+
+export const permissionLevels = ["write", "read", "none"] as const;
+export const permissionColumns = ["developer", "admin", "manager", "staff"] as const;
+export const columnLabels: Record<PermissionColumn, string> = {
+  developer: "개발자",
+  admin: "관리자",
+  manager: "실장님",
+  staff: "직원",
+};
+
+export type MatrixPermissionKey = (typeof matrixSubjects)[number]["key"];
+export type PermissionLevel = (typeof permissionLevels)[number];
+export type PermissionColumn = (typeof permissionColumns)[number];
+export type PermissionPresetMatrix = Record<PermissionColumn, Record<MatrixPermissionKey, PermissionLevel>>;
+export type ColumnMode = "allWrite" | "allNone" | "custom";
+
+const managerWrite: MatrixPermissionKey[] = [
+  "dispatch.manage",
+  "vehicles.edit",
+  "photos.manage",
+  "messages.manage",
+  "vehicle_board.manage",
+  "contracts.upload",
+];
+
+const managerRead: MatrixPermissionKey[] = [
+  "reservations.view",
+  "repairs.view",
+  "lost_items.view",
+  "partners_address.view",
+  "insurers.view",
+  "repair_shops.view",
+  "partners.view",
+  "dispatch_logs.view",
+  "return_logs.view",
+  "revenue.view",
+  "receivables.view",
+  "tax_invoices.view",
+  "payments.view",
+  "corporate_cards.view",
+  "notifications.view",
+  "search.view",
+];
+
+const staffWrite: MatrixPermissionKey[] = ["dispatch.manage", "repairs.view", "lost_items.view"];
+const staffRead: MatrixPermissionKey[] = ["vehicle_board.manage", "photos.manage", "reservations.view", "partners_address.view", "dispatch_logs.view"];
+
+export const defaultPermissionPresetMatrix: PermissionPresetMatrix = {
+  developer: makeColumnPreset("write"),
+  admin: makeColumnPreset("write"),
+  manager: makeCustomPreset(managerWrite, managerRead),
+  staff: makeCustomPreset(staffWrite, staffRead),
+};
+
+export function cyclePermissionLevel(level: PermissionLevel): PermissionLevel {
+  if (level === "write") return "read";
+  if (level === "read") return "none";
+  return "write";
+}
+
+export function cycleColumnMode(mode: ColumnMode): ColumnMode {
+  if (mode === "allWrite") return "allNone";
+  if (mode === "allNone") return "custom";
+  return "allWrite";
+}
+
+export function modeForColumn(matrix: PermissionPresetMatrix, column: PermissionColumn, custom: boolean): ColumnMode {
+  if (custom) return "custom";
+  const values = matrixSubjects.map((subject) => matrix[column][subject.key]);
+  if (values.every((value) => value === "write")) return "allWrite";
+  if (values.every((value) => value === "none")) return "allNone";
+  return "custom";
+}
+
+export function applyColumnMode(matrix: PermissionPresetMatrix, column: PermissionColumn, mode: ColumnMode): PermissionPresetMatrix {
+  if (mode === "custom") return cloneMatrix(matrix);
+  const next = cloneMatrix(matrix);
+  const level = mode === "allWrite" ? "write" : "none";
+  matrixSubjects.forEach((subject) => {
+    next[column][subject.key] = level;
+  });
+  return protectDeveloperMinimums(next);
+}
+
+export function protectDeveloperMinimums(matrix: PermissionPresetMatrix): PermissionPresetMatrix {
+  const next = cloneMatrix(matrix);
+  (["settings.view", "roles.update", "system.settings"] as MatrixPermissionKey[]).forEach((key) => {
+    next.developer[key] = "write";
+  });
+  return next;
+}
+
+export function cloneMatrix(matrix: PermissionPresetMatrix): PermissionPresetMatrix {
+  return {
+    developer: { ...matrix.developer },
+    admin: { ...matrix.admin },
+    manager: { ...matrix.manager },
+    staff: { ...matrix.staff },
+  };
+}
+
+function makeColumnPreset(level: PermissionLevel): Record<MatrixPermissionKey, PermissionLevel> {
+  return Object.fromEntries(matrixSubjects.map((subject) => [subject.key, level])) as Record<MatrixPermissionKey, PermissionLevel>;
+}
+
+function makeCustomPreset(writeKeys: MatrixPermissionKey[], readKeys: MatrixPermissionKey[]) {
+  const preset = makeColumnPreset("none");
+  writeKeys.forEach((key) => { preset[key] = "write"; });
+  readKeys.forEach((key) => { preset[key] = "read"; });
+  return preset;
+}
