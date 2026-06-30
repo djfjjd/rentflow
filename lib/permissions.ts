@@ -1,4 +1,5 @@
 import type { Role } from "./roles";
+import type { AuthSession } from "./auth/jwt";
 
 export const permissionLabels = {
   "dispatch.create": "배회차 입력",
@@ -142,6 +143,13 @@ export type PermissionColumn = (typeof permissionColumns)[number];
 export type PermissionPresetMatrix = Record<PermissionColumn, Record<MatrixPermissionKey, PermissionLevel>>;
 export type ColumnMode = "allWrite" | "allNone" | "custom";
 
+const permissionPresetId = "current";
+const permissionRank: Record<PermissionLevel, number> = {
+  none: 0,
+  read: 1,
+  write: 2,
+};
+
 const managerWrite: MatrixPermissionKey[] = [
   "dispatch.manage",
   "vehicles.edit",
@@ -216,6 +224,79 @@ export function protectDeveloperMinimums(matrix: PermissionPresetMatrix): Permis
     next.developer[key] = "write";
   });
   return next;
+}
+
+export async function ensurePermissionPresetSchema(db: any) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS position_permission_presets (
+      id TEXT PRIMARY KEY,
+      matrix_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+  ).run();
+}
+
+export async function getPermissionPresetMatrix(db: any): Promise<PermissionPresetMatrix> {
+  await ensurePermissionPresetSchema(db);
+  const row = await db.prepare("SELECT matrix_json FROM position_permission_presets WHERE id = ?").bind(permissionPresetId).first();
+  if (!row?.matrix_json) return cloneMatrix(defaultPermissionPresetMatrix);
+  try {
+    return normalizePermissionPresetMatrix(JSON.parse(String(row.matrix_json)));
+  } catch {
+    return cloneMatrix(defaultPermissionPresetMatrix);
+  }
+}
+
+export async function savePermissionPresetMatrix(db: any, matrix: PermissionPresetMatrix) {
+  await ensurePermissionPresetSchema(db);
+  const now = new Date().toISOString();
+  const normalized = protectDeveloperMinimums(normalizePermissionPresetMatrix(matrix));
+  await db.prepare(
+    `INSERT INTO position_permission_presets (id, matrix_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET matrix_json = excluded.matrix_json, updated_at = excluded.updated_at`,
+  ).bind(permissionPresetId, JSON.stringify(normalized), now, now).run();
+  return normalized;
+}
+
+export function normalizePermissionPresetMatrix(value: unknown): PermissionPresetMatrix {
+  const input = value as Partial<Record<PermissionColumn, Partial<Record<MatrixPermissionKey, PermissionLevel>>>>;
+  const next = cloneMatrix(defaultPermissionPresetMatrix);
+  permissionColumns.forEach((column) => {
+    matrixSubjects.forEach((subject) => {
+      const level = input?.[column]?.[subject.key];
+      if (level === "write" || level === "read" || level === "none") {
+        next[column][subject.key] = level;
+      }
+    });
+  });
+  return protectDeveloperMinimums(next);
+}
+
+export function permissionColumnForSession(session: Pick<AuthSession, "role" | "isDeveloper">): PermissionColumn {
+  if (session.isDeveloper) return "developer";
+  if (session.role === "super_admin") return "admin";
+  if (session.role === "manager") return "manager";
+  return "staff";
+}
+
+export function getPermissionLevel(matrix: PermissionPresetMatrix, column: PermissionColumn, key: MatrixPermissionKey): PermissionLevel {
+  return matrix[column]?.[key] || defaultPermissionPresetMatrix[column]?.[key] || "none";
+}
+
+export function hasPermissionLevel(matrix: PermissionPresetMatrix, column: PermissionColumn, key: MatrixPermissionKey, required: PermissionLevel) {
+  return permissionRank[getPermissionLevel(matrix, column, key)] >= permissionRank[required];
+}
+
+export async function getSessionPermissionLevel(db: any, session: Pick<AuthSession, "role" | "isDeveloper">, key: MatrixPermissionKey) {
+  const matrix = await getPermissionPresetMatrix(db);
+  return getPermissionLevel(matrix, permissionColumnForSession(session), key);
+}
+
+export async function hasStoredPermissionLevel(db: any, session: Pick<AuthSession, "role" | "isDeveloper">, key: MatrixPermissionKey, required: PermissionLevel) {
+  const matrix = await getPermissionPresetMatrix(db);
+  return hasPermissionLevel(matrix, permissionColumnForSession(session), key, required);
 }
 
 export function cloneMatrix(matrix: PermissionPresetMatrix): PermissionPresetMatrix {

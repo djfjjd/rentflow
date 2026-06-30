@@ -8,6 +8,7 @@ import { ensureStaffDeviceSchema } from "./api/admin/staff";
 import { writeAuditLog } from "../lib/audit-logs";
 import type { Role } from "../lib/auth/roles";
 import { detectDeviceType, isDesktopDevice } from "../lib/device-detection";
+import { hasStoredPermissionLevel } from "../lib/permissions";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -59,6 +60,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
     });
   }
 
+  if (isPartnerAddressPath(url.pathname) && !await hasStoredPermissionLevel(env.DB, session, "partners_address.view", "read")) {
+    return new Response("권한이 없습니다.", {
+      status: 403,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   const isSettingsPath = url.pathname === "/admin/settings" || url.pathname.startsWith("/admin/settings/");
   const isVerifyPath = url.pathname === "/admin/settings/verify" || url.pathname.startsWith("/admin/settings/verify/");
   if (isSettingsPath) {
@@ -81,6 +89,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, next }) => {
 
   return next();
 };
+
+function isPartnerAddressPath(pathname: string) {
+  return pathname === "/partners" || pathname.startsWith("/partners/") || pathname === "/admin/partners" || pathname.startsWith("/admin/partners/");
+}
 
 async function tryTrustedDeviceLogin(request: Request, env: Env, url: URL) {
   if (!env.DB || !env.JWT_SECRET) return null;

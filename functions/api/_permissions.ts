@@ -1,14 +1,24 @@
 import { authCookieName, readCookie, verifyAuthToken, type AuthSession } from "../../lib/auth/jwt";
-import { hasPermission, type PermissionKey } from "../../lib/permissions";
+import { hasPermission, hasStoredPermissionLevel, type MatrixPermissionKey, type PermissionKey, type PermissionLevel } from "../../lib/permissions";
 
 type PermissionEnv = {
   JWT_SECRET?: string;
+  DB?: any;
 };
 
 export async function requirePermission(request: Request, env: PermissionEnv, key: PermissionKey) {
   const session = await getApiSession(request, env);
   if (!session) return { response: Response.json({ error: "인증이 필요합니다." }, { status: 401 }) };
   if (!hasPermission(session.role, key)) return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }), session };
+  return { session };
+}
+
+export async function requirePermissionLevel(request: Request, env: PermissionEnv, key: MatrixPermissionKey, level: PermissionLevel) {
+  const session = await getApiSession(request, env);
+  if (!session) return { response: Response.json({ error: "인증이 필요합니다." }, { status: 401 }) };
+  if (!env.DB || !await hasStoredPermissionLevel(env.DB, session, key, level)) {
+    return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }), session };
+  }
   return { session };
 }
 

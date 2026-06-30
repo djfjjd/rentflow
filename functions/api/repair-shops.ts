@@ -1,8 +1,10 @@
 import { ensureColumns, noStoreHeaders, safeText } from "./_d1-utils";
 import { geocodeAddress } from "../../lib/geocode.js";
+import { requirePermissionLevel } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 type RepairShopPayload = {
@@ -10,8 +12,10 @@ type RepairShopPayload = {
   address?: string;
 };
 
-export async function onRequestGet({ env }: { env: Env }) {
+export async function onRequestGet({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "read");
+    if (auth.response) return auth.response;
     const db = getDb(env);
     await ensureRepairShopSchema(db);
     const { results } = await db.prepare(
@@ -27,6 +31,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
+    if (auth.response) return auth.response;
     const db = getDb(env);
     await ensureRepairShopSchema(db);
     const body = await request.json() as { shops?: RepairShopPayload[]; geocode?: boolean };
@@ -77,6 +83,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
 export async function onRequestDelete({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
+    if (auth.response) return auth.response;
     const db = getDb(env);
     await ensureRepairShopSchema(db);
     const url = new URL(request.url);
@@ -94,6 +102,8 @@ export async function onRequestDelete({ request, env }: { request: Request; env:
 
 export async function onRequestPut({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
+    if (auth.response) return auth.response;
     const db = getDb(env);
     await ensureRepairShopSchema(db);
     const url = new URL(request.url);

@@ -22,6 +22,8 @@ type RepairShopMapClientProps = {
   embedded?: boolean;
 };
 
+type PermissionLevel = "none" | "read" | "write";
+
 const markerIcon = L.divIcon({
   className: "",
   html: "<div style=\"width:18px;height:18px;border-radius:999px;background:#116149;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.35)\"></div>",
@@ -44,15 +46,22 @@ export default function RepairShopMapClient({
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
+  const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>("none");
   const markerRefs = useRef<Record<number, L.Marker | null>>({});
 
   useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ user?: { permissions?: Record<string, PermissionLevel> } }> : null)
+      .then((data) => setPermissionLevel(data?.user?.permissions?.["partners_address.view"] || "none"))
+      .catch(() => setPermissionLevel("none"));
     loadShops()
       .then((response) => response.json())
       .then((data) => setShops(Array.isArray(data) ? data.map(normalizeRepairShop) : []))
       .catch(() => setShops([]));
   }, []);
 
+  const canRead = permissionLevel === "read" || permissionLevel === "write";
+  const canWrite = permissionLevel === "write";
   const filtered = shops.filter((shop) => `${shop.name} ${shop.address}`.toLowerCase().includes(query.toLowerCase()));
   const mapped = filtered.filter(hasCoordinates);
   const center: [number, number] = mapped[0] ? [Number(mapped[0].lat), Number(mapped[0].lng)] : [37.5665, 126.9780];
@@ -169,14 +178,14 @@ export default function RepairShopMapClient({
             <h1 className="text-2xl font-black">{title}</h1>
             <p className="text-sm font-bold text-[#667269]">{subtitle}</p>
           </div>
-          {showImportLink ? <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link> : null}
+          {showImportLink && canWrite ? <Link className="small-btn" href="/admin/repair-shops/import">업체 가져오기</Link> : null}
         </div>
 
         <section className="grid gap-2">
           <div className="partners-toolbar">
-            <button className="primary-btn partner-add-btn" type="button" onClick={() => setShowAddModal(true)}>
+            {canWrite ? <button className="primary-btn partner-add-btn" type="button" onClick={() => setShowAddModal(true)}>
               + 주소추가
-            </button>
+            </button> : null}
             <div className="search-input-wrapper">
               <input
                 className="field search-input"
@@ -198,6 +207,7 @@ export default function RepairShopMapClient({
             </div>
           </div>
           {message ? <p className={`text-sm font-black ${message.startsWith("저장 실패") ? "text-red-700" : "text-green-700"}`}>{message}</p> : null}
+          {!canRead ? <p className="rounded-lg bg-[#fff1ef] px-3 py-2 text-sm font-black text-[#9f2d21]">권한이 없습니다.</p> : null}
         </section>
 
         <section className="partners-content-grid">
@@ -212,7 +222,7 @@ export default function RepairShopMapClient({
               >
                 <div className="partner-card-header">
                   <h2 className="partner-card-title text-sm lg:text-base">{shop.name}</h2>
-                  <button
+                  {canWrite ? <button
                     aria-label="거래처 수정"
                     className="partner-edit-button"
                     title="수정"
@@ -223,14 +233,14 @@ export default function RepairShopMapClient({
                     }}
                   >
                     <Pencil size={16} />
-                  </button>
+                  </button> : null}
                 </div>
                 <p className="mt-1 text-xs font-bold text-[#667269] lg:text-sm">{shop.address}</p>
                 <div className="partner-actions">
                   <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={naverMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>네이버지도</a>
                   <a className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" href={kakaoMapUrl(shop.address)} target="_blank" onClick={(event) => event.stopPropagation()}>카카오맵</a>
                   <button className="small-btn min-h-8 px-2 text-[11px] lg:min-h-10 lg:px-3 lg:text-sm" type="button" onClick={(event) => { event.stopPropagation(); void handleCopyAddress(shop.address); }}>주소복사</button>
-                  <button
+                  {canWrite ? <button
                     aria-label="주소 삭제"
                     className="inline-flex h-8 min-h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-800 lg:h-11 lg:min-h-11 lg:w-11 lg:min-w-11"
                     title="주소 삭제"
@@ -241,7 +251,7 @@ export default function RepairShopMapClient({
                     }}
                   >
                     <Trash2 size={16} />
-                  </button>
+                  </button> : null}
                 </div>
               </article>
             ))}

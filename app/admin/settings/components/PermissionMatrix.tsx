@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   applyColumnMode,
   cloneMatrix,
@@ -52,9 +52,23 @@ export function PermissionMatrix() {
     staff: true,
   });
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
   const columnModes = useMemo(() => {
     return Object.fromEntries(permissionColumns.map((column) => [column, modeForColumn(matrix, column, customColumns[column])])) as Record<PermissionColumn, ColumnMode>;
   }, [customColumns, matrix]);
+
+  useEffect(() => {
+    fetch("/api/admin/permission-presets", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ matrix?: PermissionPresetMatrix }> : null)
+      .then((data) => {
+        if (!data?.matrix) return;
+        const next = protectDeveloperMinimums(data.matrix);
+        setSaved(cloneMatrix(next));
+        setMatrix(cloneMatrix(next));
+      })
+      .catch(() => setMessage("저장된 권한을 불러오지 못했습니다."))
+      .finally(() => setLoading(false));
+  }, []);
 
   function cycleCell(column: PermissionColumn, key: keyof PermissionPresetMatrix[PermissionColumn]) {
     setMatrix((current) => {
@@ -73,10 +87,21 @@ export function PermissionMatrix() {
     setMessage("");
   }
 
-  function save() {
+  async function save() {
     const next = protectDeveloperMinimums(matrix);
-    setSaved(cloneMatrix(next));
-    setMatrix(cloneMatrix(next));
+    const response = await fetch("/api/admin/permission-presets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matrix: next }),
+    });
+    if (!response.ok) {
+      setMessage("권한 최신화에 실패했습니다.");
+      return;
+    }
+    const data = (await response.json().catch(() => ({}))) as { matrix?: PermissionPresetMatrix };
+    const savedMatrix = protectDeveloperMinimums(data.matrix || next);
+    setSaved(cloneMatrix(savedMatrix));
+    setMatrix(cloneMatrix(savedMatrix));
     setMessage("권한이 최신화되었습니다.");
   }
 
@@ -98,7 +123,7 @@ export function PermissionMatrix() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xl font-black">권한 매트릭스</h3>
         <div className="flex flex-wrap gap-2">
-          <button className="primary-btn" type="button" onClick={save}>권한 최신화</button>
+          <button className="primary-btn" type="button" onClick={save} disabled={loading}>권한 최신화</button>
           <button className="small-btn" type="button" onClick={cancel}>변경 취소</button>
           <button className="small-btn" type="button" onClick={restoreDefaults}>기본값으로 복원</button>
         </div>

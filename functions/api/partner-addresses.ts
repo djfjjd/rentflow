@@ -1,13 +1,15 @@
 import { safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
-import { requirePermission } from "./_permissions";
+import { requirePermissionLevel } from "./_permissions";
 
 type Env = {
   DB: any;
   JWT_SECRET?: string;
 };
 
-export async function onRequestGet({ env }: { env: Env }) {
+export async function onRequestGet({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "read");
+    if (auth.response) return auth.response;
     const { results } = await env.DB.prepare("SELECT * FROM partner_addresses ORDER BY updated_at DESC, name ASC").all();
     return Response.json(results.map(mapPartner));
   } catch (error) {
@@ -17,7 +19,7 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
-    const auth = await requirePermission(request, env, "partners.create");
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
     if (auth.response) return auth.response;
     const partner = await request.json() as any;
     await env.DB.prepare(
@@ -43,7 +45,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
 export async function onRequestPatch({ request, env }: { request: Request; env: Env }) {
   try {
-    const auth = await requirePermission(request, env, "partners.update");
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
     if (auth.response) return auth.response;
     const partner = await request.json() as any;
     await env.DB.prepare(
@@ -69,7 +71,7 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
 
 export async function onRequestDelete({ request, env }: { request: Request; env: Env }) {
   try {
-    const auth = await requirePermission(request, env, "partners.delete");
+    const auth = await requirePermissionLevel(request, env, "partners_address.view", "write");
     if (auth.response) return auth.response;
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });

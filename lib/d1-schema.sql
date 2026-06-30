@@ -79,6 +79,13 @@ CREATE TABLE IF NOT EXISTS email_verification_codes (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS position_permission_presets (
+  id TEXT PRIMARY KEY,
+  matrix_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Vehicles table
 CREATE TABLE IF NOT EXISTS vehicles (
   id TEXT PRIMARY KEY,
