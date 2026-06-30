@@ -26,8 +26,25 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const name = safeText(body.name);
       const position = safeText(body.position || "직원");
       const email = safeText(body.email).toLowerCase();
+      if (!name || !email) return Response.json({ error: "이름과 이메일이 필요합니다." }, { status: 400 });
       const role = roleFromPosition(position);
       const passwordHash = await hashPassword(crypto.randomUUID());
+      const existing = await env.DB.prepare(
+        "SELECT * FROM users WHERE lower(email) = ? OR lower(login_id) = ? LIMIT 1",
+      ).bind(email, email).first();
+      if (existing?.id) {
+        if (existing.status === "deleted" || existing.deleted_at) {
+          await env.DB.prepare(
+            `UPDATE users
+             SET name = ?, position = ?, role = ?, login_id = ?, password_hash = ?, email = ?,
+                 status = '재직', deleted_at = NULL, revoked_at = NULL, updated_at = ?
+             WHERE id = ?`,
+          ).bind(...safeBindValues([name, position, role, email, passwordHash, email, now, existing.id])).run();
+          await writeAuditLog(env.DB, { event: "staff_created", actorEmail: auth.session.email, targetId: String(existing.id), metadata: { role, position, restored: true } });
+          return Response.json({ user: await getUser(env.DB, String(existing.id)) });
+        }
+        return Response.json({ error: "이미 등록된 직원 이메일입니다." }, { status: 409 });
+      }
       await env.DB.prepare(
         `INSERT INTO users (id, name, position, role, login_id, password_hash, email, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
