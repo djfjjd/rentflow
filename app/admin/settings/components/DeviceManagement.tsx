@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { StaffDevice, StaffUser } from "@/lib/staff-device-types";
+import { deviceTypeLabel } from "@/lib/device-detection";
 
 export function DeviceManagement() {
   const [devices, setDevices] = useState<StaffDevice[]>([]);
@@ -72,21 +73,25 @@ export function DeviceManagement() {
       <section className="panel overflow-hidden">
         <h2 className="mb-3 text-xl font-black">기기 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
-          <table className="admin-table w-full min-w-[1560px] text-left text-sm">
-            <thead><tr className="border-b"><th>이름</th><th>직책(Position)</th><th>권한(Role)</th><th>기기 별칭</th><th>기종</th><th>이메일</th><th>상태</th><th>자동 로그인</th><th>최근 접속</th><th>승인자</th><th>승인일시</th><th>관리</th></tr></thead>
+          <table className="admin-table w-full min-w-[1660px] text-left text-sm">
+            <thead><tr className="border-b"><th>이름</th><th>직책(Position)</th><th>권한(Role)</th><th>기기 별칭</th><th>기종</th><th>기기 유형</th><th>이메일</th><th>상태</th><th>자동 로그인</th><th>최근 접속</th><th>승인자</th><th>승인일시</th><th>관리</th></tr></thead>
             <tbody>
               {devices.map((device) => (
                 <tr className="border-b" key={device.id}>
                   <td><button className="font-black text-[#116149]" type="button" onClick={() => setSelectedDevice(device)}>{device.userName || "직원 미연결"}</button></td>
-                  <td>{device.position || "-"}</td><td>{device.role || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{device.email || "-"}</td><td>{device.status}</td>
+                  <td>{device.position || "-"}</td><td>{device.role || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{deviceTypeLabel(device.deviceType)}</td><td>{device.email || "-"}</td><td>{device.status}</td>
                   <td>
-                    <button
-                      className={`rounded-full px-3 py-1 text-xs font-black ${device.autoLogin ? "bg-[#e3f3eb] text-[#116149]" : "bg-[#f1f2ef] text-[#68746d]"}`}
-                      type="button"
-                      onClick={() => patchDevice(device, { action: "setAutoLogin", autoLogin: !device.autoLogin }, device.autoLogin ? "자동 로그인이 꺼졌습니다." : "자동 로그인이 켜졌습니다.")}
-                    >
-                      {device.autoLogin ? "ON" : "OFF"}
-                    </button>
+                    {device.deviceType === "desktop" ? (
+                      <span className="rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-black text-[#68746d]">자동 로그인 불가</span>
+                    ) : (
+                      <button
+                        className={`rounded-full px-3 py-1 text-xs font-black ${device.autoLogin ? "bg-[#e3f3eb] text-[#116149]" : "bg-[#f1f2ef] text-[#68746d]"}`}
+                        type="button"
+                        onClick={() => patchDevice(device, { action: "setAutoLogin", autoLogin: !device.autoLogin }, device.autoLogin ? "자동 로그인이 꺼졌습니다." : "자동 로그인이 켜졌습니다.")}
+                      >
+                        {device.autoLogin ? "ON" : "OFF"}
+                      </button>
+                    )}
                   </td>
                   <td>{formatDateTime(device.lastSeenAt)}</td><td>{device.approvedBy || "-"}</td><td>{formatDateTime(device.approvedAt)}</td>
                   <td className="flex min-w-[420px] flex-wrap gap-1 py-2">
@@ -99,7 +104,7 @@ export function DeviceManagement() {
                   </td>
                 </tr>
               ))}
-              {!devices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={12}>등록된 기기가 없습니다. 첫 직원 로그인 후 승인대기 기기가 표시됩니다.</td></tr> : null}
+              {!devices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={13}>등록된 기기가 없습니다. 첫 직원 로그인 후 승인대기 기기가 표시됩니다.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -126,6 +131,7 @@ function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: 
     ["이메일", device.email || "-"],
     ["기기 별칭", device.deviceAlias || "-"],
     ["기종(Device Model)", device.deviceModel || "-"],
+    ["기기 유형", deviceTypeLabel(device.deviceType)],
     ["운영체제(OS)", device.os || "-"],
     ["브라우저", device.browser || "-"],
     ["Device ID", device.deviceId],

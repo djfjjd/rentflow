@@ -1,6 +1,7 @@
 "use client";
 
 import { Home } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 const initialForm = {
@@ -13,12 +14,13 @@ const initialForm = {
 };
 
 export default function RegisterDevicePage() {
+  const router = useRouter();
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState("");
-  const [devCode, setDevCode] = useState("");
   const [requested, setRequested] = useState(false);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
 
   useEffect(() => {
     const userAgent = navigator.userAgent || "";
@@ -35,20 +37,27 @@ export default function RegisterDevicePage() {
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = window.setTimeout(() => setResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendSeconds]);
+
   async function requestCode() {
+    if (resendSeconds > 0) return;
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/auth/register-device/request", {
+      const response = await fetch("/api/auth/send-verification-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email }),
+        body: JSON.stringify(form),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string; devCode?: string; emailReady?: boolean };
-      if (!response.ok) throw new Error(data.error || "인증코드 요청에 실패했습니다.");
+      const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!response.ok) throw new Error(data.error || "이메일 발송에 실패했습니다.");
       setRequested(true);
-      setDevCode(data.devCode || "");
-      setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : data.devCode ? "이메일 연동 전입니다. 아래 개발용 인증코드로 테스트하세요." : "이메일 연동 전입니다. 서버 로그를 확인하세요.");
+      setResendSeconds(30);
+      setMessage(data.message || "인증코드를 이메일로 발송했습니다.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -65,15 +74,15 @@ export default function RegisterDevicePage() {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/auth/register-device/verify", {
+      const response = await fetch("/api/auth/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ email: form.email, code: form.code }),
       });
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      const data = (await response.json().catch(() => ({}))) as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(data.error || "기기 등록에 실패했습니다.");
       setDone(true);
-      setMessage("관리자의 승인을 기다려주세요.");
+      router.replace(data.redirectTo || "/auth/pending");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -104,10 +113,9 @@ export default function RegisterDevicePage() {
             <Field label="기종" value={form.deviceModel} onChange={(value) => setForm({ ...form, deviceModel: value })} />
             <Field label="이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
             {requested ? <Field label="인증코드" inputMode="numeric" maxLength={6} value={form.code} onChange={(value) => setForm({ ...form, code: value.replace(/\D/g, "").slice(0, 6) })} /> : null}
-            {devCode ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">개발용 인증코드: {devCode}</p> : null}
             {message ? <p className="rounded-lg bg-[#f6f7f4] px-3 py-2 text-sm font-black text-[#68746d]">{message}</p> : null}
             <button className="primary-btn w-full" type="submit" disabled={busy}>{requested ? "기기 등록" : "인증코드 받기"}</button>
-            {requested ? <button className="small-btn w-full" type="button" onClick={requestCode} disabled={busy}>인증코드 재전송</button> : null}
+            {requested ? <button className="small-btn w-full" type="button" onClick={requestCode} disabled={busy || resendSeconds > 0}>{resendSeconds > 0 ? `인증코드 재전송 (${resendSeconds}초)` : "인증코드 재전송"}</button> : null}
           </form>
         )}
       </section>

@@ -1,5 +1,74 @@
 -- Cloudflare D1 Schema for RentFlow
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  position TEXT NOT NULL,
+  role TEXT NOT NULL,
+  login_id TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  email TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT '재직',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  device_id TEXT NOT NULL UNIQUE,
+  device_alias TEXT,
+  device_model TEXT,
+  device_type TEXT NOT NULL DEFAULT 'desktop',
+  os TEXT,
+  browser TEXT,
+  email TEXT,
+  status TEXT NOT NULL DEFAULT '승인대기',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  trusted INTEGER NOT NULL DEFAULT 0,
+  auto_login INTEGER NOT NULL DEFAULT 0,
+  approved_by TEXT,
+  approved_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (device_id) REFERENCES devices(id)
+);
+
+CREATE TABLE IF NOT EXISTS login_logs (
+  id TEXT PRIMARY KEY,
+  email TEXT,
+  login_id TEXT,
+  role TEXT,
+  device_id TEXT,
+  ip TEXT,
+  user_agent TEXT,
+  status TEXT NOT NULL,
+  message TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_verification_codes (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  code TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Vehicles table
 CREATE TABLE IF NOT EXISTS vehicles (
   id TEXT PRIMARY KEY,

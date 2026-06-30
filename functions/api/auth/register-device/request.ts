@@ -1,11 +1,11 @@
-import { buildSettingsCookie, createSettingsChallenge, deviceRegistrationChallengeCookieName, isDevCodeVisible, settingsChallengeMaxAgeSeconds } from "../../../../lib/settings-2fa";
+import { buildSettingsCookie, createSettingsChallenge, deviceRegistrationChallengeCookieName, settingsChallengeMaxAgeSeconds } from "../../../../lib/settings-2fa";
 import { normalizeEmail } from "../../../../lib/auth/jwt";
+import { sendVerificationEmail } from "../../../../lib/email-verification";
 
 type Env = {
   JWT_SECRET?: string;
-  EMAIL_API_KEY?: string;
-  NODE_ENV?: string;
-  SHOW_DEV_VERIFICATION_CODE?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -16,15 +16,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.JWT_SECRET) return Response.json({ error: "JWT_SECRET is not configured." }, { status: 500 });
 
   const { code, cookie } = await createSettingsChallenge(email, env.JWT_SECRET);
-  console.log("device registration code", { email, code });
+  try {
+    await sendVerificationEmail({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM, to: email, code });
+  } catch (error) {
+    console.error("verification email send failed", { error: error instanceof Error ? error.message : String(error) });
+    return Response.json({ error: "이메일 발송에 실패했습니다." }, { status: 502 });
+  }
   const url = new URL(request.url);
-  const hasEmailProvider = Boolean(env.EMAIL_API_KEY);
-  const showDevCode = String(env.SHOW_DEV_VERIFICATION_CODE || "").toLowerCase() === "true" || String(env.NODE_ENV || "production") !== "production" || isDevCodeVisible(request, hasEmailProvider);
   return Response.json(
     {
       ok: true,
-      devCode: showDevCode ? code : undefined,
-      emailReady: hasEmailProvider,
+      emailReady: true,
     },
     { headers: { "Set-Cookie": buildSettingsCookie(deviceRegistrationChallengeCookieName, cookie, url.protocol === "https:", settingsChallengeMaxAgeSeconds) } },
   );

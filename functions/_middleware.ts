@@ -7,6 +7,7 @@ import { buildExpiredSessionCookie, buildSessionCookie, createAuthToken, normali
 import { ensureStaffDeviceSchema } from "./api/admin/staff";
 import { writeAuditLog } from "../lib/audit-logs";
 import type { Role } from "../lib/auth/roles";
+import { detectDeviceType, isDesktopDevice } from "../lib/device-detection";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -85,6 +86,14 @@ async function tryTrustedDeviceLogin(request: Request, env: Env, url: URL) {
   if (!env.DB || !env.JWT_SECRET) return null;
   await ensureStaffDeviceSchema(env.DB);
   const userAgent = request.headers.get("User-Agent") || "";
+  const deviceType = detectDeviceType(userAgent);
+  if (isDesktopDevice(deviceType)) {
+    const desktopDeviceId = buildDeviceIdFromCookie(request.headers.get("Cookie"));
+    if (desktopDeviceId) {
+      await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: desktopDeviceId, metadata: { reason: "desktop auto login disabled" } });
+    }
+    return null;
+  }
   const deviceId = await verifyTrustedDeviceToken(readTrustedDeviceToken(request.headers.get("Cookie")), userAgent, env.JWT_SECRET);
   if (!deviceId) return null;
   const device = await env.DB.prepare(
@@ -93,7 +102,7 @@ async function tryTrustedDeviceLogin(request: Request, env: Env, url: URL) {
      LEFT JOIN users ON users.id = devices.user_id
      WHERE devices.device_id = ?`,
   ).bind(deviceId).first();
-  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login) {
+  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
     await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: deviceId });
     return null;
   }
@@ -114,6 +123,10 @@ async function tryTrustedDeviceLogin(request: Request, env: Env, url: URL) {
   headers.append("Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:"));
   headers.append("Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:"));
   return new Response(null, { status: 302, headers });
+}
+
+function buildDeviceIdFromCookie(cookieHeader: string | null) {
+  return readCookie(cookieHeader, "rentflow_device_id");
 }
 
 function roleFromDevice(value: unknown): Role {

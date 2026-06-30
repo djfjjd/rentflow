@@ -1,6 +1,7 @@
 import { ensureColumns, safeBindValues, safeNullableText, safeText } from "../_d1-utils";
 import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureAuditLogSchema, writeAuditLog } from "../../../lib/audit-logs";
+import { ensureEmailVerificationSchema } from "../../../lib/email-verification";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -120,6 +121,7 @@ export async function ensureStaffDeviceSchema(db: any) {
       device_id TEXT NOT NULL UNIQUE,
       device_alias TEXT,
       device_model TEXT,
+      device_type TEXT NOT NULL DEFAULT 'desktop',
       os TEXT,
       browser TEXT,
       email TEXT,
@@ -161,7 +163,9 @@ export async function ensureStaffDeviceSchema(db: any) {
     )`,
   ).run();
   await ensureAuditLogSchema(db);
+  await ensureEmailVerificationSchema(db);
   await ensureColumns(db, "devices", [
+    { name: "device_type", definition: "TEXT NOT NULL DEFAULT 'desktop'" },
     { name: "trusted", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "auto_login", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "approved_by", definition: "TEXT" },

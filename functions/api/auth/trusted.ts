@@ -3,7 +3,8 @@ import type { Role } from "../../../lib/auth/roles";
 import { ensureStaffDeviceSchema } from "../admin/staff";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
-import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, readTrustedDeviceToken, verifyTrustedDeviceToken } from "../../../lib/trusted-device";
+import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, readDeviceId, readTrustedDeviceToken, verifyTrustedDeviceToken } from "../../../lib/trusted-device";
+import { detectDeviceType, isDesktopDevice } from "../../../lib/device-detection";
 
 type Env = {
   JWT_SECRET?: string;
@@ -17,10 +18,31 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   await ensureStaffDeviceSchema(env.DB);
   const userAgent = request.headers.get("User-Agent") || "";
-  const deviceId = await verifyTrustedDeviceToken(readTrustedDeviceToken(request.headers.get("Cookie")), userAgent, jwtSecret);
+  const deviceType = detectDeviceType(userAgent);
+  const cookieHeader = request.headers.get("Cookie");
+  const desktopDeviceId = readDeviceId(cookieHeader);
+  if (isDesktopDevice(deviceType) && desktopDeviceId) {
+    const desktopDevice = await env.DB.prepare("SELECT status FROM devices WHERE device_id = ?").bind(safeText(desktopDeviceId)).first();
+    if (desktopDevice?.status === "승인") {
+      await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: desktopDeviceId, metadata: { reason: "desktop auto login disabled" } });
+      return Response.json(
+        { desktopApproved: true, message: "이 데스크탑 기기는 승인된 기기입니다. 보안을 위해 직책과 비밀번호를 다시 입력해주세요." },
+        { status: 409 },
+      );
+    }
+  }
+
+  const deviceId = await verifyTrustedDeviceToken(readTrustedDeviceToken(cookieHeader), userAgent, jwtSecret);
   if (!deviceId) {
     await writeAuditLog(env.DB, { event: "auto_login_failed", metadata: { reason: "invalid trusted device cookie" } });
     return Response.json({ error: "자동 로그인 기기가 아닙니다." }, { status: 401 });
+  }
+  if (isDesktopDevice(deviceType)) {
+    await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: deviceId, metadata: { reason: "desktop auto login disabled" } });
+    return Response.json(
+      { desktopApproved: true, message: "이 데스크탑 기기는 승인된 기기입니다. 보안을 위해 직책과 비밀번호를 다시 입력해주세요." },
+      { status: 409 },
+    );
   }
 
   const device = await env.DB.prepare(
@@ -30,7 +52,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
      WHERE devices.device_id = ?`,
   ).bind(safeText(deviceId)).first();
 
-  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login) {
+  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
     await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: deviceId, metadata: { reason: "device not approved or trusted" } });
     return Response.json({ error: device?.status === "차단" ? "차단된 기기입니다." : "자동 로그인이 꺼져 있습니다." }, { status: 403 });
   }

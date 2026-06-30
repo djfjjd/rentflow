@@ -29,7 +29,7 @@ function VerifyForm() {
       const data = (await response.json().catch(() => ({}))) as { error?: string; devCode?: string; sentTo?: string; emailReady?: boolean };
       if (!response.ok) throw new Error(data.error || "인증코드 발송에 실패했습니다.");
       setDevCode(data.devCode || "");
-      setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : "이메일 발송 연동 전입니다. 개발 환경에서는 서버 로그를 확인하세요.");
+      setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : "인증코드를 확인한 뒤 입력해주세요.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {

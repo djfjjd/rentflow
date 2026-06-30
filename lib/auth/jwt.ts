@@ -84,6 +84,10 @@ export function buildSessionCookie(token: string, secure: boolean) {
   return `${authCookieName}=${token}; Path=/; Max-Age=${tokenTtlSeconds}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 }
 
+export function buildBrowserSessionCookie(token: string, secure: boolean) {
+  return `${authCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+}
+
 export function buildExpiredSessionCookie() {
   return `${authCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
 }

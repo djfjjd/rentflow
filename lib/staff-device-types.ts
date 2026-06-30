@@ -31,6 +31,7 @@ export type StaffDevice = {
   deviceId: string;
   deviceAlias: string;
   deviceModel: string;
+  deviceType: "mobile" | "tablet" | "desktop" | string;
   os: string;
   browser: string;
   email: string;

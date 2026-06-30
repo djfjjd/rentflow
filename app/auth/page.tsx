@@ -20,14 +20,20 @@ function AuthForm() {
   const [accountType, setAccountType] = useState<"developer" | "admin" | "manager" | "staff">("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/trusted", { method: "POST" })
       .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as { user?: { role?: string }; redirectTo?: string; desktopApproved?: boolean; message?: string };
+        if (response.status === 409 && data.desktopApproved) {
+          if (!cancelled) setNotice(data.message || "이 데스크탑 기기는 승인된 기기입니다. 보안을 위해 직책과 비밀번호를 다시 입력해주세요.");
+          return null;
+        }
         if (!response.ok) return null;
-        return response.json() as Promise<{ user?: { role?: string }; redirectTo?: string }>;
+        return data;
       })
       .then((data) => {
         if (!data || cancelled) return;
@@ -45,6 +51,7 @@ function AuthForm() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -87,6 +94,7 @@ function AuthForm() {
             비밀번호
             <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
           </label>
+          {notice ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">{notice}</p> : null}
           {error ? <p className="rounded-lg bg-[#fff7f4] px-3 py-2 text-sm font-black text-[#a13f24]">{error}</p> : null}
           <button className="primary-btn w-full" type="submit" disabled={busy}>
             {busy ? "확인 중" : "로그인"}

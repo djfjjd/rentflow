@@ -1,9 +1,10 @@
-import { buildSessionCookie, createAuthToken, normalizeEmail } from "../../../lib/auth/jwt";
+import { buildBrowserSessionCookie, buildSessionCookie, createAuthToken, normalizeEmail } from "../../../lib/auth/jwt";
 import { ensureStaffDeviceSchema } from "../admin/staff";
 import type { Role } from "../../../lib/auth/roles";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
-import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, readDeviceId } from "../../../lib/trusted-device";
+import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, expireTrustedDeviceCookie, readDeviceId } from "../../../lib/trusted-device";
+import { detectDeviceType, isDesktopDevice } from "../../../lib/device-detection";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -42,6 +43,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const url = new URL(request.url);
+  const userAgent = request.headers.get("User-Agent") || "";
+  const deviceType = detectDeviceType(userAgent);
   if (account.isDeveloper) {
     const token = await createAuthToken({ email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, jwtSecret);
     await recordLoginLog(env, request, { email: account.email, role: account.role, status: "success", message: "developer login success" });
@@ -63,34 +66,37 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const device = await getDeviceByDeviceId(env.DB, deviceId);
-  if (!device || device.status === "승인대기") {
+  if (!device || device.status !== "승인") {
+    if (device?.status === "차단") {
+      await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "blocked device" });
+      return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
+    }
     return Response.json(
       { requiresDeviceRegistration: true, redirectTo: "/auth/register-device", deviceId },
       { status: 202, headers: { "Set-Cookie": buildDeviceCookie(deviceId, url.protocol === "https:") } },
     );
-  }
-  if (device?.status === "차단") {
-    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "blocked device" });
-    return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
   }
 
   email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
   const isDeveloper = account.isDeveloper;
   const role = account.role;
   const token = await createAuthToken({ email, role, isDeveloper, deviceId }, jwtSecret);
-  const trustedToken = await createTrustedDeviceToken(deviceId, request.headers.get("User-Agent") || "", jwtSecret);
   await createSessionRecord(env.DB, device.id, device.user_id || "", deviceId);
-  await env.DB.prepare("UPDATE devices SET trusted = 1, auto_login = 1, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
+  await env.DB.prepare("UPDATE devices SET device_type = ?, trusted = 1, auto_login = 1, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(deviceType, new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
   await recordLoginLog(env, request, { email, role, deviceId, status: "success", message: "login success" });
+  const headers: [string, string][] = [
+    ["Set-Cookie", isDesktopDevice(deviceType) ? buildBrowserSessionCookie(token, url.protocol === "https:") : buildSessionCookie(token, url.protocol === "https:")],
+    ["Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:")],
+  ];
+  if (isDesktopDevice(deviceType)) {
+    headers.push(["Set-Cookie", expireTrustedDeviceCookie()]);
+  } else {
+    const trustedToken = await createTrustedDeviceToken(deviceId, userAgent, jwtSecret);
+    headers.push(["Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:")]);
+  }
   return Response.json(
-    { user: { email, role, isDeveloper }, redirectTo: account.redirectTo },
-    {
-      headers: [
-        ["Set-Cookie", buildSessionCookie(token, url.protocol === "https:")],
-        ["Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:")],
-        ["Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:")],
-      ],
-    },
+    { user: { email, role, isDeveloper }, redirectTo: account.redirectTo, desktopReauth: isDesktopDevice(deviceType) },
+    { headers },
   );
 };
 
