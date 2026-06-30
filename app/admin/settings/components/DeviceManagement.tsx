@@ -26,6 +26,8 @@ export function DeviceManagement() {
   async function patchDevice(device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) {
     if (payload.action === "block" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 차단하시겠습니까? 해당 기기의 세션이 종료됩니다.`)) return;
     if (payload.action === "approve" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 승인하시겠습니까?`)) return;
+    if (payload.action === "remoteLogout" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 원격 로그아웃하시겠습니까? 다음 접속부터 비밀번호 로그인이 필요합니다.`)) return;
+    if (payload.action === "setAutoLogin" && payload.autoLogin === false && !confirm(`${device.deviceAlias || device.deviceId} 기기의 자동 로그인을 끄시겠습니까?`)) return;
     const response = await fetch(`/api/admin/devices?id=${encodeURIComponent(device.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -70,23 +72,34 @@ export function DeviceManagement() {
       <section className="panel overflow-hidden">
         <h2 className="mb-3 text-xl font-black">기기 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
-          <table className="admin-table w-full min-w-[1220px] text-left text-sm">
-            <thead><tr className="border-b"><th>직원명</th><th>직책(Position)</th><th>기기 별칭</th><th>기종(Device Model)</th><th>이메일</th><th>상태</th><th>최근 로그인</th><th>관리</th></tr></thead>
+          <table className="admin-table w-full min-w-[1560px] text-left text-sm">
+            <thead><tr className="border-b"><th>이름</th><th>직책(Position)</th><th>권한(Role)</th><th>기기 별칭</th><th>기종</th><th>이메일</th><th>상태</th><th>자동 로그인</th><th>최근 접속</th><th>승인자</th><th>승인일시</th><th>관리</th></tr></thead>
             <tbody>
               {devices.map((device) => (
                 <tr className="border-b" key={device.id}>
                   <td><button className="font-black text-[#116149]" type="button" onClick={() => setSelectedDevice(device)}>{device.userName || "직원 미연결"}</button></td>
-                  <td>{device.position || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{device.email || "-"}</td><td>{device.status}</td><td>{formatDateTime(device.lastSeenAt)}</td>
-                  <td className="flex min-w-[320px] flex-wrap gap-1 py-2">
+                  <td>{device.position || "-"}</td><td>{device.role || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{device.email || "-"}</td><td>{device.status}</td>
+                  <td>
+                    <button
+                      className={`rounded-full px-3 py-1 text-xs font-black ${device.autoLogin ? "bg-[#e3f3eb] text-[#116149]" : "bg-[#f1f2ef] text-[#68746d]"}`}
+                      type="button"
+                      onClick={() => patchDevice(device, { action: "setAutoLogin", autoLogin: !device.autoLogin }, device.autoLogin ? "자동 로그인이 꺼졌습니다." : "자동 로그인이 켜졌습니다.")}
+                    >
+                      {device.autoLogin ? "ON" : "OFF"}
+                    </button>
+                  </td>
+                  <td>{formatDateTime(device.lastSeenAt)}</td><td>{device.approvedBy || "-"}</td><td>{formatDateTime(device.approvedAt)}</td>
+                  <td className="flex min-w-[420px] flex-wrap gap-1 py-2">
                     <AssignSelect staff={staff} value={device.userId || ""} onChange={(userId) => patchDevice(device, { userId }, "기기 직원 연결이 변경되었습니다.")} />
                     <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "approve", userId: device.userId }, "기기가 승인되었습니다.")}>승인</button>
+                    <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
                     <button className="danger-btn" type="button" onClick={() => patchDevice(device, { action: "block" }, "기기가 차단되었고 세션이 종료되었습니다.")}>차단</button>
                     <button className="danger-btn" type="button" onClick={() => deleteDevice(device)}>삭제</button>
                     <button className="small-btn" type="button" onClick={() => setSelectedDevice(device)}>상세</button>
                   </td>
                 </tr>
               ))}
-              {!devices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={8}>등록된 기기가 없습니다. 첫 직원 로그인 후 승인대기 기기가 표시됩니다.</td></tr> : null}
+              {!devices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={12}>등록된 기기가 없습니다. 첫 직원 로그인 후 승인대기 기기가 표시됩니다.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -119,6 +132,9 @@ function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: 
     ["최초 등록일", formatDateTime(device.createdAt)],
     ["최근 로그인", formatDateTime(device.lastSeenAt)],
     ["상태", device.status],
+    ["자동 로그인", device.autoLogin ? "ON" : "OFF"],
+    ["승인자", device.approvedBy || "-"],
+    ["승인일시", formatDateTime(device.approvedAt)],
   ];
   return (
     <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/40 p-4">

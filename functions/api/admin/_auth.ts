@@ -26,5 +26,9 @@ export async function requireAdminSession(request: Request, env: AdminApiEnv, _a
     return { session };
   }
 
+  if (_access === "read" && session.role === "manager") {
+    return { session };
+  }
+
   return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }) };
 }

@@ -2,6 +2,7 @@ import { readCookie } from "../../../../lib/auth/jwt";
 import { safeBindValues, safeNullableText, safeText } from "../../_d1-utils";
 import { ensureStaffDeviceSchema } from "../../admin/staff";
 import { buildSettingsCookie, deviceRegistrationChallengeCookieName, expireSettingsCookie, verifySettingsChallenge } from "../../../../lib/settings-2fa";
+import { writeAuditLog } from "../../../../lib/audit-logs";
 
 type Env = {
   JWT_SECRET?: string;
@@ -50,6 +51,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       null,
     ])).run();
   }
+  await writeAuditLog(env.DB, { event: "device_registered", actorEmail: email, targetId: deviceId, metadata: { position: body.position, deviceAlias: body.deviceAlias, deviceModel: body.deviceModel } });
 
   const url = new URL(request.url);
   return Response.json(

@@ -35,6 +35,10 @@ export type StaffDevice = {
   browser: string;
   email: string;
   status: DeviceStatus;
+  trusted: boolean;
+  autoLogin: boolean;
+  approvedBy: string;
+  approvedAt: string;
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string;

@@ -1,4 +1,4 @@
-import { safeBindValues, safeNullableText, safeText } from "../_d1-utils";
+import { ensureColumns, safeBindValues, safeNullableText, safeText } from "../_d1-utils";
 import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureAuditLogSchema, writeAuditLog } from "../../../lib/audit-logs";
 
@@ -127,6 +127,10 @@ export async function ensureStaffDeviceSchema(db: any) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       last_seen_at TEXT,
+      trusted INTEGER NOT NULL DEFAULT 0,
+      auto_login INTEGER NOT NULL DEFAULT 0,
+      approved_by TEXT,
+      approved_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`,
   ).run();
@@ -157,6 +161,12 @@ export async function ensureStaffDeviceSchema(db: any) {
     )`,
   ).run();
   await ensureAuditLogSchema(db);
+  await ensureColumns(db, "devices", [
+    { name: "trusted", definition: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "auto_login", definition: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "approved_by", definition: "TEXT" },
+    { name: "approved_at", definition: "TEXT" },
+  ]);
 }
 
 async function getUser(db: any, id: string) {
@@ -167,7 +177,7 @@ async function getUser(db: any, id: string) {
 async function retireUser(db: any, id: string) {
   const now = new Date().toISOString();
   await db.prepare("UPDATE users SET status = '퇴사', updated_at = ? WHERE id = ?").bind(now, safeText(id)).run();
-  await db.prepare("UPDATE devices SET status = '차단', updated_at = ? WHERE user_id = ?").bind(now, safeText(id)).run();
+  await db.prepare("UPDATE devices SET status = '차단', trusted = 0, auto_login = 0, updated_at = ? WHERE user_id = ?").bind(now, safeText(id)).run();
   await db.prepare("UPDATE sessions SET status = 'revoked' WHERE user_id = ? AND status = 'active'").bind(safeText(id)).run();
 }
 

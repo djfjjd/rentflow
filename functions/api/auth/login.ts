@@ -1,8 +1,9 @@
-import { buildSessionCookie, createAuthToken, normalizeEmail, readCookie } from "../../../lib/auth/jwt";
+import { buildSessionCookie, createAuthToken, normalizeEmail } from "../../../lib/auth/jwt";
 import { ensureStaffDeviceSchema } from "../admin/staff";
 import type { Role } from "../../../lib/auth/roles";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
+import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, readDeviceId } from "../../../lib/trusted-device";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -29,7 +30,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const body = (await request.json().catch(() => ({}))) as { accountType?: string; password?: string; deviceId?: string; device_id?: string };
   const accountType = String(body.accountType || "");
   const password = String(body.password || "");
-  const deviceId = String(body.deviceId || body.device_id || readCookie(request.headers.get("Cookie"), "rentflow_device_id") || crypto.randomUUID());
+  const deviceId = String(body.deviceId || body.device_id || readDeviceId(request.headers.get("Cookie")) || crypto.randomUUID());
   const account = getPasswordAccount(accountType, env);
   let email = account?.email || "";
   if (!account || !account.password || password !== account.password) {
@@ -76,7 +77,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
   const isDeveloper = account.isDeveloper;
   const role = account.role;
-  const token = await createAuthToken({ email, role, isDeveloper }, jwtSecret);
+  const token = await createAuthToken({ email, role, isDeveloper, deviceId }, jwtSecret);
+  const trustedToken = await createTrustedDeviceToken(deviceId, request.headers.get("User-Agent") || "", jwtSecret);
+  await createSessionRecord(env.DB, device.id, device.user_id || "", deviceId);
+  await env.DB.prepare("UPDATE devices SET trusted = 1, auto_login = 1, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
   await recordLoginLog(env, request, { email, role, deviceId, status: "success", message: "login success" });
   return Response.json(
     { user: { email, role, isDeveloper }, redirectTo: account.redirectTo },
@@ -84,6 +88,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       headers: [
         ["Set-Cookie", buildSessionCookie(token, url.protocol === "https:")],
         ["Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:")],
+        ["Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:")],
       ],
     },
   );
@@ -97,7 +102,7 @@ function getPasswordAccount(accountType: string, env: Env): { password: string; 
     return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true, displayName: "개발자", position: "개발자" };
   }
   if (accountType === "manager") {
-    return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/app/dashboard", email: "", isDeveloper: false, displayName: "실장님", position: "실장" };
+    return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/admin/dispatches", email: "", isDeveloper: false, displayName: "실장님", position: "실장" };
   }
   if (accountType === "staff") {
     return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard", email: "", isDeveloper: false, displayName: "직원", position: "직원" };
@@ -120,11 +125,17 @@ function firstTeamLeadEmail(env: Env) {
 async function getDeviceByDeviceId(db: any, deviceId: string) {
   if (!db) return null;
   await ensureStaffDeviceSchema(db);
-  return db.prepare("SELECT id, status, email FROM devices WHERE device_id = ?").bind(safeText(deviceId)).first();
+  return db.prepare("SELECT devices.*, users.role AS user_role, users.position AS user_position, users.name AS user_name FROM devices LEFT JOIN users ON users.id = devices.user_id WHERE device_id = ?").bind(safeText(deviceId)).first();
 }
 
-function buildDeviceCookie(deviceId: string, secure: boolean) {
-  return `rentflow_device_id=${deviceId}; Path=/; Max-Age=${60 * 60 * 24 * 365}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
+async function createSessionRecord(db: any, deviceRowId: string, userId: string, publicDeviceId: string) {
+  if (!db) return;
+  const now = new Date();
+  const expires = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 180);
+  await db.prepare(
+    `INSERT INTO sessions (id, user_id, device_id, status, created_at, expires_at)
+     VALUES (?, ?, ?, 'active', ?, ?)`,
+  ).bind(crypto.randomUUID(), userId || publicDeviceId, safeText(deviceRowId), now.toISOString(), expires.toISOString()).run();
 }
 
 async function recordLoginLog(

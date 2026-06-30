@@ -2,6 +2,7 @@ export type ProtectedRoute = {
   path: string;
   mode?: "exact" | "prefix";
   requiredRole?: "super_admin";
+  allowedRoles?: Array<"super_admin" | "manager" | "staff">;
   allowedEmailEnvKeys?: string[];
   nextPath?: string;
   authenticatedRedirectTo?: string;
@@ -11,6 +12,7 @@ export const protectedRoutes: ProtectedRoute[] = [
   { path: "/", nextPath: "/app", authenticatedRedirectTo: "/app" },
   { path: "/app", mode: "prefix" },
   { path: "/admin/settings", mode: "prefix", requiredRole: "super_admin" },
+  { path: "/admin/dispatches", mode: "prefix", allowedRoles: ["super_admin", "manager"] },
   { path: "/admin", mode: "prefix", requiredRole: "super_admin" },
   { path: "/dispatch" },
   { path: "/return" },

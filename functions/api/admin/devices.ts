@@ -57,18 +57,31 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const values: unknown[] = [];
 
       if (action === "approve") {
-        fields.push("status = ?");
-        values.push("승인");
+        fields.push("status = ?", "trusted = ?", "auto_login = ?", "approved_by = ?", "approved_at = ?");
+        values.push("승인", 1, 1, auth.session.email, new Date().toISOString());
         await writeAuditLog(env.DB, { event: "device_approved", actorEmail: auth.session.email, targetId: id });
+        await writeAuditLog(env.DB, { event: "trusted_device_enabled", actorEmail: auth.session.email, targetId: id });
         if (body.userId || body.user_id) {
           fields.push("user_id = ?");
           values.push(safeText(body.userId || body.user_id));
         }
       } else if (action === "block") {
-        fields.push("status = ?");
-        values.push("차단");
+        fields.push("status = ?", "trusted = ?", "auto_login = ?");
+        values.push("차단", 0, 0);
         await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
         await writeAuditLog(env.DB, { event: "device_blocked", actorEmail: auth.session.email, targetId: id });
+      } else if (action === "remoteLogout") {
+        fields.push("trusted = ?", "auto_login = ?");
+        values.push(0, 0);
+        await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        await writeAuditLog(env.DB, { event: "device_remote_logout", actorEmail: auth.session.email, targetId: id });
+        await writeAuditLog(env.DB, { event: "trusted_device_disabled", actorEmail: auth.session.email, targetId: id });
+      } else if (action === "setAutoLogin") {
+        const enabled = body.autoLogin === true || body.auto_login === true || body.autoLogin === 1 || body.auto_login === 1;
+        fields.push("trusted = ?", "auto_login = ?");
+        values.push(enabled ? 1 : 0, enabled ? 1 : 0);
+        if (!enabled) await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        await writeAuditLog(env.DB, { event: enabled ? "trusted_device_enabled" : "trusted_device_disabled", actorEmail: auth.session.email, targetId: id });
       }
 
       if (body.userId !== undefined || body.user_id !== undefined) { fields.push("user_id = ?"); values.push(safeNullableText(body.userId ?? body.user_id)); }
@@ -130,6 +143,10 @@ function mapDevice(row: any) {
     browser: row.browser || "",
     email: row.email || "",
     status: row.status,
+    trusted: Boolean(row.trusted),
+    autoLogin: Boolean(row.auto_login),
+    approvedBy: row.approved_by || "",
+    approvedAt: row.approved_at || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at || "",

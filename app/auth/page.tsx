@@ -3,7 +3,7 @@
 import { Home } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 export default function AuthPage() {
   return (
@@ -21,6 +21,25 @@ function AuthForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/trusted", { method: "POST" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ user?: { role?: string }; redirectTo?: string }>;
+      })
+      .then((data) => {
+        if (!data || cancelled) return;
+        const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
+        const fallback = data.redirectTo || "/app/dashboard";
+        const target = safeNext && (data.user?.role === "super_admin" || !safeNext.startsWith("/admin")) ? safeNext : fallback;
+        router.replace(target);
+        router.refresh();
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [next, router]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

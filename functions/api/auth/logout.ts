@@ -1,5 +1,6 @@
 import { buildExpiredSessionCookie } from "../../../lib/auth/jwt";
 import { expireSettingsCookie, settings2faChallengeCookieName, settings2faCookieName } from "../../../lib/settings-2fa";
+import { expireTrustedDeviceCookie } from "../../../lib/trusted-device";
 
 export const onRequest: PagesFunction = async ({ request }) => {
   if (request.method !== "POST") {
@@ -11,6 +12,7 @@ export const onRequest: PagesFunction = async ({ request }) => {
     {
       headers: [
         ["Set-Cookie", buildExpiredSessionCookie()],
+        ["Set-Cookie", expireTrustedDeviceCookie()],
         ["Set-Cookie", expireSettingsCookie(settings2faCookieName)],
         ["Set-Cookie", expireSettingsCookie(settings2faChallengeCookieName)],
       ],

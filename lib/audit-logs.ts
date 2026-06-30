@@ -6,9 +6,15 @@ export type AuditEvent =
   | "staff_deleted"
   | "staff_resigned"
   | "role_changed"
+  | "device_registered"
   | "device_approved"
+  | "device_remote_logout"
   | "device_blocked"
   | "device_deleted"
+  | "trusted_device_enabled"
+  | "trusted_device_disabled"
+  | "auto_login_success"
+  | "auto_login_failed"
   | "login_success"
   | "login_failed";
 
