@@ -29,8 +29,8 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const id = safeText(body.id || crypto.randomUUID());
       const now = new Date().toISOString();
       await env.DB.prepare(
-        `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_scope, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(...safeBindValues([
         id,
         safeNullableText(body.userId || body.user_id),
@@ -39,6 +39,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         safeNullableText(body.deviceAlias || body.device_alias),
         safeNullableText(body.deviceModel || body.device_model),
         safeText(body.deviceType || body.device_type || "desktop"),
+        safeText(body.deviceScope || body.device_scope || ((body.deviceOwnerType || body.device_owner_type) === "office_pc" ? "office_pc" : "personal_mobile")),
         safeText(body.deviceOwnerType || body.device_owner_type || "personal"),
         safeNullableText(body.officePcType || body.office_pc_type),
         safeNullableText(body.location),
@@ -108,6 +109,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (body.deviceName !== undefined || body.device_name !== undefined) { fields.push("device_name = ?"); values.push(safeNullableText(body.deviceName ?? body.device_name)); }
       if (body.deviceModel !== undefined || body.device_model !== undefined) { fields.push("device_model = ?"); values.push(safeNullableText(body.deviceModel ?? body.device_model)); }
       if (body.deviceType !== undefined || body.device_type !== undefined) { fields.push("device_type = ?"); values.push(safeText(body.deviceType ?? body.device_type)); }
+      if (body.deviceScope !== undefined || body.device_scope !== undefined) { fields.push("device_scope = ?"); values.push(safeText(body.deviceScope ?? body.device_scope)); }
       if (body.deviceOwnerType !== undefined || body.device_owner_type !== undefined) { fields.push("device_owner_type = ?"); values.push(safeText(body.deviceOwnerType ?? body.device_owner_type)); }
       if (body.officePcType !== undefined || body.office_pc_type !== undefined) { fields.push("office_pc_type = ?"); values.push(safeNullableText(body.officePcType ?? body.office_pc_type)); }
       if (body.location !== undefined) { fields.push("location = ?"); values.push(safeNullableText(body.location)); }
@@ -170,6 +172,7 @@ function mapDevice(row: any) {
     deviceAlias: row.device_name || row.device_alias || "",
     deviceModel: row.device_model || "",
     deviceType: row.device_type || "desktop",
+    deviceScope: row.device_scope || (row.device_owner_type === "office_pc" ? "office_pc" : "personal_mobile"),
     deviceOwnerType: row.device_owner_type || "personal",
     officePcType: row.office_pc_type || "",
     location: row.location || "",

@@ -33,12 +33,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const existing = await env.DB.prepare("SELECT id FROM devices WHERE device_id = ?").bind(deviceId).first();
   if (existing?.id) {
     await env.DB.prepare(
-      `UPDATE devices SET device_name = ?, device_alias = ?, device_model = ?, device_type = ?, os = ?, browser = ?, email = ?, status = 'email_verified_pending', updated_at = ? WHERE device_id = ?`,
+      `UPDATE devices SET device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_scope = 'personal_mobile', device_owner_type = 'personal', os = ?, browser = ?, email = ?, status = 'pending_approval', updated_at = ? WHERE device_id = ?`,
     ).bind(...safeBindValues([safeNullableText(detected.deviceName), safeNullableText(detected.deviceName), safeNullableText(detected.deviceModel), detected.deviceType, detected.os, detected.browser, email, now, deviceId])).run();
   } else {
     await env.DB.prepare(
-      `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, os, browser, email, status, created_at, updated_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_scope, device_owner_type, os, browser, email, status, created_at, updated_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'personal_mobile', 'personal', ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(...safeBindValues([
       crypto.randomUUID(),
       null,
@@ -50,7 +50,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       detected.os,
       detected.browser,
       email,
-      "email_verified_pending",
+      "pending_approval",
       now,
       now,
       null,

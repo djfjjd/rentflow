@@ -112,7 +112,14 @@ export default function RegisterDevicePage() {
       const response = await fetch("/api/auth/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, code: form.code }),
+        body: JSON.stringify({
+          email: form.email,
+          code: form.code,
+          name: form.name,
+          deviceOwnerType: form.deviceOwnerType,
+          officePcType: form.officePcType,
+          location: form.location,
+        }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(data.error || "기기 등록에 실패했습니다.");

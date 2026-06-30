@@ -59,6 +59,8 @@ export function DeviceManagement() {
     setMessage("기기가 삭제 처리되었습니다.");
   }
 
+  const personalDevices = devices.filter(isPersonalDevice);
+
   return (
     <section className="space-y-4">
       {message ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">{message}</p> : null}
@@ -75,13 +77,13 @@ export function DeviceManagement() {
           <table className="admin-table w-full min-w-[1180px] text-left text-sm">
             <thead><tr className="border-b"><th>직원명</th><th>이메일</th><th>직책</th><th>기기 별칭</th><th>기종</th><th>상태</th><th>최근 접속</th><th>관리</th></tr></thead>
             <tbody>
-              {devices.filter((device) => device.deviceOwnerType !== "office_pc").map((device) => (
+              {personalDevices.map((device) => (
                 <tr className="border-b" key={device.id}>
                   <td><button className="font-black text-[#116149]" type="button" onClick={() => setSelectedDevice(device)}>{device.userName || "직원 미연결"}</button></td>
-                  <td>{device.email || "-"}</td><td>{device.position || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{device.status}</td><td>{formatDateTime(device.lastSeenAt)}</td>
+                  <td>{device.email || "-"}</td><td>{device.position || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{formatDeviceStatus(device.status)}</td><td>{formatDateTime(device.lastSeenAt)}</td>
                   <td className="flex min-w-[360px] flex-wrap gap-1 py-2">
                     <AssignSelect staff={staff} value={device.userId || ""} onChange={(userId) => patchDevice(device, { userId }, "기기 직원 연결이 변경되었습니다.")} />
-                    <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "approve", userId: device.userId }, "기기가 승인되었습니다.")}>승인</button>
+                    {isPendingDevice(device.status) ? <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "approve", userId: device.userId }, "기기가 승인되었습니다.")}>승인</button> : null}
                     <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
                     <button className="danger-btn" type="button" onClick={() => patchDevice(device, { action: "block" }, "기기가 차단되었고 세션이 종료되었습니다.")}>차단</button>
                     <button className="danger-btn" type="button" onClick={() => deleteDevice(device)}>삭제</button>
@@ -89,7 +91,7 @@ export function DeviceManagement() {
                   </td>
                 </tr>
               ))}
-              {!devices.filter((device) => device.deviceOwnerType !== "office_pc").length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={8}>등록된 개인 기기가 없습니다.</td></tr> : null}
+              {!personalDevices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={8}>등록된 개인 기기가 없습니다.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -112,7 +114,7 @@ function OfficePcCards({ devices, onPatch, onDelete, onSelect }: { devices: Staf
                 <h3 className="text-lg font-black">{officePcLabels[type]}</h3>
                 <p className="mt-1 text-sm font-bold text-[#68746d]">권한: {officePcRoles[type]}</p>
               </div>
-              <span className="rounded-full bg-[#eef4ed] px-3 py-1 text-xs font-black text-[#116149]">{device?.status || "미등록"}</span>
+              <span className="rounded-full bg-[#eef4ed] px-3 py-1 text-xs font-black text-[#116149]">{device ? formatDeviceStatus(device.status) : "미등록"}</span>
             </div>
             {device ? (
               <div className="mt-4 grid gap-2 text-sm font-bold text-[#34423b]">
@@ -165,7 +167,7 @@ function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: 
     ["Device ID", device.deviceId],
     ["최초 등록일", formatDateTime(device.createdAt)],
     ["최근 로그인", formatDateTime(device.lastSeenAt)],
-    ["상태", device.status],
+    ["상태", formatDeviceStatus(device.status)],
     ["자동 로그인", device.autoLogin ? "ON" : "OFF"],
     ["승인자", device.approvedBy || "-"],
     ["승인일시", formatDateTime(device.approvedAt)],
@@ -192,4 +194,20 @@ function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: 
 
 function formatDateTime(value: string) {
   return value ? value.replace("T", " ").slice(0, 16) : "-";
+}
+
+function isPersonalDevice(device: StaffDevice) {
+  return device.deviceScope === "personal_mobile" || device.deviceOwnerType !== "office_pc";
+}
+
+function isPendingDevice(status: string) {
+  return ["승인대기", "pending_approval", "email_verified_pending", "이메일인증대기"].includes(status);
+}
+
+function formatDeviceStatus(status: string) {
+  if (isPendingDevice(status)) return "승인대기";
+  if (status === "approved" || status === "승인") return "승인";
+  if (status === "blocked" || status === "차단") return "차단";
+  if (status === "deleted") return "삭제됨";
+  return status || "-";
 }

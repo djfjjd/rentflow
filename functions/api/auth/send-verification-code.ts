@@ -57,14 +57,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (ownerType === "personal") {
       const existingPersonal = await env.DB.prepare(
         `SELECT id, device_id FROM devices
-         WHERE user_id = ? AND device_owner_type = 'personal' AND status != '차단' AND device_id != ?
+         WHERE user_id = ? AND device_owner_type = 'personal' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
          LIMIT 1`,
       ).bind(staff.id, deviceId).first();
       if (existingPersonal?.id) return Response.json({ error: "개인 휴대폰/태블릿은 직원 이메일 1개당 1대만 등록할 수 있습니다." }, { status: 409 });
     } else {
       const existingOfficePc = await env.DB.prepare(
         `SELECT id, device_id FROM devices
-         WHERE office_pc_type = ? AND device_owner_type = 'office_pc' AND status != '차단' AND device_id != ?
+         WHERE office_pc_type = ? AND device_owner_type = 'office_pc' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
          LIMIT 1`,
       ).bind(officePcType, deviceId).first();
       if (existingOfficePc?.id) return Response.json({ error: "해당 사무실 PC는 이미 등록되어 있습니다." }, { status: 409 });
@@ -110,7 +110,7 @@ async function upsertRegistrationDevice(
     const status = existing.status === "승인" || existing.status === "차단" ? existing.status : "이메일인증대기";
     await db.prepare(
       `UPDATE devices
-       SET user_id = ?, device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_owner_type = ?, office_pc_type = ?, location = ?, os = ?, browser = ?, email = ?, status = ?, updated_at = ?
+       SET user_id = ?, device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_scope = ?, device_owner_type = ?, office_pc_type = ?, location = ?, os = ?, browser = ?, email = ?, status = ?, updated_at = ?
        WHERE device_id = ?`,
     ).bind(...safeBindValues([
       input.ownerType === "personal" ? safeNullableText(input.userId) : null,
@@ -118,6 +118,7 @@ async function upsertRegistrationDevice(
       safeNullableText(input.deviceName),
       safeNullableText(input.deviceModel),
       input.deviceType,
+      input.ownerType === "personal" ? "personal_mobile" : "office_pc",
       input.ownerType,
       safeNullableText(input.officePcType),
       safeNullableText(input.location),
@@ -131,8 +132,8 @@ async function upsertRegistrationDevice(
     return;
   }
   await db.prepare(
-    `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_scope, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(...safeBindValues([
     crypto.randomUUID(),
     input.ownerType === "personal" ? safeNullableText(input.userId) : null,
@@ -141,6 +142,7 @@ async function upsertRegistrationDevice(
     safeNullableText(input.deviceName),
     safeNullableText(input.deviceModel),
     input.deviceType,
+    input.ownerType === "personal" ? "personal_mobile" : "office_pc",
     input.ownerType,
     safeNullableText(input.officePcType),
     safeNullableText(input.location),

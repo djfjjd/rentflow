@@ -133,6 +133,7 @@ export async function ensureStaffDeviceSchema(db: any) {
       device_alias TEXT,
       device_model TEXT,
       device_type TEXT NOT NULL DEFAULT 'desktop',
+      device_scope TEXT,
       device_owner_type TEXT NOT NULL DEFAULT 'personal',
       office_pc_type TEXT,
       location TEXT,
@@ -187,6 +188,7 @@ export async function ensureStaffDeviceSchema(db: any) {
   ]);
   await ensureColumns(db, "devices", [
     { name: "device_type", definition: "TEXT NOT NULL DEFAULT 'desktop'" },
+    { name: "device_scope", definition: "TEXT" },
     { name: "device_name", definition: "TEXT" },
     { name: "device_owner_type", definition: "TEXT NOT NULL DEFAULT 'personal'" },
     { name: "office_pc_type", definition: "TEXT" },

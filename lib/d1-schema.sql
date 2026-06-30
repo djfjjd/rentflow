@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS devices (
   device_alias TEXT,
   device_model TEXT,
   device_type TEXT NOT NULL DEFAULT 'desktop',
+  device_scope TEXT,
   device_owner_type TEXT NOT NULL DEFAULT 'personal',
   office_pc_type TEXT,
   location TEXT,
