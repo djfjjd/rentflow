@@ -161,8 +161,8 @@ function AssignSelect({ staff, value, onChange }: { staff: StaffUser[]; value: s
 function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: () => void }) {
   const rows = [
     ["직원명", device.userName || "직원 미연결"],
-    ["직책(Position)", device.position || "-"],
-    ["권한(Role)", device.role || "-"],
+    ["직책", device.position || "-"],
+    ["권한", device.role || "-"],
     ["이메일", device.email || "-"],
     ["기기 별칭", device.deviceAlias || "-"],
     ["기종(Device Model)", device.deviceModel || "-"],

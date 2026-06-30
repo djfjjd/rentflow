@@ -26,14 +26,20 @@ const levelStyle: Record<PermissionLevel, string> = {
 
 const levelLabel: Record<PermissionLevel, string> = {
   write: "편집",
-  read: "읽기만",
+  read: "읽기",
   none: "⛔",
 };
 
 const modeLabel: Record<ColumnMode, string> = {
   allWrite: "전체편집",
-  allNone: "전체접근금지",
+  allNone: "전체불가",
   custom: "사용자화",
+};
+
+const modeStyle: Record<ColumnMode, string> = {
+  allWrite: "border-[#116149] bg-[#116149] text-white",
+  allNone: "border-[#f2c7c2] bg-[#fff1ef] text-[#9f2d21]",
+  custom: "border-[#d8ded8] bg-white text-[#16211d]",
 };
 
 export function PermissionMatrix() {
@@ -111,7 +117,7 @@ export function PermissionMatrix() {
               <th className="sticky left-0 top-[37px] z-30 border-b border-[#d8ded8] bg-[#f6f7f4] p-2 text-left">전체 상태</th>
               {permissionColumns.map((column) => (
                 <th className="sticky top-[37px] z-20 border-b border-[#d8ded8] bg-[#f6f7f4] p-2 text-center" key={column}>
-                  <button className="small-btn mx-auto" type="button" onClick={() => cycleColumn(column)}>{modeLabel[columnModes[column]]}</button>
+                  <button className={`mx-auto inline-flex min-w-24 justify-center rounded-full border px-3 py-1.5 text-xs font-black ${modeStyle[columnModes[column]]}`} type="button" onClick={() => cycleColumn(column)}>{modeLabel[columnModes[column]]}</button>
                 </th>
               ))}
             </tr>

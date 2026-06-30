@@ -90,14 +90,14 @@ export function StaffManagement() {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-black">{editing ? "직원 수정" : "신규 직원 등록"}</h2>
-            <p className="text-sm font-bold text-[#68746d]">직책(Position)을 기준으로 내부 권한이 자동 적용됩니다. 재직 직원 {activeCount}명</p>
+            <p className="text-sm font-bold text-[#68746d]">직책을 기준으로 내부 권한이 자동 적용됩니다. 재직 직원 {activeCount}명</p>
           </div>
           {editing ? <button className="small-btn" type="button" onClick={() => { setEditing(null); setForm(emptyStaffForm); }}>신규 등록으로 전환</button> : null}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="이름" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
           <Field label="이메일" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required type="email" />
-          <label className="label">직책(Position)<select className="field" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })}>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
+          <label className="label">직책<select className="field" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })}>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
         </div>
         <button className="primary-btn" type="submit">{editing ? "수정 저장" : "직원 등록"}</button>
       </form>
@@ -108,7 +108,7 @@ export function StaffManagement() {
         <h2 className="mb-3 text-xl font-black">직원 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
           <table className="admin-table w-full min-w-[880px] text-left text-sm">
-            <thead><tr className="border-b"><th>이름</th><th>이메일</th><th>직책(Position)</th><th>상태</th><th>등록일</th><th>관리</th></tr></thead>
+            <thead><tr className="border-b"><th>이름</th><th>이메일</th><th>직책</th><th>상태</th><th>등록일</th><th>관리</th></tr></thead>
             <tbody>
               {staff.map((user) => (
                 <tr className="border-b" key={user.id}>
