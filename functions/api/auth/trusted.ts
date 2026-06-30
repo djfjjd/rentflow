@@ -52,7 +52,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
      WHERE devices.device_id = ?`,
   ).bind(safeText(deviceId)).first();
 
-  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
+  if (!device || device.status !== "승인" || device.device_owner_type === "office_pc" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
     await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: deviceId, metadata: { reason: "device not approved or trusted" } });
     return Response.json({ error: device?.status === "차단" ? "차단된 기기입니다." : "자동 로그인이 꺼져 있습니다." }, { status: 403 });
   }

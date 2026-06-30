@@ -5,6 +5,7 @@ import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
 import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, expireTrustedDeviceCookie, readDeviceId } from "../../../lib/trusted-device";
 import { detectDeviceType, isDesktopDevice } from "../../../lib/device-detection";
+import { officePcLabel, officePcRoles, roleAllowedForOfficePc } from "../../../lib/office-pc-policy";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -79,23 +80,34 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
   const isDeveloper = account.isDeveloper;
-  const role = account.role;
-  const token = await createAuthToken({ email, role, isDeveloper, deviceId }, jwtSecret);
+  const role = effectiveDeviceRole(device);
+  if (account.role !== role) {
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "role not allowed for device" });
+    return Response.json({ error: "이 기기에서 선택한 직책으로 로그인할 수 없습니다." }, { status: 403 });
+  }
+  if (device.device_owner_type === "office_pc" && !roleAllowedForOfficePc(String(device.office_pc_type || ""), account.role)) {
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "office pc role blocked" });
+    return Response.json({ error: "이 사무실 PC에서 선택한 직책으로 로그인할 수 없습니다." }, { status: 403 });
+  }
+  const displayName = device.device_owner_type === "office_pc" ? officePcLabel(String(device.office_pc_type || "")) : device.user_name || account.displayName;
+  const position = device.device_owner_type === "office_pc" ? displayName : device.user_position || account.position;
+  const token = await createAuthToken({ email, role, isDeveloper, displayName, position, deviceId }, jwtSecret);
   await createSessionRecord(env.DB, device.id, device.user_id || "", deviceId);
-  await env.DB.prepare("UPDATE devices SET device_type = ?, trusted = 1, auto_login = 1, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(deviceType, new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
+  const autoLogin = device.device_owner_type === "office_pc" || isDesktopDevice(deviceType) ? 0 : 1;
+  await env.DB.prepare("UPDATE devices SET device_type = ?, trusted = ?, auto_login = ?, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(deviceType, autoLogin ? 1 : 0, autoLogin, new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
   await recordLoginLog(env, request, { email, role, deviceId, status: "success", message: "login success" });
   const headers: [string, string][] = [
     ["Set-Cookie", isDesktopDevice(deviceType) ? buildBrowserSessionCookie(token, url.protocol === "https:") : buildSessionCookie(token, url.protocol === "https:")],
     ["Set-Cookie", buildDeviceCookie(deviceId, url.protocol === "https:")],
   ];
-  if (isDesktopDevice(deviceType)) {
+  if (!autoLogin) {
     headers.push(["Set-Cookie", expireTrustedDeviceCookie()]);
   } else {
     const trustedToken = await createTrustedDeviceToken(deviceId, userAgent, jwtSecret);
     headers.push(["Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:")]);
   }
   return Response.json(
-    { user: { email, role, isDeveloper }, redirectTo: account.redirectTo, desktopReauth: isDesktopDevice(deviceType) },
+    { user: { email, role, isDeveloper, displayName, position }, redirectTo: redirectForRole(role), desktopReauth: isDesktopDevice(deviceType) },
     { headers },
   );
 };
@@ -132,6 +144,20 @@ async function getDeviceByDeviceId(db: any, deviceId: string) {
   if (!db) return null;
   await ensureStaffDeviceSchema(db);
   return db.prepare("SELECT devices.*, users.role AS user_role, users.position AS user_position, users.name AS user_name FROM devices LEFT JOIN users ON users.id = devices.user_id WHERE device_id = ?").bind(safeText(deviceId)).first();
+}
+
+function effectiveDeviceRole(device: any): Role {
+  if (device.device_owner_type === "office_pc") {
+    const officeRole = officePcRoles[String(device.office_pc_type || "") as keyof typeof officePcRoles];
+    return officeRole || "staff";
+  }
+  return device.user_role === "super_admin" || device.user_role === "manager" || device.user_role === "staff" ? device.user_role : "staff";
+}
+
+function redirectForRole(role: Role) {
+  if (role === "super_admin") return "/admin";
+  if (role === "manager") return "/admin/dispatches";
+  return "/app/dashboard";
 }
 
 async function createSessionRecord(db: any, deviceRowId: string, userId: string, publicDeviceId: string) {

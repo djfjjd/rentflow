@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import type { StaffDevice, StaffUser } from "@/lib/staff-device-types";
 import { deviceTypeLabel } from "@/lib/device-detection";
+import { officePcLabels, officePcRoles, officePcTypes, officePcLabel } from "@/lib/office-pc-policy";
 
 export function DeviceManagement() {
   const [devices, setDevices] = useState<StaffDevice[]>([]);
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<StaffDevice | null>(null);
+  const [activeTab, setActiveTab] = useState<"personal" | "office_pc">("personal");
   const [message, setMessage] = useState("");
 
   async function load() {
@@ -70,31 +72,24 @@ export function DeviceManagement() {
         </article>
       </div>
       {message ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">{message}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <button className={activeTab === "personal" ? "primary-btn" : "small-btn"} type="button" onClick={() => setActiveTab("personal")}>개인 기기</button>
+        <button className={activeTab === "office_pc" ? "primary-btn" : "small-btn"} type="button" onClick={() => setActiveTab("office_pc")}>사무실 PC</button>
+      </div>
+      {activeTab === "office_pc" ? (
+        <OfficePcCards devices={devices} onPatch={patchDevice} onDelete={deleteDevice} onSelect={setSelectedDevice} />
+      ) : (
       <section className="panel overflow-hidden">
-        <h2 className="mb-3 text-xl font-black">기기 관리</h2>
+        <h2 className="mb-3 text-xl font-black">개인 기기 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
-          <table className="admin-table w-full min-w-[1660px] text-left text-sm">
-            <thead><tr className="border-b"><th>이름</th><th>직책(Position)</th><th>권한(Role)</th><th>기기 별칭</th><th>기종</th><th>기기 유형</th><th>이메일</th><th>상태</th><th>자동 로그인</th><th>최근 접속</th><th>승인자</th><th>승인일시</th><th>관리</th></tr></thead>
+          <table className="admin-table w-full min-w-[1180px] text-left text-sm">
+            <thead><tr className="border-b"><th>직원명</th><th>이메일</th><th>직책</th><th>기기 별칭</th><th>기종</th><th>상태</th><th>최근 접속</th><th>관리</th></tr></thead>
             <tbody>
-              {devices.map((device) => (
+              {devices.filter((device) => device.deviceOwnerType !== "office_pc").map((device) => (
                 <tr className="border-b" key={device.id}>
                   <td><button className="font-black text-[#116149]" type="button" onClick={() => setSelectedDevice(device)}>{device.userName || "직원 미연결"}</button></td>
-                  <td>{device.position || "-"}</td><td>{device.role || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{deviceTypeLabel(device.deviceType)}</td><td>{device.email || "-"}</td><td>{device.status}</td>
-                  <td>
-                    {device.deviceType === "desktop" ? (
-                      <span className="rounded-full bg-[#f1f2ef] px-3 py-1 text-xs font-black text-[#68746d]">자동 로그인 불가</span>
-                    ) : (
-                      <button
-                        className={`rounded-full px-3 py-1 text-xs font-black ${device.autoLogin ? "bg-[#e3f3eb] text-[#116149]" : "bg-[#f1f2ef] text-[#68746d]"}`}
-                        type="button"
-                        onClick={() => patchDevice(device, { action: "setAutoLogin", autoLogin: !device.autoLogin }, device.autoLogin ? "자동 로그인이 꺼졌습니다." : "자동 로그인이 켜졌습니다.")}
-                      >
-                        {device.autoLogin ? "ON" : "OFF"}
-                      </button>
-                    )}
-                  </td>
-                  <td>{formatDateTime(device.lastSeenAt)}</td><td>{device.approvedBy || "-"}</td><td>{formatDateTime(device.approvedAt)}</td>
-                  <td className="flex min-w-[420px] flex-wrap gap-1 py-2">
+                  <td>{device.email || "-"}</td><td>{device.position || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{device.status}</td><td>{formatDateTime(device.lastSeenAt)}</td>
+                  <td className="flex min-w-[360px] flex-wrap gap-1 py-2">
                     <AssignSelect staff={staff} value={device.userId || ""} onChange={(userId) => patchDevice(device, { userId }, "기기 직원 연결이 변경되었습니다.")} />
                     <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "approve", userId: device.userId }, "기기가 승인되었습니다.")}>승인</button>
                     <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
@@ -104,12 +99,52 @@ export function DeviceManagement() {
                   </td>
                 </tr>
               ))}
-              {!devices.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={13}>등록된 기기가 없습니다. 첫 직원 로그인 후 승인대기 기기가 표시됩니다.</td></tr> : null}
+              {!devices.filter((device) => device.deviceOwnerType !== "office_pc").length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={8}>등록된 개인 기기가 없습니다.</td></tr> : null}
             </tbody>
           </table>
         </div>
       </section>
+      )}
       {selectedDevice ? <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} /> : null}
+    </section>
+  );
+}
+
+function OfficePcCards({ devices, onPatch, onDelete, onSelect }: { devices: StaffDevice[]; onPatch: (device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) => void; onDelete: (device: StaffDevice) => void; onSelect: (device: StaffDevice) => void }) {
+  return (
+    <section className="grid gap-3 md:grid-cols-2">
+      {officePcTypes.map((type) => {
+        const device = devices.find((item) => item.deviceOwnerType === "office_pc" && item.officePcType === type);
+        return (
+          <article className="panel min-h-56" key={type}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black">{officePcLabels[type]}</h3>
+                <p className="mt-1 text-sm font-bold text-[#68746d]">권한: {officePcRoles[type]}</p>
+              </div>
+              <span className="rounded-full bg-[#eef4ed] px-3 py-1 text-xs font-black text-[#116149]">{device?.status || "미등록"}</span>
+            </div>
+            {device ? (
+              <div className="mt-4 grid gap-2 text-sm font-bold text-[#34423b]">
+                <p>기기 별칭: {device.deviceAlias || "-"}</p>
+                <p>기종: {device.deviceModel || "-"}</p>
+                <p>위치: {device.location || "-"}</p>
+                <p>승인 요청 이메일: {device.email || "-"}</p>
+                <p>최근 접속: {formatDateTime(device.lastSeenAt)}</p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <button className="small-btn" type="button" onClick={() => onPatch(device, { action: "approve" }, "사무실 PC가 승인되었습니다.")}>승인</button>
+                  <button className="small-btn" type="button" onClick={() => onPatch(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
+                  <button className="danger-btn" type="button" onClick={() => onPatch(device, { action: "block" }, "사무실 PC가 차단되었습니다.")}>차단</button>
+                  <button className="danger-btn" type="button" onClick={() => onDelete(device)}>삭제</button>
+                  <button className="small-btn" type="button" onClick={() => onSelect(device)}>상세</button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-lg bg-[#f6f7f4] p-3 text-sm font-bold text-[#68746d]">아직 등록된 PC가 없습니다. 해당 PC에서 최초 기기 등록을 진행하면 승인대기로 표시됩니다.</p>
+            )}
+          </article>
+        );
+      })}
     </section>
   );
 }
@@ -132,6 +167,9 @@ function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: 
     ["기기 별칭", device.deviceAlias || "-"],
     ["기종(Device Model)", device.deviceModel || "-"],
     ["기기 유형", deviceTypeLabel(device.deviceType)],
+    ["소유 유형", device.deviceOwnerType === "office_pc" ? "사무실 PC" : "개인 기기"],
+    ["사무실 PC 구분", officePcLabel(device.officePcType)],
+    ["위치", device.location || "-"],
     ["운영체제(OS)", device.os || "-"],
     ["브라우저", device.browser || "-"],
     ["Device ID", device.deviceId],

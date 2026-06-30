@@ -102,7 +102,7 @@ async function tryTrustedDeviceLogin(request: Request, env: Env, url: URL) {
      LEFT JOIN users ON users.id = devices.user_id
      WHERE devices.device_id = ?`,
   ).bind(deviceId).first();
-  if (!device || device.status !== "승인" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
+  if (!device || device.status !== "승인" || device.device_owner_type === "office_pc" || !device.trusted || !device.auto_login || device.device_type === "desktop") {
     await writeAuditLog(env.DB, { event: "auto_login_failed", targetId: deviceId });
     return null;
   }
@@ -136,6 +136,6 @@ function roleFromDevice(value: unknown): Role {
 async function isSessionDeviceValid(db: any, deviceId: string) {
   if (!db) return true;
   await ensureStaffDeviceSchema(db);
-  const device = await db.prepare("SELECT status, trusted, auto_login FROM devices WHERE device_id = ?").bind(deviceId).first();
-  return Boolean(device && device.status === "승인" && device.trusted && device.auto_login);
+  const device = await db.prepare("SELECT status FROM devices WHERE device_id = ?").bind(deviceId).first();
+  return Boolean(device && device.status === "승인");
 }

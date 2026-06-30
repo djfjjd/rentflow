@@ -129,6 +129,9 @@ export async function ensureStaffDeviceSchema(db: any) {
       device_alias TEXT,
       device_model TEXT,
       device_type TEXT NOT NULL DEFAULT 'desktop',
+      device_owner_type TEXT NOT NULL DEFAULT 'personal',
+      office_pc_type TEXT,
+      location TEXT,
       os TEXT,
       browser TEXT,
       email TEXT,
@@ -173,6 +176,9 @@ export async function ensureStaffDeviceSchema(db: any) {
   await ensureEmailVerificationSchema(db);
   await ensureColumns(db, "devices", [
     { name: "device_type", definition: "TEXT NOT NULL DEFAULT 'desktop'" },
+    { name: "device_owner_type", definition: "TEXT NOT NULL DEFAULT 'personal'" },
+    { name: "office_pc_type", definition: "TEXT" },
+    { name: "location", definition: "TEXT" },
     { name: "trusted", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "auto_login", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "approved_by", definition: "TEXT" },

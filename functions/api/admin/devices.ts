@@ -3,6 +3,7 @@ import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureStaffDeviceSchema } from "./staff";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { isDesktopDevice } from "../../../lib/device-detection";
+import { officePcLabel, officePcRoles, officePcTypes } from "../../../lib/office-pc-policy";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -27,8 +28,8 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const id = safeText(body.id || crypto.randomUUID());
       const now = new Date().toISOString();
       await env.DB.prepare(
-        `INSERT INTO devices (id, user_id, device_id, device_alias, device_model, device_type, os, browser, email, status, created_at, updated_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devices (id, user_id, device_id, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(...safeBindValues([
         id,
         safeNullableText(body.userId || body.user_id),
@@ -36,6 +37,9 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         safeNullableText(body.deviceAlias || body.device_alias),
         safeNullableText(body.deviceModel || body.device_model),
         safeText(body.deviceType || body.device_type || "desktop"),
+        safeText(body.deviceOwnerType || body.device_owner_type || "personal"),
+        safeNullableText(body.officePcType || body.office_pc_type),
+        safeNullableText(body.location),
         safeNullableText(body.os),
         safeNullableText(body.browser),
         safeNullableText(body.email),
@@ -55,15 +59,17 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
       const body = (await request.json().catch(() => ({}))) as any;
       const action = safeText(body.action);
-      const currentDevice = await env.DB.prepare("SELECT device_type FROM devices WHERE id = ?").bind(safeText(id)).first();
+      const currentDevice = await env.DB.prepare("SELECT device_type, device_owner_type FROM devices WHERE id = ?").bind(safeText(id)).first();
       const fields: string[] = [];
       const values: unknown[] = [];
 
       if (action === "approve") {
+        const isOfficePc = currentDevice?.device_owner_type === "office_pc";
+        const autoLogin = !isOfficePc && !isDesktopDevice(String(currentDevice?.device_type || "desktop"));
         fields.push("status = ?", "trusted = ?", "auto_login = ?", "approved_by = ?", "approved_at = ?");
-        values.push("승인", 1, 1, auth.session.email, new Date().toISOString());
+        values.push("승인", autoLogin ? 1 : 0, autoLogin ? 1 : 0, auth.session.email, new Date().toISOString());
         await writeAuditLog(env.DB, { event: "device_approved", actorEmail: auth.session.email, targetId: id });
-        await writeAuditLog(env.DB, { event: "trusted_device_enabled", actorEmail: auth.session.email, targetId: id });
+        if (autoLogin) await writeAuditLog(env.DB, { event: "trusted_device_enabled", actorEmail: auth.session.email, targetId: id });
         if (body.userId || body.user_id) {
           fields.push("user_id = ?");
           values.push(safeText(body.userId || body.user_id));
@@ -81,8 +87,8 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         await writeAuditLog(env.DB, { event: "trusted_device_disabled", actorEmail: auth.session.email, targetId: id });
       } else if (action === "setAutoLogin") {
         const enabled = body.autoLogin === true || body.auto_login === true || body.autoLogin === 1 || body.auto_login === 1;
-        if (enabled && isDesktopDevice(String(currentDevice?.device_type || "desktop"))) {
-          return Response.json({ error: "데스크탑 기기는 자동 로그인을 사용할 수 없습니다." }, { status: 400 });
+        if (enabled && (currentDevice?.device_owner_type === "office_pc" || isDesktopDevice(String(currentDevice?.device_type || "desktop")))) {
+          return Response.json({ error: "사무실 PC 또는 데스크탑 기기는 자동 로그인을 사용할 수 없습니다." }, { status: 400 });
         }
         fields.push("trusted = ?", "auto_login = ?");
         values.push(enabled ? 1 : 0, enabled ? 1 : 0);
@@ -94,6 +100,9 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (body.deviceAlias !== undefined || body.device_alias !== undefined) { fields.push("device_alias = ?"); values.push(safeNullableText(body.deviceAlias ?? body.device_alias)); }
       if (body.deviceModel !== undefined || body.device_model !== undefined) { fields.push("device_model = ?"); values.push(safeNullableText(body.deviceModel ?? body.device_model)); }
       if (body.deviceType !== undefined || body.device_type !== undefined) { fields.push("device_type = ?"); values.push(safeText(body.deviceType ?? body.device_type)); }
+      if (body.deviceOwnerType !== undefined || body.device_owner_type !== undefined) { fields.push("device_owner_type = ?"); values.push(safeText(body.deviceOwnerType ?? body.device_owner_type)); }
+      if (body.officePcType !== undefined || body.office_pc_type !== undefined) { fields.push("office_pc_type = ?"); values.push(safeNullableText(body.officePcType ?? body.office_pc_type)); }
+      if (body.location !== undefined) { fields.push("location = ?"); values.push(safeNullableText(body.location)); }
       if (body.os !== undefined) { fields.push("os = ?"); values.push(safeNullableText(body.os)); }
       if (body.browser !== undefined) { fields.push("browser = ?"); values.push(safeNullableText(body.browser)); }
       if (body.email !== undefined) { fields.push("email = ?"); values.push(safeNullableText(body.email)); }
@@ -147,6 +156,9 @@ function mapDevice(row: any) {
     deviceAlias: row.device_alias || "",
     deviceModel: row.device_model || "",
     deviceType: row.device_type || "desktop",
+    deviceOwnerType: row.device_owner_type || "personal",
+    officePcType: row.office_pc_type || "",
+    location: row.location || "",
     os: row.os || "",
     browser: row.browser || "",
     email: row.email || "",
@@ -159,4 +171,17 @@ function mapDevice(row: any) {
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at || "",
   };
+}
+
+export function buildOfficePcCards(devices: ReturnType<typeof mapDevice>[]) {
+  return officePcTypes.map((type) => {
+    const device = devices.find((item) => item.deviceOwnerType === "office_pc" && item.officePcType === type);
+    return {
+      type,
+      label: officePcLabel(type),
+      role: officePcRoles[type],
+      status: device?.status || "미등록",
+      device,
+    };
+  });
 }

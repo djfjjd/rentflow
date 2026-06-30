@@ -3,10 +3,13 @@
 import { Home } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { officePcLabels, officePcTypes, type DeviceOwnerType } from "@/lib/office-pc-policy";
 
 const initialForm = {
+  deviceOwnerType: "personal" as DeviceOwnerType,
   name: "",
-  position: "",
+  officePcType: "director_pc",
+  location: "",
   deviceAlias: "",
   deviceModel: "",
   email: "",
@@ -107,11 +110,33 @@ export default function RegisterDevicePage() {
           </div>
         ) : (
           <form className="grid gap-3" onSubmit={submit}>
-            <Field label="이름" value={form.name} onChange={(value) => setForm({ ...form, name: value })} />
-            <Field label="직책" value={form.position} onChange={(value) => setForm({ ...form, position: value })} />
-            <Field label="기기 별칭" value={form.deviceAlias} onChange={(value) => setForm({ ...form, deviceAlias: value })} />
-            <Field label="기종" value={form.deviceModel} onChange={(value) => setForm({ ...form, deviceModel: value })} />
-            <Field label="이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+            <label className="label">
+              기기 유형
+              <select className="field" value={form.deviceOwnerType} onChange={(event) => setForm({ ...form, deviceOwnerType: event.target.value as DeviceOwnerType })}>
+                <option value="personal">개인 휴대폰/태블릿</option>
+                <option value="office_pc">사무실 PC</option>
+              </select>
+            </label>
+            {form.deviceOwnerType === "office_pc" ? (
+              <>
+                <label className="label">
+                  PC 구분
+                  <select className="field" value={form.officePcType} onChange={(event) => setForm({ ...form, officePcType: event.target.value })}>
+                    {officePcTypes.map((type) => <option value={type} key={type}>{officePcLabels[type]}</option>)}
+                  </select>
+                </label>
+                <Field label="기기 별칭" value={form.deviceAlias} onChange={(value) => setForm({ ...form, deviceAlias: value })} />
+                <Field label="위치" value={form.location} onChange={(value) => setForm({ ...form, location: value })} />
+                <Field label="승인 요청 이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+              </>
+            ) : (
+              <>
+                <Field label="이름" value={form.name} onChange={(value) => setForm({ ...form, name: value })} />
+                <Field label="기기 별칭" value={form.deviceAlias} onChange={(value) => setForm({ ...form, deviceAlias: value })} />
+                <Field label="기종" value={form.deviceModel} onChange={(value) => setForm({ ...form, deviceModel: value })} />
+                <Field label="이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+              </>
+            )}
             {requested ? <Field label="인증코드" inputMode="numeric" maxLength={6} value={form.code} onChange={(value) => setForm({ ...form, code: value.replace(/\D/g, "").slice(0, 6) })} /> : null}
             {message ? <p className="rounded-lg bg-[#f6f7f4] px-3 py-2 text-sm font-black text-[#68746d]">{message}</p> : null}
             <button className="primary-btn w-full" type="submit" disabled={busy}>{requested ? "기기 등록" : "인증코드 받기"}</button>
