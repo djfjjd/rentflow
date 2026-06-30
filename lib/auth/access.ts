@@ -1,6 +1,7 @@
 import { normalizeEmail, type AuthSession } from "./jwt";
 import type { ProtectedRoute } from "./protected-routes";
 import type { Role } from "./roles";
+import { hasPermission } from "../permissions";
 
 type AuthEnv = Record<string, unknown>;
 
@@ -21,6 +22,7 @@ export function roleForLoginEmail(email: string, env: AuthEnv): Role | null {
 export function isRouteAllowedForSession(route: ProtectedRoute, session: AuthSession, env: AuthEnv) {
   if (route.allowedRoles?.length && !route.allowedRoles.includes(session.role)) return false;
   if (route.requiredRole && session.role !== route.requiredRole) return false;
+  if (route.requiredPermission && !hasPermission(session.role, route.requiredPermission)) return false;
   if (!route.allowedEmailEnvKeys?.length) return true;
   return emailsFromEnv(env, route.allowedEmailEnvKeys).includes(normalizeEmail(session.email));
 }

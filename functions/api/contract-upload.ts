@@ -1,5 +1,6 @@
 import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
 import { ensureContractsSchema } from "./contracts";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
@@ -7,12 +8,15 @@ type Env = {
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
   GOOGLE_DRIVE_FOLDER_ID?: string;
+  JWT_SECRET?: string;
 };
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "contracts.upload");
+    if (auth.response) return auth.response;
     if (!env.DB) return Response.json({ error: "DB is not configured" }, { status: 500, headers: noStoreHeaders() });
     const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
     if (!rootFolderId) return Response.json({ error: "GOOGLE_DRIVE_FOLDER_ID is not configured" }, { status: 500, headers: noStoreHeaders() });

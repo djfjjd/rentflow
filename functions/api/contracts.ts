@@ -1,7 +1,9 @@
 import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ request, env }: { request: Request; env: Env }) {
@@ -38,6 +40,8 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "contracts.upload");
+    if (auth.response) return auth.response;
     await ensureContractsSchema(env);
     const body = await request.json() as any;
     const recordId = safeText(body.recordId);

@@ -197,6 +197,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [currentRole, setCurrentRole] = useState<string | null>(null);
   const isAdmin = kind.startsWith("admin") || pathname.startsWith("/admin");
   const canShowDriveLinks = currentRole !== null && currentRole !== "staff";
+  const canUploadContracts = currentRole !== "staff";
   const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
   const mainInnerClass = isAdmin ? "admin-main-inner admin-content" : "app-main-inner";
   const pageClassName =
@@ -311,7 +312,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
         {isAdmin ? <AdminNav /> : null}
 
-        {kind === "home" ? <HomeScreen /> : null}
+        {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
         {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
         {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
@@ -672,16 +673,17 @@ export function VehicleSearchCombobox({
   );
 }
 
-function HomeScreen() {
+function HomeScreen({ canUploadContracts }: { canUploadContracts: boolean }) {
+  const visibleActions = appActions.filter((item) => canUploadContracts || item.href !== "/app/billing");
   return (
     <section className="home-container space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        {appActions.slice(0, 2).map((item) => (
+        {visibleActions.slice(0, 2).map((item) => (
           <ActionButton item={item} key={item.href} />
         ))}
       </div>
       <div className="grid gap-3">
-        {appActions.slice(2).map((item) => (
+        {visibleActions.slice(2).map((item) => (
           <ActionButton item={item} key={item.href} />
         ))}
       </div>

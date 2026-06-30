@@ -4,14 +4,19 @@ export type ProtectedRoute = {
   requiredRole?: "super_admin";
   allowedRoles?: Array<"super_admin" | "manager" | "staff">;
   allowedEmailEnvKeys?: string[];
+  requiredPermission?: "contracts.upload";
   nextPath?: string;
   authenticatedRedirectTo?: string;
 };
 
 export const protectedRoutes: ProtectedRoute[] = [
   { path: "/", nextPath: "/app", authenticatedRedirectTo: "/app" },
+  { path: "/app/billing", mode: "prefix", requiredPermission: "contracts.upload" },
+  { path: "/app/contracts", mode: "prefix", requiredPermission: "contracts.upload" },
   { path: "/app", mode: "prefix" },
   { path: "/admin/settings", mode: "prefix", requiredRole: "super_admin" },
+  { path: "/admin/billing", mode: "prefix", requiredPermission: "contracts.upload" },
+  { path: "/admin/contracts", mode: "prefix", requiredPermission: "contracts.upload" },
   { path: "/admin/dispatches", mode: "prefix", allowedRoles: ["super_admin", "manager"] },
   { path: "/admin", mode: "prefix", requiredRole: "super_admin" },
   { path: "/dispatch" },
@@ -19,7 +24,7 @@ export const protectedRoutes: ProtectedRoute[] = [
   { path: "/partners" },
   { path: "/repairs" },
   { path: "/lost-items" },
-  { path: "/contracts" },
+  { path: "/contracts", mode: "prefix", requiredPermission: "contracts.upload" },
   { path: "/reservations" },
 ];
 

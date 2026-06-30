@@ -16,6 +16,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         `SELECT devices.*, users.name AS user_name, users.position AS user_position, users.role AS user_role
          FROM devices
          LEFT JOIN users ON users.id = devices.user_id
+         WHERE COALESCE(devices.status, '') != 'deleted' AND devices.deleted_at IS NULL
          ORDER BY devices.updated_at DESC`,
       ).all();
       return Response.json((results || []).map(mapDevice));
@@ -76,14 +77,16 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
           values.push(safeText(body.userId || body.user_id));
         }
       } else if (action === "block") {
-        fields.push("status = ?", "trusted = ?", "auto_login = ?");
-        values.push("차단", 0, 0);
-        await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        const now = new Date().toISOString();
+        fields.push("status = ?", "trusted = ?", "auto_login = ?", "revoked_at = ?");
+        values.push("차단", 0, 0, now);
+        await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
         await writeAuditLog(env.DB, { event: "device_blocked", actorEmail: auth.session.email, targetId: id });
       } else if (action === "remoteLogout") {
-        fields.push("trusted = ?", "auto_login = ?");
-        values.push(0, 0);
-        await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        const now = new Date().toISOString();
+        fields.push("trusted = ?", "auto_login = ?", "revoked_at = ?");
+        values.push(0, 0, now);
+        await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
         await writeAuditLog(env.DB, { event: "device_remote_logout", actorEmail: auth.session.email, targetId: id });
         await writeAuditLog(env.DB, { event: "trusted_device_disabled", actorEmail: auth.session.email, targetId: id });
       } else if (action === "setAutoLogin") {
@@ -93,7 +96,10 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         }
         fields.push("trusted = ?", "auto_login = ?");
         values.push(enabled ? 1 : 0, enabled ? 1 : 0);
-        if (!enabled) await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ? AND status = 'active'").bind(safeText(id)).run();
+        if (!enabled) {
+          const now = new Date().toISOString();
+          await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
+        }
         await writeAuditLog(env.DB, { event: enabled ? "trusted_device_enabled" : "trusted_device_disabled", actorEmail: auth.session.email, targetId: id });
       }
 
@@ -124,8 +130,13 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const url = new URL(request.url);
       const id = url.searchParams.get("id");
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-      await env.DB.prepare("UPDATE sessions SET status = 'revoked' WHERE device_id = ?").bind(safeText(id)).run();
-      await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(safeText(id)).run();
+      const now = new Date().toISOString();
+      await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
+      await env.DB.prepare(
+        `UPDATE devices
+         SET status = 'deleted', deleted_at = ?, revoked_at = ?, trusted = 0, auto_login = 0, updated_at = ?
+         WHERE id = ?`,
+      ).bind(now, now, now, safeText(id)).run();
       await writeAuditLog(env.DB, { event: "device_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });
     }
@@ -170,6 +181,8 @@ function mapDevice(row: any) {
     autoLogin: Boolean(row.auto_login),
     approvedBy: row.approved_by || "",
     approvedAt: row.approved_at || "",
+    deletedAt: row.deleted_at || "",
+    revokedAt: row.revoked_at || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at || "",

@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS devices (
   auto_login INTEGER NOT NULL DEFAULT 0,
   approved_by TEXT,
   approved_at TEXT,
+  deleted_at TEXT,
+  revoked_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -45,6 +47,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL,
   expires_at TEXT NOT NULL,
+  revoked_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (device_id) REFERENCES devices(id)
 );

@@ -56,7 +56,7 @@ export function DeviceManagement() {
     }
     await load();
     setSelectedDevice(null);
-    setMessage("기기가 삭제되었습니다.");
+    setMessage("기기가 삭제 처리되었습니다.");
   }
 
   return (

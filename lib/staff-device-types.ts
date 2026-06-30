@@ -44,6 +44,8 @@ export type StaffDevice = {
   autoLogin: boolean;
   approvedBy: string;
   approvedAt: string;
+  deletedAt: string;
+  revokedAt: string;
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string;
@@ -64,6 +66,12 @@ export type LoginLog = {
   loginId: string;
   role: string;
   deviceId: string;
+  userName: string;
+  position: string;
+  deviceAlias: string;
+  deviceModel: string;
+  os: string;
+  browser: string;
   ip: string;
   userAgent: string;
   status: "success" | "failure" | string;

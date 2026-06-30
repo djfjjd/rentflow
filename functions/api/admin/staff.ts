@@ -144,6 +144,8 @@ export async function ensureStaffDeviceSchema(db: any) {
       auto_login INTEGER NOT NULL DEFAULT 0,
       approved_by TEXT,
       approved_at TEXT,
+      deleted_at TEXT,
+      revoked_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`,
   ).run();
@@ -155,6 +157,7 @@ export async function ensureStaffDeviceSchema(db: any) {
       status TEXT NOT NULL DEFAULT 'active',
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
+      revoked_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (device_id) REFERENCES devices(id)
     )`,
@@ -185,6 +188,11 @@ export async function ensureStaffDeviceSchema(db: any) {
     { name: "auto_login", definition: "INTEGER NOT NULL DEFAULT 0" },
     { name: "approved_by", definition: "TEXT" },
     { name: "approved_at", definition: "TEXT" },
+    { name: "deleted_at", definition: "TEXT" },
+    { name: "revoked_at", definition: "TEXT" },
+  ]);
+  await ensureColumns(db, "sessions", [
+    { name: "revoked_at", definition: "TEXT" },
   ]);
 }
 
@@ -196,8 +204,8 @@ async function getUser(db: any, id: string) {
 async function retireUser(db: any, id: string) {
   const now = new Date().toISOString();
   await db.prepare("UPDATE users SET status = '퇴사', updated_at = ? WHERE id = ?").bind(now, safeText(id)).run();
-  await db.prepare("UPDATE devices SET status = '차단', trusted = 0, auto_login = 0, updated_at = ? WHERE user_id = ?").bind(now, safeText(id)).run();
-  await db.prepare("UPDATE sessions SET status = 'revoked' WHERE user_id = ? AND status = 'active'").bind(safeText(id)).run();
+  await db.prepare("UPDATE devices SET status = '차단', trusted = 0, auto_login = 0, revoked_at = ?, updated_at = ? WHERE user_id = ?").bind(now, now, safeText(id)).run();
+  await db.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE user_id = ? AND status = 'active'").bind(now, safeText(id)).run();
 }
 
 async function hashPassword(password: string) {
