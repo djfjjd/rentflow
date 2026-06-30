@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS devices (
   id TEXT PRIMARY KEY,
   user_id TEXT,
   device_id TEXT NOT NULL UNIQUE,
+  device_name TEXT,
   device_alias TEXT,
   device_model TEXT,
   device_type TEXT NOT NULL DEFAULT 'desktop',

@@ -3,7 +3,7 @@ import { safeBindValues, safeNullableText, safeText } from "../../_d1-utils";
 import { ensureStaffDeviceSchema } from "../../admin/staff";
 import { buildSettingsCookie, deviceRegistrationChallengeCookieName, expireSettingsCookie, verifySettingsChallenge } from "../../../../lib/settings-2fa";
 import { writeAuditLog } from "../../../../lib/audit-logs";
-import { detectDeviceType } from "../../../../lib/device-detection";
+import { detectDeviceInfo } from "../../../../lib/device-detection";
 
 type Env = {
   JWT_SECRET?: string;
@@ -28,26 +28,27 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   await ensureStaffDeviceSchema(env.DB);
   const deviceId = readCookie(request.headers.get("Cookie"), "rentflow_device_id") || crypto.randomUUID();
   const userAgent = request.headers.get("User-Agent") || "";
-  const deviceType = detectDeviceType(userAgent);
+  const detected = detectDeviceInfo({ userAgent, platform: request.headers.get("Sec-CH-UA-Platform") || "", name: body.name });
   const now = new Date().toISOString();
   const existing = await env.DB.prepare("SELECT id FROM devices WHERE device_id = ?").bind(deviceId).first();
   if (existing?.id) {
     await env.DB.prepare(
-      `UPDATE devices SET device_alias = ?, device_model = ?, device_type = ?, email = ?, status = 'email_verified_pending', updated_at = ? WHERE device_id = ?`,
-    ).bind(...safeBindValues([safeNullableText(body.deviceAlias), safeNullableText(body.deviceModel), deviceType, email, now, deviceId])).run();
+      `UPDATE devices SET device_name = ?, device_alias = ?, device_model = ?, device_type = ?, os = ?, browser = ?, email = ?, status = 'email_verified_pending', updated_at = ? WHERE device_id = ?`,
+    ).bind(...safeBindValues([safeNullableText(detected.deviceName), safeNullableText(detected.deviceName), safeNullableText(detected.deviceModel), detected.deviceType, detected.os, detected.browser, email, now, deviceId])).run();
   } else {
     await env.DB.prepare(
-      `INSERT INTO devices (id, user_id, device_id, device_alias, device_model, device_type, os, browser, email, status, created_at, updated_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, os, browser, email, status, created_at, updated_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(...safeBindValues([
       crypto.randomUUID(),
       null,
       deviceId,
-      safeNullableText(body.deviceAlias || body.name),
-      safeNullableText(body.deviceModel),
-      deviceType,
-      "",
-      userAgent,
+      safeNullableText(detected.deviceName),
+      safeNullableText(detected.deviceName),
+      safeNullableText(detected.deviceModel),
+      detected.deviceType,
+      detected.os,
+      detected.browser,
       email,
       "email_verified_pending",
       now,

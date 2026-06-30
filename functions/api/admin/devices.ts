@@ -28,12 +28,13 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const id = safeText(body.id || crypto.randomUUID());
       const now = new Date().toISOString();
       await env.DB.prepare(
-        `INSERT INTO devices (id, user_id, device_id, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(...safeBindValues([
         id,
         safeNullableText(body.userId || body.user_id),
         safeText(body.deviceId || body.device_id || crypto.randomUUID()),
+        safeNullableText(body.deviceName || body.device_name || body.deviceAlias || body.device_alias),
         safeNullableText(body.deviceAlias || body.device_alias),
         safeNullableText(body.deviceModel || body.device_model),
         safeText(body.deviceType || body.device_type || "desktop"),
@@ -98,6 +99,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
 
       if (body.userId !== undefined || body.user_id !== undefined) { fields.push("user_id = ?"); values.push(safeNullableText(body.userId ?? body.user_id)); }
       if (body.deviceAlias !== undefined || body.device_alias !== undefined) { fields.push("device_alias = ?"); values.push(safeNullableText(body.deviceAlias ?? body.device_alias)); }
+      if (body.deviceName !== undefined || body.device_name !== undefined) { fields.push("device_name = ?"); values.push(safeNullableText(body.deviceName ?? body.device_name)); }
       if (body.deviceModel !== undefined || body.device_model !== undefined) { fields.push("device_model = ?"); values.push(safeNullableText(body.deviceModel ?? body.device_model)); }
       if (body.deviceType !== undefined || body.device_type !== undefined) { fields.push("device_type = ?"); values.push(safeText(body.deviceType ?? body.device_type)); }
       if (body.deviceOwnerType !== undefined || body.device_owner_type !== undefined) { fields.push("device_owner_type = ?"); values.push(safeText(body.deviceOwnerType ?? body.device_owner_type)); }
@@ -153,7 +155,8 @@ function mapDevice(row: any) {
     position: row.user_position || "",
     role: row.user_role || "staff",
     deviceId: row.device_id,
-    deviceAlias: row.device_alias || "",
+    deviceName: row.device_name || row.device_alias || "",
+    deviceAlias: row.device_name || row.device_alias || "",
     deviceModel: row.device_model || "",
     deviceType: row.device_type || "desktop",
     deviceOwnerType: row.device_owner_type || "personal",

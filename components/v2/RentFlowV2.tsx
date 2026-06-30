@@ -184,6 +184,7 @@ const pageTitles: Record<PageKind, string> = {
 };
 
 export function RentFlowV2Page({ kind }: { kind: PageKind }) {
+  const pathname = usePathname();
   const [vehicles, setVehicles] = useState<VehicleV2[]>([]);
   const [reservations, setReservations] = useState<ReservationV2[]>([]);
   const [dispatches, setDispatches] = useState<DispatchV2[]>([]);
@@ -193,7 +194,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [maintenance, setMaintenance] = useState<IncidentRecordV2[]>([]);
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
-  const isAdmin = kind.startsWith("admin");
+  const [currentRole, setCurrentRole] = useState<string | null>(null);
+  const isAdmin = kind.startsWith("admin") || pathname.startsWith("/admin");
+  const canShowDriveLinks = currentRole !== null && currentRole !== "staff";
   const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
   const mainInnerClass = isAdmin ? "admin-main-inner admin-content" : "app-main-inner";
   const pageClassName =
@@ -238,6 +241,10 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   }
 
   useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ user?: { role?: string } }> : null)
+      .then((data) => setCurrentRole(data?.user?.role || null))
+      .catch(() => setCurrentRole(null));
     Promise.all([
       fetchJson<VehicleV2[]>("/api/vehicles", []),
       fetchJson<ReservationV2[]>("/api/reservations", []),
@@ -311,7 +318,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
         {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
         {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
-        {kind === "photos" ? <PhotosPage admin={false} /> : null}
+        {kind === "photos" ? <PhotosPage admin={isAdmin} canShowDriveLinks={canShowDriveLinks} /> : null}
         {kind === "partners" ? <PartnersPage /> : null}
         {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
         {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
@@ -1817,7 +1824,7 @@ type UploadProgressState = {
   done?: boolean;
 };
 
-function PhotosPage({ admin }: { admin: boolean }) {
+function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDriveLinks: boolean }) {
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [vehicles, setVehicles] = useState<VehicleV2[]>([]);
   const [query, setQuery] = useState("");
@@ -1850,8 +1857,8 @@ function PhotosPage({ admin }: { admin: boolean }) {
     .filter((folder) => folder.files.length > 0);
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
   const visibleArchiveIds = useMemo(
-    () => filteredFolders.flatMap((folder) => folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id))),
-    [filteredFolders]
+    () => canShowDriveLinks ? filteredFolders.flatMap((folder) => folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id))) : [],
+    [canShowDriveLinks, filteredFolders]
   );
   const selectedArchiveBatches = useMemo(
     () => filteredFolders
@@ -1925,24 +1932,28 @@ function PhotosPage({ admin }: { admin: boolean }) {
   return (
     <section className="space-y-4">
       <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명, 파일명 검색" />
-      <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
-        <p>파일 보관기간은 업로드 후 14일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.</p>
-        <div className="mt-1 flex justify-end">
-          <a className="text-[#116149] underline underline-offset-2" href="https://drive.google.com/drive/folders/17CfWZO35zjGtpxO8jm_U5-ehN3J0_Rql?usp=drive_link" rel="noreferrer" target="_blank">
-            구글 드라이브 열기
-          </a>
+      {canShowDriveLinks ? (
+        <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
+          <p>파일 보관기간은 업로드 후 14일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.</p>
+          <div className="mt-1 flex justify-end">
+            <a className="text-[#116149] underline underline-offset-2" href="https://drive.google.com/drive/folders/17CfWZO35zjGtpxO8jm_U5-ehN3J0_Rql?usp=drive_link" rel="noreferrer" target="_blank">
+              구글 드라이브 열기
+            </a>
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="hidden"><ThumbnailBackfillButton /></div>
-      <DriveArchiveButton
-        allSelected={allVisibleSelected}
-        onArchived={reloadUploadedFiles}
-        onToggleAll={toggleAllVisibleArchiveIds}
-        selectedBatches={selectedArchiveBatches}
-        selectedIds={[...selectedArchiveIds]}
-        totalVisible={visibleArchiveIds.length}
-      />
-      {admin ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
+      {canShowDriveLinks ? (
+        <DriveArchiveButton
+          allSelected={allVisibleSelected}
+          onArchived={reloadUploadedFiles}
+          onToggleAll={toggleAllVisibleArchiveIds}
+          selectedBatches={selectedArchiveBatches}
+          selectedIds={[...selectedArchiveIds]}
+          totalVisible={visibleArchiveIds.length}
+        />
+      ) : null}
+      {admin && canShowDriveLinks ? <p className="text-sm font-bold text-[#667269]">관리자 필터: R2/Drive 백업 상태까지 함께 확인합니다.</p> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filteredFolders.map((folder) => {
           const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;

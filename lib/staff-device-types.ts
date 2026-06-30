@@ -29,6 +29,7 @@ export type StaffDevice = {
   position: Position | string;
   role: Role;
   deviceId: string;
+  deviceName: string;
   deviceAlias: string;
   deviceModel: string;
   deviceType: "mobile" | "tablet" | "desktop" | string;

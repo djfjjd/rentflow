@@ -1,13 +1,17 @@
 import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
 import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures } from "./_photo-retention";
+import { getApiSession, isStaff } from "./_permissions";
 
 type Env = {
   DB: any;
   RENTFLOW_UPLOADS?: any;
+  JWT_SECRET?: string;
 };
 
-export async function onRequestGet({ env }: { env: Env }) {
+export async function onRequestGet({ request, env }: { request: Request; env: Env }) {
   try {
+    const session = await getApiSession(request, env);
+    const includeDriveFields = Boolean(session && !isStaff(session));
     await ensureUploadedFilesSchema(env);
     await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
     const { results } = await env.DB.prepare(`
@@ -52,7 +56,7 @@ export async function onRequestGet({ env }: { env: Env }) {
       WHERE ${activePhotoRetentionWhere("uf")}
       ORDER BY COALESCE(business_date, uf.uploaded_at, uf.created_at) DESC, COALESCE(uf.uploaded_at, uf.created_at) DESC
     `).all();
-    return Response.json(results.map(mapFile), { headers: noStoreHeaders() });
+    return Response.json(results.map((row: any) => mapFile(row, includeDriveFields)), { headers: noStoreHeaders() });
   } catch (error) {
     console.error("uploaded files list failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500 });
@@ -99,7 +103,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
   }
 }
 
-function mapFile(row: any) {
+function mapFile(row: any, includeDriveFields: boolean) {
   return {
     id: row.id,
     fileName: row.file_name,
@@ -112,12 +116,15 @@ function mapFile(row: any) {
     thumbnail_url: row.thumbnail_url,
     thumbnailKey: row.thumbnail_key,
     thumbnail_key: row.thumbnail_key,
-    driveBackupStatus: row.drive_backup_status,
-    driveFileId: row.drive_file_id,
-    driveUrl: row.drive_url,
-    drive_url: row.drive_url,
-    driveFolderId: row.drive_folder_id,
-    driveFolderUrl: row.drive_folder_url,
+    driveBackupStatus: includeDriveFields ? row.drive_backup_status : null,
+    driveFileId: includeDriveFields ? row.drive_file_id : null,
+    drive_file_id: includeDriveFields ? row.drive_file_id : null,
+    driveUrl: includeDriveFields ? row.drive_url : null,
+    drive_url: includeDriveFields ? row.drive_url : null,
+    driveFolderId: includeDriveFields ? row.drive_folder_id : null,
+    drive_folder_id: includeDriveFields ? row.drive_folder_id : null,
+    driveFolderUrl: includeDriveFields ? row.drive_folder_url : null,
+    drive_folder_url: includeDriveFields ? row.drive_folder_url : null,
     archivedAt: row.archived_at,
     archived_at: row.archived_at,
     archiveStatus: row.archive_status || "none",
@@ -140,9 +147,12 @@ function mapFile(row: any) {
     businessTime: row.business_time,
     businessKind: row.business_kind,
     businessLabel: row.business_label,
-    vehicleFolderUrl: row.vehicle_folder_url,
-    insuranceFolderUrl: row.insurance_folder_url,
-    customerFolderUrl: row.customer_folder_url,
+    vehicleFolderUrl: includeDriveFields ? row.vehicle_folder_url : null,
+    vehicle_folder_url: includeDriveFields ? row.vehicle_folder_url : null,
+    insuranceFolderUrl: includeDriveFields ? row.insurance_folder_url : null,
+    insurance_folder_url: includeDriveFields ? row.insurance_folder_url : null,
+    customerFolderUrl: includeDriveFields ? row.customer_folder_url : null,
+    customer_folder_url: includeDriveFields ? row.customer_folder_url : null,
     uploadedAt: row.uploaded_at,
     uploaded_at: row.uploaded_at,
     createdAt: row.created_at,

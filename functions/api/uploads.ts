@@ -1,6 +1,6 @@
 import { ensureColumns, noStoreHeaders, safeText } from "./_d1-utils";
 import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures, isActivePhotoCaptureObject } from "./_photo-retention";
-import { requirePermission } from "./_permissions";
+import { getApiSession, isStaff, requirePermission } from "./_permissions";
 
 type UploadEnv = {
   DB?: any;
@@ -122,6 +122,8 @@ export async function onRequestGet({ request, env }: UploadContext) {
   }
 
   if ((folderId || recordType || recordId || vehicleNumber) && env.DB) {
+    const session = await getApiSession(request, env);
+    const includeDriveFields = Boolean(session && !isStaff(session));
     await ensureUploadedFilesSchema(env);
     await cleanupExpiredPhotoCaptures(env.DB, env.RENTFLOW_UPLOADS);
     let results: any[] = [];
@@ -158,13 +160,13 @@ export async function onRequestGet({ request, env }: UploadContext) {
       });
     }
 
-    return Response.json(dedupeUploadedRows(results).map(mapUploadedFile), { headers: noStoreHeaders() });
+    return Response.json(dedupeUploadedRows(results).map((row) => mapUploadedFile(row, includeDriveFields)), { headers: noStoreHeaders() });
   }
 
   return Response.json({ files: [], fallback: true, message: "Drive listing is handled by uploaded_files." }, { headers: noStoreHeaders() });
 }
 
-function mapUploadedFile(row: any) {
+function mapUploadedFile(row: any, includeDriveFields: boolean) {
   return {
     id: row.id,
     file_name: row.file_name,
@@ -177,14 +179,14 @@ function mapUploadedFile(row: any) {
     thumbnailUrl: row.thumbnail_url,
     thumbnail_key: row.thumbnail_key,
     thumbnailKey: row.thumbnail_key,
-    drive_url: row.drive_url,
-    driveUrl: row.drive_url,
-    drive_file_id: row.drive_file_id,
-    driveFileId: row.drive_file_id,
-    drive_folder_id: row.drive_folder_id,
-    driveFolderId: row.drive_folder_id,
-    drive_folder_url: row.drive_folder_url,
-    driveFolderUrl: row.drive_folder_url,
+    drive_url: includeDriveFields ? row.drive_url : null,
+    driveUrl: includeDriveFields ? row.drive_url : null,
+    drive_file_id: includeDriveFields ? row.drive_file_id : null,
+    driveFileId: includeDriveFields ? row.drive_file_id : null,
+    drive_folder_id: includeDriveFields ? row.drive_folder_id : null,
+    driveFolderId: includeDriveFields ? row.drive_folder_id : null,
+    drive_folder_url: includeDriveFields ? row.drive_folder_url : null,
+    driveFolderUrl: includeDriveFields ? row.drive_folder_url : null,
     archived_at: row.archived_at,
     archivedAt: row.archived_at,
     archive_status: row.archive_status || "none",

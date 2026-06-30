@@ -10,10 +10,16 @@ const initialForm = {
   name: "",
   officePcType: "director_pc",
   location: "",
-  deviceAlias: "",
-  deviceModel: "",
   email: "",
   code: "",
+};
+
+type DetectedDeviceInfo = {
+  deviceName: string;
+  deviceModel: string;
+  deviceType: string;
+  os: string;
+  browser: string;
 };
 
 export default function RegisterDevicePage() {
@@ -24,14 +30,15 @@ export default function RegisterDevicePage() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
+  const [detected, setDetected] = useState<DetectedDeviceInfo>({
+    deviceName: "감지 중",
+    deviceModel: "감지 중",
+    deviceType: "",
+    os: "",
+    browser: "",
+  });
 
   useEffect(() => {
-    const userAgent = navigator.userAgent || "";
-    setForm((current) => ({
-      ...current,
-      deviceAlias: current.deviceAlias || defaultDeviceAlias(userAgent),
-      deviceModel: current.deviceModel || guessDeviceModel(userAgent),
-    }));
     fetch("/api/auth/me")
       .then((response) => response.ok ? response.json() as Promise<{ user?: { isDeveloper?: boolean } }> : null)
       .then((data) => {
@@ -39,6 +46,25 @@ export default function RegisterDevicePage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/detect-device-info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        deviceOwnerType: form.deviceOwnerType,
+        officePcType: form.officePcType,
+      }),
+    })
+      .then((response) => response.ok ? response.json() as Promise<DetectedDeviceInfo> : null)
+      .then((data) => {
+        if (!cancelled && data) setDetected(data);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [form.deviceOwnerType, form.name, form.officePcType]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -54,7 +80,13 @@ export default function RegisterDevicePage() {
       const response = await fetch("/api/auth/send-verification-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          deviceOwnerType: form.deviceOwnerType,
+          name: form.name,
+          officePcType: form.officePcType,
+          location: form.location,
+          email: form.email,
+        }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
       if (!response.ok) throw new Error(data.error || "이메일 발송에 실패했습니다.");
@@ -125,16 +157,17 @@ export default function RegisterDevicePage() {
                     {officePcTypes.map((type) => <option value={type} key={type}>{officePcLabels[type]}</option>)}
                   </select>
                 </label>
-                <Field label="기기 별칭" value={form.deviceAlias} onChange={(value) => setForm({ ...form, deviceAlias: value })} />
                 <Field label="위치" value={form.location} onChange={(value) => setForm({ ...form, location: value })} />
                 <Field label="승인 요청 이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+                <ReadOnlyField label="기기별칭" value={detected.deviceName} />
+                <ReadOnlyField label="기종" value={detected.deviceModel} />
               </>
             ) : (
               <>
                 <Field label="이름" value={form.name} onChange={(value) => setForm({ ...form, name: value })} />
-                <Field label="기기 별칭" value={form.deviceAlias} onChange={(value) => setForm({ ...form, deviceAlias: value })} />
-                <Field label="기종" value={form.deviceModel} onChange={(value) => setForm({ ...form, deviceModel: value })} />
                 <Field label="이메일" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} />
+                <ReadOnlyField label="기기별칭" value={detected.deviceName} />
+                <ReadOnlyField label="기종" value={detected.deviceModel} />
               </>
             )}
             {requested ? <Field label="인증코드" inputMode="numeric" maxLength={6} value={form.code} onChange={(value) => setForm({ ...form, code: value.replace(/\D/g, "").slice(0, 6) })} /> : null}
@@ -152,21 +185,11 @@ function Field({ label, value, onChange, type = "text", inputMode, maxLength }: 
   return <label className="label">{label}<input className="field" type={type} value={value} inputMode={inputMode} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} required /></label>;
 }
 
-function defaultDeviceAlias(userAgent: string) {
-  if (/iPhone/i.test(userAgent)) return "iPhone";
-  if (/iPad/i.test(userAgent)) return "iPad";
-  if (/Android/i.test(userAgent)) return "Android 기기";
-  if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
-  if (/Windows/i.test(userAgent)) return "Windows PC";
-  return "업무용 기기";
-}
-
-function guessDeviceModel(userAgent: string) {
-  if (/iPhone/i.test(userAgent)) return "iPhone";
-  if (/iPad/i.test(userAgent)) return "iPad";
-  const android = userAgent.match(/Android[^;)]*(?:;\s*([^;)]+))?/i);
-  if (android?.[1]) return android[1].trim();
-  if (/Macintosh|Mac OS/i.test(userAgent)) return "Mac";
-  if (/Windows/i.test(userAgent)) return "Windows PC";
-  return "알 수 없음";
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="label">
+      {label}
+      <input className="field cursor-copy bg-[#f1f2ef] text-[#4b5751]" value={value || "-"} readOnly tabIndex={-1} />
+    </label>
+  );
 }

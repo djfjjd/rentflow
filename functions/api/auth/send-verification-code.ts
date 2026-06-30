@@ -1,5 +1,5 @@
 import { normalizeEmail, readCookie } from "../../../lib/auth/jwt";
-import { detectDeviceType } from "../../../lib/device-detection";
+import { detectDeviceInfo } from "../../../lib/device-detection";
 import { createSixDigitCode, emailVerificationTtlMs, ensureEmailVerificationSchema, sendVerificationEmail, verificationId } from "../../../lib/email-verification";
 import { buildDeviceCookie } from "../../../lib/trusted-device";
 import { safeBindValues, safeNullableText, safeText } from "../_d1-utils";
@@ -21,8 +21,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     device_id?: string;
     name?: string;
     position?: string;
-    deviceAlias?: string;
-    deviceModel?: string;
     deviceOwnerType?: DeviceOwnerType;
     device_owner_type?: DeviceOwnerType;
     officePcType?: string;
@@ -37,7 +35,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   const deviceId = safeText(body.deviceId || body.device_id || readCookie(request.headers.get("Cookie"), "rentflow_device_id") || crypto.randomUUID());
   const userAgent = request.headers.get("User-Agent") || "";
-  const deviceType = detectDeviceType(userAgent);
+  const detected = detectDeviceInfo({
+    userAgent,
+    platform: request.headers.get("Sec-CH-UA-Platform") || "",
+    deviceOwnerType: ownerType,
+    officePcType,
+    name: body.name,
+  });
   const now = new Date();
   const nowIso = now.toISOString();
   const code = createSixDigitCode();
@@ -66,15 +70,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     }
     await upsertRegistrationDevice(env.DB, {
       deviceId,
-      deviceAlias: body.deviceAlias || body.name || "",
-      deviceModel: body.deviceModel || "",
-      deviceType,
+      deviceName: detected.deviceName,
+      deviceModel: detected.deviceModel,
+      deviceType: detected.deviceType,
       ownerType,
       officePcType,
       location: body.location || "",
       email,
       userId: ownerType === "personal" ? String(staff.id || "") : "",
       userAgent,
+      os: detected.os,
+      browser: detected.browser,
       now: nowIso,
     });
     await env.DB.prepare(
@@ -96,24 +102,26 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
 async function upsertRegistrationDevice(
   db: any,
-  input: { deviceId: string; deviceAlias: string; deviceModel: string; deviceType: string; ownerType: DeviceOwnerType; officePcType: string; location: string; email: string; userId: string; userAgent: string; now: string },
+  input: { deviceId: string; deviceName: string; deviceModel: string; deviceType: string; ownerType: DeviceOwnerType; officePcType: string; location: string; email: string; userId: string; userAgent: string; os: string; browser: string; now: string },
 ) {
   const existing = await db.prepare("SELECT id, status FROM devices WHERE device_id = ?").bind(input.deviceId).first();
   if (existing?.id) {
     const status = existing.status === "승인" || existing.status === "차단" ? existing.status : "이메일인증대기";
     await db.prepare(
       `UPDATE devices
-       SET user_id = ?, device_alias = ?, device_model = ?, device_type = ?, device_owner_type = ?, office_pc_type = ?, location = ?, browser = ?, email = ?, status = ?, updated_at = ?
+       SET user_id = ?, device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_owner_type = ?, office_pc_type = ?, location = ?, os = ?, browser = ?, email = ?, status = ?, updated_at = ?
        WHERE device_id = ?`,
     ).bind(...safeBindValues([
       input.ownerType === "personal" ? safeNullableText(input.userId) : null,
-      safeNullableText(input.deviceAlias),
+      safeNullableText(input.deviceName),
+      safeNullableText(input.deviceName),
       safeNullableText(input.deviceModel),
       input.deviceType,
       input.ownerType,
       safeNullableText(input.officePcType),
       safeNullableText(input.location),
-      input.userAgent,
+      input.os,
+      input.browser,
       input.email,
       status,
       input.now,
@@ -122,20 +130,21 @@ async function upsertRegistrationDevice(
     return;
   }
   await db.prepare(
-    `INSERT INTO devices (id, user_id, device_id, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO devices (id, user_id, device_id, device_name, device_alias, device_model, device_type, device_owner_type, office_pc_type, location, os, browser, email, status, created_at, updated_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(...safeBindValues([
     crypto.randomUUID(),
     input.ownerType === "personal" ? safeNullableText(input.userId) : null,
     input.deviceId,
-    safeNullableText(input.deviceAlias),
+    safeNullableText(input.deviceName),
+    safeNullableText(input.deviceName),
     safeNullableText(input.deviceModel),
     input.deviceType,
     input.ownerType,
     safeNullableText(input.officePcType),
     safeNullableText(input.location),
-    "",
-    input.userAgent,
+    input.os,
+    input.browser,
     input.email,
     "이메일인증대기",
     input.now,
