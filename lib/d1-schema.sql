@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT '재직',
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  revoked_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS devices (

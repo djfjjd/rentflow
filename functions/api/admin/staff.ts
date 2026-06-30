@@ -11,7 +11,9 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
     if (request.method === "GET") {
       const auth = await requireAdminSession(request, env, "read");
       if (auth.response) return auth.response;
-      const { results } = await env.DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM users WHERE deleted_at IS NULL AND status != 'deleted' ORDER BY created_at DESC",
+      ).all();
       return Response.json((results || []).map(mapUser));
     }
 
@@ -93,8 +95,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const url = new URL(request.url);
       const id = url.searchParams.get("id");
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-      await retireUser(env.DB, id);
-      await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(safeText(id)).run();
+      await deleteUserSoft(env.DB, id);
       await writeAuditLog(env.DB, { event: "staff_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });
     }
@@ -118,7 +119,9 @@ export async function ensureStaffDeviceSchema(db: any) {
       email TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT '재직',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT,
+      revoked_at TEXT
     )`,
   ).run();
   await db.prepare(
@@ -178,6 +181,10 @@ export async function ensureStaffDeviceSchema(db: any) {
   ).run();
   await ensureAuditLogSchema(db);
   await ensureEmailVerificationSchema(db);
+  await ensureColumns(db, "users", [
+    { name: "deleted_at", definition: "TEXT" },
+    { name: "revoked_at", definition: "TEXT" },
+  ]);
   await ensureColumns(db, "devices", [
     { name: "device_type", definition: "TEXT NOT NULL DEFAULT 'desktop'" },
     { name: "device_name", definition: "TEXT" },
@@ -203,9 +210,23 @@ async function getUser(db: any, id: string) {
 
 async function retireUser(db: any, id: string) {
   const now = new Date().toISOString();
-  await db.prepare("UPDATE users SET status = '퇴사', updated_at = ? WHERE id = ?").bind(now, safeText(id)).run();
+  await db.prepare("UPDATE users SET status = '퇴사', revoked_at = ?, updated_at = ? WHERE id = ?").bind(now, now, safeText(id)).run();
   await db.prepare("UPDATE devices SET status = '차단', trusted = 0, auto_login = 0, revoked_at = ?, updated_at = ? WHERE user_id = ?").bind(now, now, safeText(id)).run();
   await db.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE user_id = ? AND status = 'active'").bind(now, safeText(id)).run();
+}
+
+async function deleteUserSoft(db: any, id: string) {
+  const now = new Date().toISOString();
+  const userId = safeText(id);
+  await db.prepare(
+    "UPDATE users SET status = 'deleted', deleted_at = ?, revoked_at = ?, updated_at = ? WHERE id = ?",
+  ).bind(now, now, now, userId).run();
+  await db.prepare(
+    `UPDATE devices
+     SET status = 'deleted', trusted = 0, auto_login = 0, deleted_at = ?, revoked_at = ?, updated_at = ?
+     WHERE user_id = ?`,
+  ).bind(now, now, now, userId).run();
+  await db.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE user_id = ? AND status = 'active'").bind(now, userId).run();
 }
 
 async function hashPassword(password: string) {

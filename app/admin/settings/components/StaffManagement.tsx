@@ -79,7 +79,7 @@ export function StaffManagement() {
       return;
     }
     await loadStaff();
-    setMessage("직원이 삭제되었습니다.");
+    setMessage("직원이 삭제 처리되었습니다.");
   }
 
   const activeCount = useMemo(() => staff.filter((user) => user.status === "재직").length, [staff]);

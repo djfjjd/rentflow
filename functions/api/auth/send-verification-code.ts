@@ -50,9 +50,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   try {
     await ensureStaffDeviceSchema(env.DB);
     await ensureEmailVerificationSchema(env.DB);
-    const staff = await env.DB.prepare("SELECT id, name, position, role, status FROM users WHERE lower(email) = ?").bind(email).first();
+    const staff = await env.DB.prepare("SELECT id, name, position, role, status, deleted_at FROM users WHERE lower(email) = ?").bind(email).first();
     if (!staff) return Response.json({ error: "등록되지 않은 직원 이메일입니다." }, { status: 403 });
     if (staff.status === "퇴사") return Response.json({ error: "퇴사 상태 직원은 기기 등록을 할 수 없습니다." }, { status: 403 });
+    if (staff.status === "deleted" || staff.deleted_at) return Response.json({ error: "삭제 처리된 직원은 기기 등록을 할 수 없습니다." }, { status: 403 });
     if (ownerType === "personal") {
       const existingPersonal = await env.DB.prepare(
         `SELECT id, device_id FROM devices
