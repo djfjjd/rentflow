@@ -36,6 +36,13 @@ export function parseReservationDateRange(inputStartDate: string, reservationTex
     return normalizeRange(startDate, addDays(startDate, days - 1));
   }
 
+  const singleDate = new RegExp(dateToken);
+  const singleDateMatch = source.match(singleDate);
+  if (singleDateMatch) {
+    const date = toDateString(currentYear, Number(singleDateMatch[1]), Number(singleDateMatch[2]));
+    return normalizeRange(date, date);
+  }
+
   return normalizeRange(fallbackStart, fallbackStart);
 }
 
