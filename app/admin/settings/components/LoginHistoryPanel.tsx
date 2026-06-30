@@ -17,19 +17,19 @@ export function LoginHistoryPanel() {
   }, []);
 
   return (
-    <section className="panel overflow-hidden">
+    <section className="panel overflow-visible">
       <h2 className="mb-3 text-xl font-black">로그인 기록</h2>
       {message ? <p className="mb-3 rounded-lg bg-[#fff7f4] px-3 py-2 text-sm font-black text-[#a13f24]">{message}</p> : null}
       <div data-horizontal-scroll="true" className="overflow-x-auto">
         <table className="admin-table w-full min-w-[920px] table-fixed text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-white"><tr className="border-b"><th className="w-[150px]">로그인 시간</th><th className="w-[170px]">사용자</th><th className="w-[220px]">이메일</th><th className="w-[240px]">기기</th><th className="w-[150px]">IP</th><th className="w-[110px]">상태</th></tr></thead>
+          <thead className="sticky top-0 z-10 bg-white"><tr className="border-b"><th className="w-[170px] pr-6">로그인 시간</th><th className="w-[160px] pl-3">사용자</th><th className="w-[220px]">이메일</th><th className="w-[210px]">기기</th><th className="w-[150px]">IP</th><th className="w-[110px]">상태</th></tr></thead>
           <tbody>
             {logs.map((log) => (
               <tr className="h-14 border-b" key={log.id}>
-                <td className="whitespace-nowrap font-bold">{formatDateTime(log.createdAt)}</td>
-                <td className="truncate font-black" title={userLabel(log)}>{userLabel(log)}</td>
+                <td className="whitespace-nowrap pr-6 font-bold">{formatDateTime(log.createdAt)}</td>
+                <td className="truncate pl-3 font-black" title={userLabel(log)}>{userLabel(log)}</td>
                 <td className="truncate" title={log.email || "-"}>{log.email || "-"}</td>
-                <td className="truncate" title={deviceLabel(log)}>{deviceLabel(log)}</td>
+                <td><DeviceCell log={log} /></td>
                 <td className="truncate" title={log.ip || "-"}>{log.ip || "-"}</td>
                 <td><StatusBadge status={log.status} message={log.message} /></td>
               </tr>
@@ -63,10 +63,41 @@ function userLabel(log: LoginLog) {
   return `${name}${position ? `(${position})` : ""}`;
 }
 
-function deviceLabel(log: LoginLog) {
-  const alias = log.deviceAlias || "알 수 없는 기기";
-  const detail = [log.os, log.browser].filter(Boolean).join(" ");
-  return detail ? `${alias}(${detail})` : alias;
+function DeviceCell({ log }: { log: LoginLog }) {
+  return (
+    <span className="group relative inline-block max-w-full align-middle">
+      <span className="block max-w-[190px] truncate font-bold text-[#16211d]" title={deviceTooltip(log)}>{deviceName(log)}</span>
+      <span className="pointer-events-none absolute left-0 top-7 z-50 hidden w-72 rounded-lg border border-[#d8ded8] bg-white p-3 text-xs font-bold leading-5 text-[#34423b] shadow-xl group-hover:block">
+        <span className="block">기종: {log.deviceModel || deviceName(log)}</span>
+        <span className="block">OS: {log.os || "-"}</span>
+        <span className="block">브라우저: {log.browser || "-"}</span>
+        <span className="block">Device ID: {shortDeviceId(log.deviceId)}</span>
+        {log.userAgent ? <span className="mt-1 block truncate">UA: {truncate(log.userAgent, 80)}</span> : null}
+      </span>
+    </span>
+  );
+}
+
+function deviceName(log: LoginLog) {
+  return log.deviceAlias || "알 수 없는 기기";
+}
+
+function deviceTooltip(log: LoginLog) {
+  return [
+    `기종: ${log.deviceModel || deviceName(log)}`,
+    `OS: ${log.os || "-"}`,
+    `브라우저: ${log.browser || "-"}`,
+    `Device ID: ${shortDeviceId(log.deviceId)}`,
+    log.userAgent ? `UA: ${truncate(log.userAgent, 80)}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function shortDeviceId(value: string) {
+  return value ? `${value.slice(0, 12)}${value.length > 12 ? "..." : ""}` : "-";
+}
+
+function truncate(value: string, max: number) {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
 }
 
 function StatusBadge({ status, message }: { status: string; message?: string }) {
