@@ -1,7 +1,9 @@
 import { ensureColumns, noStoreHeaders, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -23,6 +25,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "repair_records.create");
+    if (auth.response) return auth.response;
     await ensureIncidentSchemas(env);
     const body = await request.json() as any;
     const kind = safeText(body.type || body.kind || body.incidentType || "accident");

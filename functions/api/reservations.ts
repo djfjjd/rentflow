@@ -1,8 +1,10 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
 import { resolveReservationDateRange } from "../../lib/reservation-date-range";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -19,6 +21,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "reservations.create");
+    if (auth.response) return auth.response;
     await ensureReservationSchema(env);
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
@@ -60,6 +64,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
 
 export async function onRequestPatch({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "reservations.update");
+    if (auth.response) return auth.response;
     await ensureReservationSchema(env);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
@@ -79,6 +85,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
 
 export async function onRequestDelete({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "reservations.delete");
+    if (auth.response) return auth.response;
     await ensureReservationSchema(env);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
@@ -93,6 +101,8 @@ export async function onRequestDelete({ request, env }: { request: Request, env:
 export async function onRequestPut({ request, env }: { request: Request, env: Env }) {
   // Overwrite all reservations (for saveReservations)
   try {
+    const auth = await requirePermission(request, env, "reservations.update");
+    if (auth.response) return auth.response;
     await ensureReservationSchema(env);
     const reservations = await request.json() as any[];
     

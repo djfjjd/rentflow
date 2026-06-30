@@ -1,7 +1,9 @@
 import { safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -15,6 +17,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "partners.create");
+    if (auth.response) return auth.response;
     const partner = await request.json() as any;
     await env.DB.prepare(
       "INSERT INTO partner_addresses (id, name, category, manager_name, phone, address, detail_address, naver_map_url, latitude, longitude, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -39,6 +43,8 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
 
 export async function onRequestPatch({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "partners.update");
+    if (auth.response) return auth.response;
     const partner = await request.json() as any;
     await env.DB.prepare(
       "UPDATE partner_addresses SET name = ?, category = ?, manager_name = ?, phone = ?, address = ?, detail_address = ?, naver_map_url = ?, latitude = ?, longitude = ?, memo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -63,6 +69,8 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
 
 export async function onRequestDelete({ request, env }: { request: Request; env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "partners.delete");
+    if (auth.response) return auth.response;
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     await env.DB.prepare("DELETE FROM partner_addresses WHERE id = ?").bind(safeText(id)).run();

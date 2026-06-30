@@ -1,9 +1,11 @@
 import { ensureColumns, noStoreHeaders, safeText } from "./_d1-utils";
 import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures, isActivePhotoCaptureObject } from "./_photo-retention";
+import { requirePermission } from "./_permissions";
 
 type UploadEnv = {
   DB?: any;
   RENTFLOW_UPLOADS?: any; // R2Bucket
+  JWT_SECRET?: string;
 };
 
 type UploadContext = {
@@ -37,6 +39,8 @@ type FileRecord = {
 };
 
 export async function onRequestPost({ request, env }: UploadContext) {
+  const auth = await requirePermission(request, env, "photos.upload");
+  if (auth.response) return auth.response;
   const formData = await request.formData();
   const file = formData.get("file");
   const thumbnail = formData.get("thumbnail");
@@ -302,6 +306,8 @@ async function findClosestLegacyPhotoFolder(
 }
 
 export async function onRequestDelete({ request, env }: UploadContext) {
+  const auth = await requirePermission(request, env, "photos.delete");
+  if (auth.response) return auth.response;
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
 

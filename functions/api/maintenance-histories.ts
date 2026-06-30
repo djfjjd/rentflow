@@ -1,7 +1,9 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -18,6 +20,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPatch({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "repair_records.update");
+    if (auth.response) return auth.response;
     await ensureMaintenanceHistorySchema(env);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
@@ -42,6 +46,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "repair_records.create");
+    if (auth.response) return auth.response;
     await ensureMaintenanceHistorySchema(env);
     const mh = await request.json() as any;
     const date = mh.date ?? mh.foundDate;

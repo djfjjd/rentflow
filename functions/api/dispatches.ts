@@ -1,7 +1,9 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { isDispatchingStatus, isStaff, requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -27,6 +29,8 @@ export async function onRequestGet({ env }: { env: Env }) {
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "dispatch.create");
+    if (auth.response) return auth.response;
     await ensureDispatchSchema(env);
     const d = await request.json() as any;
     const vehicleNumber = d.vehicleNumber ?? d.rentalCarNumber;
@@ -72,10 +76,16 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
 
 export async function onRequestPatch({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "dispatch.update");
+    if (auth.response) return auth.response;
     await ensureDispatchSchema(env);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+    if (isStaff(auth.session)) {
+      const current = await env.DB.prepare("SELECT status, dispatch_type, business_type, is_completed, return_completed FROM dispatches WHERE id = ?").bind(safeText(id)).first();
+      if (!isDispatchingStatus(current)) return Response.json({ error: "배차기록은 읽기만 가능합니다." }, { status: 403 });
+    }
 
     const body = await request.json() as any;
     const vehicleNumber = body.vehicleNumber ?? body.vehicle_number ?? body.rentalCarNumber;
@@ -163,9 +173,15 @@ export const onRequestPut = onRequestPatch;
 
 export async function onRequestDelete({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "dispatch.delete");
+    if (auth.response) return auth.response;
     await ensureDispatchSchema(env);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+    if (isStaff(auth.session)) {
+      const current = await env.DB.prepare("SELECT status, dispatch_type, business_type, is_completed, return_completed FROM dispatches WHERE id = ?").bind(safeText(id)).first();
+      if (!isDispatchingStatus(current)) return Response.json({ error: "배차기록은 삭제할 수 없습니다." }, { status: 403 });
+    }
     await env.DB.prepare("DELETE FROM dispatches WHERE id = ?").bind(safeText(id)).run();
     return Response.json({ success: true }, { headers: noStoreHeaders() });
   } catch (error) {
