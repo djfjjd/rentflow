@@ -1,6 +1,6 @@
 import type { Role } from "./roles";
 
-export const positions = ["소장", "팀장", "실장", "직원"] as const;
+export const positions = ["개발자", "관리자", "실장님", "직원"] as const;
 export const staffStatuses = ["재직", "휴직", "퇴사"] as const;
 export const deviceStatuses = ["승인대기", "승인", "차단"] as const;
 export const sessionStatuses = ["active", "revoked", "expired"] as const;

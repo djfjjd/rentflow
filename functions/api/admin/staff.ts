@@ -1,7 +1,8 @@
-import { ensureColumns, safeBindValues, safeNullableText, safeText } from "../_d1-utils";
+import { ensureColumns, safeBindValues, safeText } from "../_d1-utils";
 import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureAuditLogSchema, writeAuditLog } from "../../../lib/audit-logs";
 import { ensureEmailVerificationSchema } from "../../../lib/email-verification";
+import type { Role } from "../../../lib/auth/roles";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -20,23 +21,27 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const body = (await request.json().catch(() => ({}))) as any;
       const id = safeText(body.id || crypto.randomUUID());
       const now = new Date().toISOString();
-      const passwordHash = await hashPassword(safeText(body.temporaryPassword || body.password || ""));
+      const name = safeText(body.name);
+      const position = safeText(body.position || "직원");
+      const email = safeText(body.email).toLowerCase();
+      const role = roleFromPosition(position);
+      const passwordHash = await hashPassword(crypto.randomUUID());
       await env.DB.prepare(
         `INSERT INTO users (id, name, position, role, login_id, password_hash, email, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(...safeBindValues([
         id,
-        safeText(body.name),
-        safeText(body.position),
-        safeText(body.role || "staff"),
-        safeText(body.loginId || body.login_id),
+        name,
+        position,
+        role,
+        email,
         passwordHash,
-        safeText(body.email).toLowerCase(),
+        email,
         "재직",
         now,
         now,
       ])).run();
-      await writeAuditLog(env.DB, { event: "staff_created", actorEmail: auth.session.email, targetId: id, metadata: { role: body.role, position: body.position } });
+      await writeAuditLog(env.DB, { event: "staff_created", actorEmail: auth.session.email, targetId: id, metadata: { role, position } });
       return Response.json({ user: await getUser(env.DB, id) });
     }
 
@@ -58,21 +63,23 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const fields: string[] = [];
       const values: unknown[] = [];
       if (body.name !== undefined) { fields.push("name = ?"); values.push(safeText(body.name)); }
-      if (body.position !== undefined) { fields.push("position = ?"); values.push(safeText(body.position)); }
-      if (body.role !== undefined) { fields.push("role = ?"); values.push(safeText(body.role)); }
-      if (body.loginId !== undefined || body.login_id !== undefined) { fields.push("login_id = ?"); values.push(safeText(body.loginId ?? body.login_id)); }
-      if (body.email !== undefined) { fields.push("email = ?"); values.push(safeText(body.email).toLowerCase()); }
-      if (body.status !== undefined) { fields.push("status = ?"); values.push(safeText(body.status)); }
-      if (body.temporaryPassword !== undefined || body.password !== undefined) {
-        fields.push("password_hash = ?");
-        values.push(await hashPassword(safeText(body.temporaryPassword ?? body.password)));
+      if (body.position !== undefined) {
+        const position = safeText(body.position);
+        fields.push("position = ?", "role = ?");
+        values.push(position, roleFromPosition(position));
       }
+      if (body.email !== undefined) {
+        const email = safeText(body.email).toLowerCase();
+        fields.push("email = ?", "login_id = ?");
+        values.push(email, email);
+      }
+      if (body.status !== undefined) { fields.push("status = ?"); values.push(safeText(body.status)); }
       if (!fields.length) return Response.json({ user: await getUser(env.DB, id) });
       fields.push("updated_at = ?");
       values.push(new Date().toISOString(), id);
       await env.DB.prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
 
-      if (body.role !== undefined) await writeAuditLog(env.DB, { event: "role_changed", actorEmail: auth.session.email, targetId: id, metadata: { role: body.role } });
+      if (body.position !== undefined) await writeAuditLog(env.DB, { event: "role_changed", actorEmail: auth.session.email, targetId: id, metadata: { role: roleFromPosition(safeText(body.position)), position: body.position } });
       if (safeText(body.status) === "퇴사") {
         await retireUser(env.DB, id);
         await writeAuditLog(env.DB, { event: "staff_resigned", actorEmail: auth.session.email, targetId: id });
@@ -203,4 +210,10 @@ function mapUser(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function roleFromPosition(position: string): Role {
+  if (position === "개발자" || position === "관리자") return "super_admin";
+  if (position === "실장님" || position === "실장") return "manager";
+  return "staff";
 }

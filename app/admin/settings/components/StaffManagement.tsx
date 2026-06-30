@@ -2,15 +2,11 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { positions, type StaffUser } from "@/lib/staff-device-types";
-import { roles, type Role } from "@/lib/roles";
 
 const emptyStaffForm = {
   name: "",
   position: "직원",
-  loginId: "",
-  temporaryPassword: "",
   email: "",
-  role: "staff" as Role,
 };
 
 export function StaffManagement() {
@@ -54,15 +50,11 @@ export function StaffManagement() {
     setForm({
       name: user.name,
       position: user.position,
-      loginId: user.loginId,
-      temporaryPassword: "",
       email: user.email,
-      role: user.role,
     });
   }
 
   async function patchUser(user: StaffUser, payload: Record<string, unknown>, doneMessage: string) {
-    if (payload.role !== undefined && !confirm(`${user.name} 직원의 권한을 변경하시겠습니까?`)) return;
     if (payload.action === "retire" && !confirm(`${user.name} 직원을 퇴사 처리하시겠습니까? 모든 기기와 세션이 차단됩니다.`)) return;
     const response = await fetch(`/api/admin/staff?id=${encodeURIComponent(user.id)}`, {
       method: "PATCH",
@@ -98,17 +90,14 @@ export function StaffManagement() {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-black">{editing ? "직원 수정" : "신규 직원 등록"}</h2>
-            <p className="text-sm font-bold text-[#68746d]">직책(Position)과 권한(Role)을 별도로 관리합니다. 재직 직원 {activeCount}명</p>
+            <p className="text-sm font-bold text-[#68746d]">직책(Position)을 기준으로 내부 권한이 자동 적용됩니다. 재직 직원 {activeCount}명</p>
           </div>
           {editing ? <button className="small-btn" type="button" onClick={() => { setEditing(null); setForm(emptyStaffForm); }}>신규 등록으로 전환</button> : null}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="이름" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
-          <label className="label">직책(Position)<select className="field" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })}>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
-          <Field label="로그인 ID" value={form.loginId} onChange={(value) => setForm({ ...form, loginId: value })} required />
-          <Field label="임시 비밀번호" value={form.temporaryPassword} onChange={(value) => setForm({ ...form, temporaryPassword: value })} required={!editing} type="password" />
           <Field label="이메일" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required type="email" />
-          <label className="label">권한(Role)<select className="field" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as Role })}>{roles.map((role) => <option key={role}>{role}</option>)}</select></label>
+          <label className="label">직책(Position)<select className="field" value={form.position} onChange={(event) => setForm({ ...form, position: event.target.value })}>{positions.map((position) => <option key={position}>{position}</option>)}</select></label>
         </div>
         <button className="primary-btn" type="submit">{editing ? "수정 저장" : "직원 등록"}</button>
       </form>
@@ -118,21 +107,20 @@ export function StaffManagement() {
       <section className="panel overflow-hidden">
         <h2 className="mb-3 text-xl font-black">직원 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
-          <table className="admin-table w-full min-w-[1180px] text-left text-sm">
-            <thead><tr className="border-b"><th>이름</th><th>직책(Position)</th><th>권한(Role)</th><th>로그인 ID</th><th>이메일</th><th>상태</th><th>등록일</th><th>관리</th></tr></thead>
+          <table className="admin-table w-full min-w-[880px] text-left text-sm">
+            <thead><tr className="border-b"><th>이름</th><th>이메일</th><th>직책(Position)</th><th>상태</th><th>등록일</th><th>관리</th></tr></thead>
             <tbody>
               {staff.map((user) => (
                 <tr className="border-b" key={user.id}>
-                  <td>{user.name}</td><td>{user.position}</td><td>{user.role}</td><td>{user.loginId}</td><td>{user.email}</td><td>{user.status}</td><td>{formatDate(user.createdAt)}</td>
-                  <td className="flex min-w-[280px] flex-wrap gap-1 py-2">
+                  <td>{user.name}</td><td>{user.email}</td><td>{user.position}</td><td>{user.status}</td><td>{formatDate(user.createdAt)}</td>
+                  <td className="flex min-w-[220px] flex-wrap gap-1 py-2">
                     <button className="small-btn" type="button" onClick={() => startEdit(user)}>수정</button>
-                    <button className="small-btn" type="button" onClick={() => patchUser(user, { role: nextRole(user.role) }, "권한이 변경되었습니다.")}>권한 변경</button>
                     <button className="danger-btn" type="button" onClick={() => patchUser(user, { action: "retire" }, "퇴사 처리되었고 모든 기기와 세션이 차단되었습니다.")}>퇴사 처리</button>
                     <button className="danger-btn" type="button" onClick={() => deleteUser(user)}>삭제</button>
                   </td>
                 </tr>
               ))}
-              {!staff.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={8}>등록된 직원이 없습니다.</td></tr> : null}
+              {!staff.length ? <tr><td className="py-6 text-center font-bold text-[#68746d]" colSpan={6}>등록된 직원이 없습니다.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -143,12 +131,6 @@ export function StaffManagement() {
 
 function Field({ label, value, onChange, required, type = "text" }: { label: string; value: string; onChange: (value: string) => void; required?: boolean; type?: string }) {
   return <label className="label">{label}<input className="field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} /></label>;
-}
-
-function nextRole(role: Role): Role {
-  if (role === "staff") return "manager";
-  if (role === "manager") return "super_admin";
-  return "staff";
 }
 
 function formatDate(value: string) {
