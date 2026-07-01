@@ -99,9 +99,6 @@ function AuthForm() {
           <button className="primary-btn w-full" type="submit" disabled={busy}>
             {busy ? "확인 중" : "로그인"}
           </button>
-          <button className="small-btn w-full" type="button" disabled>
-            사무실 직원 등록(준비중)
-          </button>
         </form>
     </AuthShell>
   );
