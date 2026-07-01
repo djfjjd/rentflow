@@ -95,26 +95,18 @@ export function PermissionMatrix() {
       body: JSON.stringify({ matrix: next }),
     });
     if (!response.ok) {
-      setMessage("권한 최신화에 실패했습니다.");
+      setMessage("권한 저장에 실패했습니다.");
       return;
     }
     const data = (await response.json().catch(() => ({}))) as { matrix?: PermissionPresetMatrix };
     const savedMatrix = protectDeveloperMinimums(data.matrix || next);
     setSaved(cloneMatrix(savedMatrix));
     setMatrix(cloneMatrix(savedMatrix));
-    setMessage("권한이 최신화되었습니다.");
+    setMessage("권한이 저장되었습니다.");
   }
 
   function cancel() {
     setMatrix(cloneMatrix(saved));
-    setMessage("");
-  }
-
-  function restoreDefaults() {
-    const next = cloneMatrix(defaultPermissionPresetMatrix);
-    setSaved(cloneMatrix(next));
-    setMatrix(next);
-    setCustomColumns({ developer: false, admin: false, manager: true, staff: true });
     setMessage("");
   }
 
@@ -123,9 +115,8 @@ export function PermissionMatrix() {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xl font-black">권한 매트릭스</h3>
         <div className="flex flex-wrap gap-2">
-          <button className="primary-btn" type="button" onClick={save} disabled={loading}>권한 최신화</button>
-          <button className="small-btn" type="button" onClick={cancel}>변경 취소</button>
-          <button className="small-btn" type="button" onClick={restoreDefaults}>기본값으로 복원</button>
+          <button className="small-btn" type="button" onClick={cancel}>되돌리기</button>
+          <button className="primary-btn" type="button" onClick={save} disabled={loading}>권한 저장하기</button>
         </div>
       </div>
       {message ? <p className="mb-3 rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">{message}</p> : null}
