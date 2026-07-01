@@ -123,7 +123,7 @@ function getPasswordAccount(accountType: string, env: Env): { password: string; 
     return { password: String(env.MANAGER_PASSWORD || ""), role: "manager", redirectTo: "/admin/dispatches", email: "", isDeveloper: false, displayName: "실장님", position: "실장" };
   }
   if (accountType === "staff") {
-    return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app/dashboard", email: "", isDeveloper: false, displayName: "직원", position: "직원" };
+    return { password: String(env.STAFF_PASSWORD || ""), role: "staff", redirectTo: "/app", email: "", isDeveloper: false, displayName: "직원", position: "직원" };
   }
   return null;
 }
@@ -157,7 +157,7 @@ function effectiveDeviceRole(device: any): Role {
 function redirectForRole(role: Role) {
   if (role === "super_admin") return "/admin";
   if (role === "manager") return "/admin/dispatches";
-  return "/app/dashboard";
+  return "/app";
 }
 
 async function createSessionRecord(db: any, deviceRowId: string, userId: string, publicDeviceId: string) {

@@ -77,6 +77,7 @@ type PageKind =
   | "admin-stats";
 
 type ReloadHandler<T> = (items?: T[]) => void | Promise<void>;
+type PermissionLevel = "none" | "read" | "write";
 
 type ContractV2 = {
   id: string;
@@ -196,9 +197,11 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
   const [isDeveloperSession, setIsDeveloperSession] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({});
   const isAdmin = kind.startsWith("admin") || pathname.startsWith("/admin");
   const canShowDriveLinks = currentRole !== null && currentRole !== "staff";
   const canUploadContracts = currentRole !== "staff";
+  const canEditDispatchRecords = permissions["dispatch.manage"] === "write";
   const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
   const mainInnerClass = isAdmin ? "admin-main-inner admin-content" : "app-main-inner";
   const pageClassName =
@@ -244,14 +247,16 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() as Promise<{ user?: { role?: string; isDeveloper?: boolean } }> : null)
+      .then((response) => response.ok ? response.json() as Promise<{ user?: { role?: string; isDeveloper?: boolean; permissions?: Record<string, PermissionLevel> } }> : null)
       .then((data) => {
         setCurrentRole(data?.user?.role || null);
         setIsDeveloperSession(Boolean(data?.user?.isDeveloper));
+        setPermissions(data?.user?.permissions || {});
       })
       .catch(() => {
         setCurrentRole(null);
         setIsDeveloperSession(false);
+        setPermissions({});
       });
     Promise.all([
       fetchJson<VehicleV2[]>("/api/vehicles", []),
@@ -320,8 +325,8 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {isAdmin ? <AdminNav /> : null}
 
         {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
-        {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} /> : null}
-        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
+        {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} canEditDispatchRecords={canEditDispatchRecords} /> : null}
+        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
         {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
         {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
         {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
@@ -333,7 +338,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
         {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
         {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
-        {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} /> : null}
+        {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
         {kind === "admin-billing" ? <BillingAdmin /> : null}
         {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
         {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -1015,7 +1020,7 @@ function normalizeRoutePath(pathname: string) {
   return pathname.replace(/\/+$/, "") || "/";
 }
 
-function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contracts: ContractV2[]; vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
+function DispatchForm({ contracts, vehicles, dispatches, onDispatches, canEditDispatchRecords }: { contracts: ContractV2[]; vehicles: VehicleV2[]; dispatches: DispatchV2[]; onDispatches: ReloadHandler<DispatchV2>; canEditDispatchRecords: boolean }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [businessType, setBusinessType] = useState("보험");
   const [date, setDate] = useState(todayKorea());
@@ -1112,12 +1117,12 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches }: { contr
         <Textarea name="notes" label="특이사항" />
         <PhotoUploadButton key={`dispatch-upload-${resetKey}`} recordId={recordId} recordType="dispatch" vehicleNumber={vehicle?.plateNumber || ""} />
       </DataForm>
-      <DispatchBoard contracts={contracts} dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} />
+      <DispatchBoard contracts={contracts} dispatches={dispatches} vehicles={vehicles} onDispatches={onDispatches} canEditDispatchRecords={canEditDispatchRecords} />
     </section>
   );
 }
 
-function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onDispatches: ReloadHandler<DispatchV2>; onReturns: ReloadHandler<ReturnV2> }) {
+function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns, canEditDispatchRecords }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onDispatches: ReloadHandler<DispatchV2>; onReturns: ReloadHandler<ReturnV2>; canEditDispatchRecords: boolean }) {
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
@@ -1241,7 +1246,7 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns }: 
       <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
-    <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} />
+    <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} canEditDispatchRecords={canEditDispatchRecords} />
     </section>
   );
 }
@@ -3077,6 +3082,7 @@ function DispatchAdmin({
   vehicles,
   onDispatches,
   onReturns,
+  canEditDispatchRecords: _canEditDispatchRecords,
 }: {
   contracts: ContractV2[];
   dispatches: DispatchV2[];
@@ -3084,6 +3090,7 @@ function DispatchAdmin({
   vehicles: VehicleV2[];
   onDispatches: ReloadHandler<DispatchV2>;
   onReturns: ReloadHandler<ReturnV2>;
+  canEditDispatchRecords: boolean;
 }) {
   const [filter, setFilter] = useState("미정리");
   const [page, setPage] = useState(1);
@@ -3214,7 +3221,7 @@ function DispatchAdmin({
   );
 }
 
-function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { contracts: ContractV2[]; dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2> }) {
+function DispatchBoard({ contracts, dispatches, vehicles, onDispatches, canEditDispatchRecords }: { contracts: ContractV2[]; dispatches: DispatchV2[]; vehicles: VehicleV2[]; onDispatches: ReloadHandler<DispatchV2>; canEditDispatchRecords: boolean }) {
   const [editing, setEditing] = useState<DispatchV2 | null>(null);
   const [deleting, setDeleting] = useState<DispatchV2 | null>(null);
   const [memo, setMemo] = useState("");
@@ -3233,6 +3240,7 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
   const historyRows = searchedRows.filter(isReturnedDispatch);
   const rows = tab === "active" ? activeRows : historyRows;
   const page = pages[tab];
+  const visibleColumns = canEditDispatchRecords ? dispatchBoardColumns : dispatchBoardColumns.filter((column) => column.label !== "수정" && column.label !== "삭제");
   function setTabPage(nextPage: number) {
     setPages((current) => ({ ...current, [tab]: nextPage }));
   }
@@ -3264,11 +3272,11 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
         <Segmented value={tab} values={["active", "history"]} labels={{ active: "배차중", history: "배차기록" }} onChange={(value) => setTab(value as "active" | "history")} />
       </div>
       <div data-horizontal-scroll="true" className="dispatch-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[1700px] table-fixed text-left text-sm">
+        <table className={`w-full ${canEditDispatchRecords ? "min-w-[1700px]" : "min-w-[1560px]"} table-fixed text-left text-sm`}>
           <colgroup>
-            {dispatchBoardColumns.map((column) => <col className={column.width} key={column.label} />)}
+            {visibleColumns.map((column) => <col className={column.width} key={column.label} />)}
           </colgroup>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th className="text-center">계약서</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th className="text-center">계약서</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}</tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
             const contract = contractForRecord(contracts, item.id);
@@ -3289,8 +3297,8 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
                   <PhotoGalleryButton date={item.date} kind="배차" recordId={item.id} recordType="dispatch" time={item.time} vehicleNumber={item.rentalCarNumber || ""} />
                 </td>
                 <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
-                <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td>
-                <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+                {canEditDispatchRecords ? <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td> : null}
+                {canEditDispatchRecords ? <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td> : null}
               </tr>
             );
           })}</tbody>
@@ -3309,7 +3317,7 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches }: { cont
   );
 }
 
-function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: ReloadHandler<ReturnV2> }) {
+function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: ReloadHandler<ReturnV2>; canEditDispatchRecords: boolean }) {
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
@@ -3360,8 +3368,8 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
         </div>
       </div>
       <div data-horizontal-scroll="true" className="return-board-wrapper return-table-wrapper return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="return-table w-full min-w-[1200px] text-left text-sm">
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th><th>수정</th><th>삭제</th></tr></thead>
+        <table className={`return-table w-full ${canEditDispatchRecords ? "min-w-[1200px]" : "min-w-[1060px]"} text-left text-sm`}>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}</tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
             return (
@@ -3376,8 +3384,8 @@ function ReturnBoard({ returns, vehicles, onReturns }: { returns: ReturnV2[]; ve
                 <td>{clean(item.notes)}</td>
                 <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
                 <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} label="사진추가" /></td>
-                <td><button className="small-btn edit-button" type="button" onClick={() => setEditing(item)}>수정</button></td>
-                <td><button className="danger-btn delete-button" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td>
+                {canEditDispatchRecords ? <td><button className="small-btn edit-button" type="button" onClick={() => setEditing(item)}>수정</button></td> : null}
+                {canEditDispatchRecords ? <td><button className="danger-btn delete-button" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td> : null}
               </tr>
             );
           })}</tbody>

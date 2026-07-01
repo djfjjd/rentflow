@@ -18,6 +18,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (!session) return Response.json({ user: null }, { status: 401 });
   const isDeveloper = Boolean(session.isDeveloper) || session.email.toLowerCase() === String(env.ADMIN_EMAIL || "").trim().toLowerCase();
   const partnersAddressLevel = env.DB ? await getSessionPermissionLevel(env.DB, { ...session, isDeveloper }, "partners_address.view") : "none";
+  const dispatchManageLevel = env.DB ? await getSessionPermissionLevel(env.DB, { ...session, isDeveloper }, "dispatch.manage") : "none";
   return Response.json({
     user: {
       email: session.email,
@@ -28,6 +29,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       canAccessSettings: session.role === "super_admin",
       permissions: {
         "partners_address.view": partnersAddressLevel,
+        "dispatch.manage": dispatchManageLevel,
       },
     },
   });

@@ -86,7 +86,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 function redirectForRole(role: string) {
   if (role === "super_admin") return "/admin";
   if (role === "manager") return "/admin/dispatches";
-  return "/app/dashboard";
+  return "/app";
 }
 
 function roleFromDevice(value: unknown): Role {

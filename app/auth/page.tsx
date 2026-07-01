@@ -38,7 +38,7 @@ function AuthForm() {
       .then((data) => {
         if (!data || cancelled) return;
         const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
-        const fallback = data.redirectTo || "/app/dashboard";
+        const fallback = data.redirectTo || "/app";
         const target = safeNext && (data.user?.role === "super_admin" || !safeNext.startsWith("/admin")) ? safeNext : fallback;
         router.replace(target);
         router.refresh();
@@ -67,7 +67,7 @@ function AuthForm() {
         throw new Error(data.error || "로그인에 실패했습니다.");
       }
       const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
-      const fallback = data.redirectTo || "/app/dashboard";
+      const fallback = data.redirectTo || "/app";
       const target = safeNext && (data.user?.role === "super_admin" || !safeNext.startsWith("/admin")) ? safeNext : fallback;
       router.replace(target);
       router.refresh();
