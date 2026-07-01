@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -53,6 +53,8 @@ import {
   type UploadedFileV2,
   type VehicleV2,
 } from "@/lib/rentflow-v2";
+
+const DeveloperPrivacyMaskContext = createContext(false);
 
 type PageKind =
   | "home"
@@ -280,15 +282,34 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   }, []);
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
-      <header className="app-header sticky top-0 z-30 bg-[#f6f7f4]/95 py-3 backdrop-blur">
-        <div className={headerInnerClass}>
-          <div className="header-top-row">
-            <div className="header-left">
-              <HeaderLogo isAdmin={isAdmin} role={currentRole} isDeveloper={isDeveloperSession} />
-              <DeveloperBadge enabled />
+    <DeveloperPrivacyMaskContext.Provider value={isDeveloperSession}>
+      <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
+        <header className="app-header sticky top-0 z-30 bg-[#f6f7f4]/95 py-3 backdrop-blur">
+          <div className={headerInnerClass}>
+            <div className="header-top-row">
+              <div className="header-left">
+                <HeaderLogo isAdmin={isAdmin} role={currentRole} isDeveloper={isDeveloperSession} />
+                <DeveloperBadge enabled />
+              </div>
+              <div className="header-center">
+                <UnreadMessagesButton
+                  dispatches={dispatches}
+                  returns={returns}
+                  vehicles={vehicles}
+                  onDispatches={reloadDispatches}
+                  onReturns={reloadReturns}
+                  open={activeOverlay === "unread"}
+                  onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
+                />
+              </div>
+              <div className="header-right">
+                <QuickMenu />
+                <div className="desktop-calendar-button">
+                  <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
+                </div>
+              </div>
             </div>
-            <div className="header-center">
+            <div className="mobile-header-second-row">
               <UnreadMessagesButton
                 dispatches={dispatches}
                 returns={returns}
@@ -298,54 +319,37 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 open={activeOverlay === "unread"}
                 onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
               />
-            </div>
-            <div className="header-right">
-              <QuickMenu />
-              <div className="desktop-calendar-button">
-                <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
-              </div>
+              <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
             </div>
           </div>
-          <div className="mobile-header-second-row">
-            <UnreadMessagesButton
-              dispatches={dispatches}
-              returns={returns}
-              vehicles={vehicles}
-              onDispatches={reloadDispatches}
-              onReturns={reloadReturns}
-              open={activeOverlay === "unread"}
-              onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
-            />
-            <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
-          </div>
+        </header>
+        <div className={`${mainInnerClass} flex flex-col gap-4 py-4 ${pageClassName}`}>
+
+          {isAdmin ? <AdminNav /> : null}
+
+          {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
+          {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} canEditDispatchRecords={canEditDispatchRecords} /> : null}
+          {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
+          {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
+          {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
+          {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
+          {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
+          {kind === "photos" ? <PhotosPage admin={isAdmin} canShowDriveLinks={canShowDriveLinks} /> : null}
+          {kind === "partners" ? <PartnersPage /> : null}
+          {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
+          {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
+          {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
+          {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
+          {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
+          {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
+          {kind === "admin-billing" ? <BillingAdmin /> : null}
+          {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
+          {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
+          {kind === "admin-settings" ? <SettingsAdmin /> : null}
+          {kind === "admin-stats" ? <StatsAdmin vehicles={vehicles} dispatches={dispatches} /> : null}
         </div>
-      </header>
-      <div className={`${mainInnerClass} flex flex-col gap-4 py-4 ${pageClassName}`}>
-
-        {isAdmin ? <AdminNav /> : null}
-
-        {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
-        {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} canEditDispatchRecords={canEditDispatchRecords} /> : null}
-        {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
-        {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
-        {kind === "incident" ? <IncidentForm vehicles={vehicles} accidents={accidents} maintenance={maintenance} onAccidents={reloadAccidents} onMaintenance={reloadMaintenance} /> : null}
-        {kind === "billing" ? <BillingForm contracts={contracts} dispatches={dispatches} onContracts={reloadContracts} onDispatches={reloadDispatches} /> : null}
-        {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
-        {kind === "photos" ? <PhotosPage admin={isAdmin} canShowDriveLinks={canShowDriveLinks} /> : null}
-        {kind === "partners" ? <PartnersPage /> : null}
-        {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
-        {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
-        {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
-        {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
-        {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
-        {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
-        {kind === "admin-billing" ? <BillingAdmin /> : null}
-        {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
-        {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
-        {kind === "admin-settings" ? <SettingsAdmin /> : null}
-        {kind === "admin-stats" ? <StatsAdmin vehicles={vehicles} dispatches={dispatches} /> : null}
-      </div>
-    </main>
+      </main>
+    </DeveloperPrivacyMaskContext.Provider>
   );
 }
 
@@ -474,10 +478,10 @@ function UnreadMessagesButton({
                       <td>{row.kind}</td>
                       <td>{ret ? firstText(vehicleModelColor(vehicle), returnSnapshot?.carModelColor) : vehicleModelColor(vehicle)}</td>
                       <td><UnreadStatusBadge status={firstText(returnSnapshot?.status, linkedDispatch?.dispatchType, linkedDispatch?.businessType, linkedDispatch?.status)} /></td>
-                      <td>{ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)}</td>
+                      <td><SensitiveInline value={ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)} /></td>
                       <td>{ret ? clean(returnSnapshot?.customerCarModel) : clean(linkedDispatch?.customerCarModel)}</td>
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
-                      <td>{ret ? clean(returnSnapshot?.repairShop) : clean(linkedDispatch?.repairShop)}</td>
+                      <td><SensitiveInline value={ret ? clean(returnSnapshot?.repairShop) : clean(linkedDispatch?.repairShop)} /></td>
                       <td>{clean(ret?.notes || returnSnapshot?.dispatchMemo || linkedDispatch?.notes || dispatch?.notes)}</td>
                     </tr>
                   );
@@ -492,6 +496,7 @@ function UnreadMessagesButton({
 }
 
 function TodayCalendar({ reservations, open, onOpenChange }: { reservations: ReservationV2[]; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const [selected, setSelected] = useState(todayKorea());
   const today = todayKorea();
   const monthStart = `${selected.slice(0, 7)}-01`;
@@ -533,7 +538,7 @@ function TodayCalendar({ reservations, open, onOpenChange }: { reservations: Res
             />
             <div className="mt-4 rounded-lg bg-[#f5f7f4] p-3">
               <p className="mb-2 text-sm font-black">{formatDateDot(selected)} 일정</p>
-              {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {scheduleText(item)} <span className="text-[#68746d]">({reservationRangeText(item)})</span></p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
+              {selectedItems.length ? selectedItems.map((item) => <p className="break-words whitespace-normal text-sm leading-relaxed" key={item.id}>* {privacyText(scheduleText(item), shouldMask)} <span className="text-[#68746d]">({reservationRangeText(item)})</span></p>) : <p className="text-sm text-[#69736d]">예약일정 없음</p>}
             </div>
         </OverlayModal>
       ) : null}
@@ -558,6 +563,7 @@ function ReservationMonthGrid({
   today: string;
   onSelect: (date: string) => void;
 }) {
+  const shouldMask = useDeveloperPrivacyMask();
   return (
     <>
       <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-[#657268]">
@@ -588,7 +594,7 @@ function ReservationMonthGrid({
             <button
               className={`relative min-h-12 overflow-hidden rounded-lg border text-center text-sm font-black ${date === selected ? "border-[#116149] bg-[#e3f3eb]" : date === today ? "border-[#c7d7c9] bg-[#f0f7f1]" : "border-[#edf0ec] bg-[#fafbf9]"}`}
               key={date}
-              title={items.map((item) => `${scheduleText(item)} (${reservationRangeText(item)})`).join("\n")}
+              title={items.map((item) => `${privacyText(scheduleText(item), shouldMask)} (${reservationRangeText(item)})`).join("\n")}
               type="button"
               onClick={() => onSelect(date)}
             >
@@ -1123,6 +1129,7 @@ function DispatchForm({ contracts, vehicles, dispatches, onDispatches, canEditDi
 }
 
 function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns, canEditDispatchRecords }: { vehicles: VehicleV2[]; dispatches: DispatchV2[]; returns: ReturnV2[]; onDispatches: ReloadHandler<DispatchV2>; onReturns: ReloadHandler<ReturnV2>; canEditDispatchRecords: boolean }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const [vehicle, setVehicle] = useState<VehicleV2>();
   const [date, setDate] = useState(todayKorea());
   const [time, setTime] = useState(currentTimeKorea());
@@ -1239,8 +1246,8 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns, ca
       </CompactRow>
       <div className="grid gap-2 sm:grid-cols-3">
         <Input label="고객차종" value={selectedDispatch ? clean(selectedDispatch.customerCarModel) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="연락처" value={selectedDispatch ? dispatchPhone(selectedDispatch) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
-        <Input label="오더자" value={selectedDispatch ? formatOrdererName(firstText(selectedDispatch.orderer, selectedDispatch.orderedBy, selectedDispatch.customerName), selectedDispatch.corporateVehicle) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="연락처" value={selectedDispatch ? privacyText(dispatchPhone(selectedDispatch), shouldMask) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
+        <Input label="오더자" value={selectedDispatch ? privacyText(formatOrdererName(firstText(selectedDispatch.orderer, selectedDispatch.orderedBy, selectedDispatch.customerName), selectedDispatch.corporateVehicle), shouldMask) : ""} readOnly className="field min-h-12 bg-[#f8faf7] text-[#16211d]" />
       </div>
       <Textarea key={`return-notes-${selectedDispatch?.id || "none"}`} name="notes" label="특이사항" defaultValue={selectedDispatch?.notes || ""} />
       <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
@@ -1847,6 +1854,7 @@ type UploadProgressState = {
 };
 
 function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDriveLinks: boolean }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [vehicles, setVehicles] = useState<VehicleV2[]>([]);
   const [query, setQuery] = useState("");
@@ -1919,7 +1927,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <button className="small-btn" type="button" onClick={() => { setSelectedIndex(null); setSelectedFolderKey(null); }}>뒤로가기</button>
             <div className="min-w-0 text-right">
-              <h2 className="truncate text-lg font-black">{selectedFolder.folderName}</h2>
+              <h2 className="truncate text-lg font-black">{privacyText(selectedFolder.folderName, shouldMask)}</h2>
               {selectedFolder.vehicleNumber ? <p className="text-sm"><VehicleNumberText vehicle={findVehicle(vehicles, selectedFolder.vehicleNumber)} value={selectedFolder.vehicleNumber} /></p> : null}
               <p className="text-sm font-bold text-[#68746d]">총 {sortedFiles.length}개</p>
             </div>
@@ -1929,11 +1937,11 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
               {sortedFiles.map((file, index) => (
                 <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
-                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
+                    <img alt={privacyText(fileName(file), shouldMask)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
                     <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
                   ) : (
-                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{fileName(file)}</span>
+                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{privacyText(fileName(file), shouldMask)}</span>
                   )}
                 </button>
               ))}
@@ -2013,7 +2021,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
                   {coverUrl ? <img alt="" className="h-full w-full object-cover" src={coverUrl} /> : <span className="grid h-full place-items-center text-xl">📁</span>}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-base font-black">📁 {folder.folderName}</p>
+                  <p className="truncate text-base font-black">📁 {privacyText(folder.folderName, shouldMask)}</p>
                   <div className="mt-2 grid gap-1 text-sm font-bold text-[#68746d]">
                     <p><VehicleNumberText vehicle={findVehicle(vehicles, folder.vehicleNumber)} value={folder.vehicleNumber || "차량번호 없음"} /> · {folder.kind}</p>
                     <p>{folderFileSummary(photoCount, videoCount)}</p>
@@ -2744,7 +2752,7 @@ function LegacyPartnersPage() {
                 <p className="text-xs font-black text-[#116149]">{partner.category || "기타"}</p>
                 <h2 className="text-xl font-black">{partner.name}</h2>
                 <p className="font-bold">{partner.address} {partner.detailAddress}</p>
-                <p className="text-sm text-[#637168]">{partner.managerName || "-"} · {partner.phone || "-"}</p>
+                <p className="text-sm text-[#637168]"><SensitiveInline value={partner.managerName} /> · <SensitiveInline value={partner.phone} /></p>
                 {partner.latitude && partner.longitude ? <p className="text-xs text-[#637168]">{partner.latitude}, {partner.longitude}</p> : <p className="text-xs font-bold text-[#b25b2d]">좌표 등록 필요</p>}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -3194,10 +3202,10 @@ function DispatchAdmin({
                 <TruncatedCell value={row.kind} />
                 <td className="h-11 whitespace-nowrap"><DispatchAdminStatusPill status={status} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
-                <TruncatedCell value={ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)} />
+                <TruncatedCell sensitive value={ret ? formatOrdererName(returnSnapshot?.orderer, returnSnapshot?.isCorporateVehicle) : formatOrdererName(linkedDispatch?.orderedBy || linkedDispatch?.customerName, linkedDispatch?.corporateVehicle)} />
                 <TruncatedCell value={ret ? clean(returnSnapshot?.customerCarModel) : clean(linkedDispatch?.customerCarModel)} />
                 <TruncatedCell value={clean(dispatch?.fuelDisplay || ret?.fuelDisplay)} />
-                <TruncatedCell value={ret ? clean(returnSnapshot?.repairShop) : clean(linkedDispatch?.repairShop)} />
+                <TruncatedCell sensitive value={ret ? clean(returnSnapshot?.repairShop) : clean(linkedDispatch?.repairShop)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={ret ? returnSnapshot?.customerPhone : dispatchPhone(linkedDispatch)} /></td>
                 <MemoCell value={ret?.notes || returnSnapshot?.dispatchMemo || linkedDispatch?.notes || dispatch?.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap">
@@ -3287,10 +3295,10 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches, canEditD
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={dispatchPhone(item)} /></td>
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><DispatchTypeBadge status={clean(item.businessType || item.status)} /></td>
                 <TruncatedCell value={vehicleModelColor(vehicle)} />
-                <TruncatedCell value={formatOrdererName(item.orderedBy || item.customerName, item.corporateVehicle)} />
+                <TruncatedCell sensitive value={formatOrdererName(item.orderedBy || item.customerName, item.corporateVehicle)} />
                 <TruncatedCell value={clean(item.customerCarModel)} />
                 <TruncatedCell value={clean(item.fuelDisplay)} />
-                <TruncatedCell value={clean(item.repairShop)} />
+                <TruncatedCell sensitive value={clean(item.repairShop)} />
                 <MemoCell value={item.notes} onOpen={setMemo} />
                 <td className="h-11 whitespace-nowrap px-1 text-center align-middle"><ContractClip contract={contract} /></td>
                 <td className="h-11 whitespace-nowrap">
@@ -3597,7 +3605,7 @@ function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; 
         <thead><tr className="border-b"><th>{tab === "done" ? "보관중으로" : "정리완료"}</th><th>차량번호</th><th>고객명</th><th>연락처</th><th>특이사항</th><th>수정</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const plate = clean(item.vehicleNumber);
-          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(item.customerName)}</td><td><PhoneCell phone={item.customerPhone} /></td><td>{clean(item.memo)}</td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td><SensitiveInline value={item.customerName} /></td><td><PhoneCell phone={item.customerPhone} /></td><td>{clean(item.memo)}</td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -3687,6 +3695,7 @@ function PhotoFolderGalleryModal({
   vehicleNumber?: string;
   onClose: () => void;
 }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const [files, setFiles] = useState<UploadedFileV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -3727,18 +3736,18 @@ function PhotoFolderGalleryModal({
         <div>
           <div className="mb-3 flex items-center justify-between gap-2">
             <button className="small-btn" type="button" onClick={() => setGalleryOpen(false)}>폴더 목록</button>
-            <p className="truncate text-sm font-black">{folderName}</p>
+            <p className="truncate text-sm font-black">{privacyText(folderName, shouldMask)}</p>
           </div>
           {sortedFiles.length ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {sortedFiles.map((file, index) => (
                 <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
-                    <img alt={fileName(file)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
+                    <img alt={privacyText(fileName(file), shouldMask)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
                     <video className="h-full w-full object-cover" muted src={fileUrl(file)} />
                   ) : (
-                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{fileName(file)}</span>
+                    <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{privacyText(fileName(file), shouldMask)}</span>
                   )}
                 </button>
               ))}
@@ -3754,7 +3763,7 @@ function PhotoFolderGalleryModal({
           {!loading && sortedFiles.length ? (
             <button className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#d8ded8] bg-white p-4 text-left hover:bg-[#f5f7f4]" type="button" onClick={() => setGalleryOpen(true)}>
               <div className="min-w-0">
-                <p className="truncate text-base font-black">📁 {folderName}</p>
+                <p className="truncate text-base font-black">📁 {privacyText(folderName, shouldMask)}</p>
                 <p className="mt-1 text-sm font-bold text-[#68746d]">{folderFileSummary(photoCount, videoCount)}</p>
               </div>
               <p className="shrink-0 text-xs font-bold text-[#68746d]">{formatPhotoBusinessDate(date, time)}</p>
@@ -3777,8 +3786,10 @@ function PhotoDetailView({
   onIndexChange: (index: number) => void;
   onBack: () => void;
 }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const file = files[currentIndex];
   const url = fileUrl(file);
+  const displayFileName = privacyText(fileName(file), shouldMask);
   const [zoom, setZoom] = useState(1);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null);
@@ -3880,7 +3891,7 @@ function PhotoDetailView({
     >
       <div className="photo-detail-header mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <button className="small-btn" type="button" onClick={onBack}>← 닫기</button>
-        <p className="truncate text-center text-sm font-black" title={fileName(file)}>{fileName(file)}</p>
+        <p className="truncate text-center text-sm font-black" title={displayFileName}>{displayFileName}</p>
         {url ? (
           <button className="small-btn" type="button" disabled={sharing} onClick={shareCurrentPhoto}>
             {sharing ? "준비 중" : "저장/공유"}
@@ -3918,13 +3929,13 @@ function PhotoDetailView({
           <video className="max-h-[72vh] max-w-full" controls src={url} />
         ) : isImageFile(file) ? (
           <img
-            alt={fileName(file)}
+            alt={displayFileName}
             className="max-h-[72vh] max-w-full object-contain transition-transform"
             src={url}
             style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
           />
         ) : (
-          <a className="font-black text-white underline" href={url} target="_blank">{fileName(file)}</a>
+          <a className="font-black text-white underline" href={url} target="_blank">{displayFileName}</a>
         )}
       </div>
     </div>
@@ -4055,7 +4066,7 @@ function VehicleStatusBoard({ rows, query, onQueryChange }: { rows: VehicleDashb
               <td className="whitespace-nowrap">{row.dispatchDate}</td>
               <td>{row.fuelLevelText || "-"}</td>
               <td>{row.customerCarModel || "-"}</td>
-              <td>{row.ordererRepairShop || "-"}</td>
+              <td><SensitiveInline value={row.ordererRepairShop} /></td>
               <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
             </tr>
           ))}</tbody>
@@ -4217,6 +4228,7 @@ function VehicleCompanySelect({ defaultValue }: { defaultValue?: string }) {
 }
 
 function ReservationList({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const [editing, setEditing] = useState<ReservationV2 | null>(null);
   const [detail, setDetail] = useState<ReservationV2 | null>(null);
   const [nameDetail, setNameDetail] = useState("");
@@ -4262,6 +4274,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
           <tbody>
             {paginate(rows, page).map((reservation) => {
               const reservationText = reservation.reservationText || reservation.memo || "";
+              const displayCustomerName = privacyText(reservation.customerName, shouldMask);
               return (
                 <tr className="border-b [&>td]:whitespace-nowrap [&>td]:align-middle" key={reservation.id}>
                   <td>
@@ -4270,9 +4283,9 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
                   </td>
                   <td className="font-black">
                     <div className="reservation-name-cell">
-                      <span className="reservation-name-text" title={reservation.customerName}>{reservation.customerName}</span>
+                      <span className="reservation-name-text" title={displayCustomerName}>{displayCustomerName}</span>
                       {clean(reservation.customerName).length > 0 ? (
-                        <button className="reservation-name-info-button" type="button" aria-label="예약자명 전체보기" onClick={() => setNameDetail(clean(reservation.customerName))}>
+                        <button className="reservation-name-info-button" type="button" aria-label="예약자명 전체보기" onClick={() => setNameDetail(displayCustomerName)}>
                           <Info size={14} />
                         </button>
                       ) : null}
@@ -4322,12 +4335,13 @@ function SimpleTextModal({ title, text, onClose }: { title: string; text: string
 }
 
 function ReservationDetailModal({ reservation, onClose }: { reservation: ReservationV2; onClose: () => void }) {
+  const shouldMask = useDeveloperPrivacyMask();
   return (
     <ModalShell title="예약 상세내용" onClose={onClose}>
       <div className="grid gap-3 text-sm font-bold text-[#16211d]">
         <p><span className="text-[#667269]">예약일</span><br />{reservationRangeText(reservation) || "-"}</p>
         {reservationDurationText(reservation) ? <p><span className="text-[#667269]">기간</span><br />{reservationDurationText(reservation)}</p> : null}
-        <p><span className="text-[#667269]">예약자</span><br />{reservation.customerName || reservation.reserverName || "-"}</p>
+        <p><span className="text-[#667269]">예약자</span><br />{privacyText(reservation.customerName || reservation.reserverName, shouldMask) || "-"}</p>
         <p className="whitespace-pre-wrap break-words"><span className="text-[#667269]">예약내용</span><br />{reservation.reservationText || reservation.memo || "-"}</p>
       </div>
     </ModalShell>
@@ -5094,8 +5108,10 @@ function EmptyState({ text }: { text: string }) {
   return <div className="panel grid min-h-40 place-items-center text-center font-black text-[#68746d]">{text}</div>;
 }
 
-function TruncatedCell({ value, className = "" }: { value: unknown; className?: string }) {
-  const textValue = clean(value);
+function TruncatedCell({ value, className = "", sensitive = false }: { value: unknown; className?: string; sensitive?: boolean }) {
+  const shouldMask = useDeveloperPrivacyMask();
+  const rawValue = clean(value);
+  const textValue = sensitive ? privacyText(rawValue, shouldMask) : rawValue;
   return (
     <td className={`h-11 whitespace-nowrap px-1 align-middle ${className}`} title={textValue}>
       <div className="truncate">{textValue}</div>
@@ -5295,10 +5311,14 @@ function UnreadStatusBadge({ status }: { status: string }) {
 }
 
 function PhoneCell({ phone }: { phone?: string }) {
+  const shouldMask = useDeveloperPrivacyMask();
   const value = clean(phone);
   if (!value) return <span>-</span>;
   const href = `tel:${value.replace(/[^\d+]/g, "") || value}`;
-  const display = formatPhoneNumber(value);
+  const display = shouldMask ? maskPrivateText(formatPhoneNumber(value)) : formatPhoneNumber(value);
+  if (shouldMask) {
+    return <span className="whitespace-nowrap" title={display}>{display}</span>;
+  }
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span className="whitespace-nowrap" title={value}>{display}</span>
@@ -5603,6 +5623,38 @@ function formatOrdererShop(orderer: unknown, repairShop: unknown) {
   const left = clean(orderer).trim() || "?";
   const right = clean(repairShop).trim() || "?";
   return `${left}/${right}`;
+}
+
+function useDeveloperPrivacyMask() {
+  return useContext(DeveloperPrivacyMaskContext);
+}
+
+function privacyText(value: unknown, shouldMask: boolean) {
+  const textValue = clean(value);
+  return shouldMask ? maskPrivateText(textValue) : textValue;
+}
+
+function maskPrivateText(value: unknown) {
+  const textValue = clean(value);
+  let hasFirstVisibleChar = false;
+  return Array.from(textValue).map((char) => {
+    if (!isMaskablePrivateChar(char)) return char;
+    if (!hasFirstVisibleChar) {
+      hasFirstVisibleChar = true;
+      return char;
+    }
+    return "*";
+  }).join("");
+}
+
+function isMaskablePrivateChar(char: string) {
+  return /[0-9A-Za-z가-힣]/.test(char);
+}
+
+function SensitiveInline({ value, fallback = "-" }: { value: unknown; fallback?: string }) {
+  const shouldMask = useDeveloperPrivacyMask();
+  const textValue = privacyText(value, shouldMask);
+  return <>{textValue || fallback}</>;
 }
 
 function normalizeParkingLocation(value: unknown) {
