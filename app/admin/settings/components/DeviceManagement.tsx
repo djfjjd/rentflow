@@ -1,25 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { StaffDevice, StaffUser } from "@/lib/staff-device-types";
-import { deviceTypeLabel } from "@/lib/device-detection";
-import { officePcLabels, officePcRoles, officePcTypes, officePcLabel } from "@/lib/office-pc-policy";
+import type { StaffDevice } from "@/lib/staff-device-types";
+import { officePcLabels, officePcRoles, officePcTypes } from "@/lib/office-pc-policy";
 
 export function DeviceManagement() {
   const [devices, setDevices] = useState<StaffDevice[]>([]);
-  const [staff, setStaff] = useState<StaffUser[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<StaffDevice | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StaffDevice | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "office_pc">("personal");
   const [message, setMessage] = useState("");
 
   async function load() {
-    const [deviceResponse, staffResponse] = await Promise.all([
-      fetch("/api/admin/devices", { cache: "no-store" }),
-      fetch("/api/admin/staff", { cache: "no-store" }),
-    ]);
-    if (!deviceResponse.ok || !staffResponse.ok) throw new Error("기기 관리 데이터를 불러오지 못했습니다.");
+    const deviceResponse = await fetch("/api/admin/devices", { cache: "no-store" });
+    if (!deviceResponse.ok) throw new Error("기기 관리 데이터를 불러오지 못했습니다.");
     setDevices((await deviceResponse.json()) as StaffDevice[]);
-    setStaff((await staffResponse.json()) as StaffUser[]);
   }
 
   useEffect(() => {
@@ -42,12 +36,10 @@ export function DeviceManagement() {
       return;
     }
     await load();
-    setSelectedDevice(null);
     setMessage(doneMessage);
   }
 
   async function deleteDevice(device: StaffDevice) {
-    if (!confirm(`${device.deviceAlias || device.deviceId} 기기를 삭제하시겠습니까?`)) return;
     const response = await fetch(`/api/admin/devices?id=${encodeURIComponent(device.id)}`, { method: "DELETE" });
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
@@ -55,7 +47,7 @@ export function DeviceManagement() {
       return;
     }
     await load();
-    setSelectedDevice(null);
+    setDeleteTarget(null);
     setMessage("기기가 삭제 처리되었습니다.");
   }
 
@@ -69,25 +61,21 @@ export function DeviceManagement() {
         <button className={activeTab === "office_pc" ? "primary-btn" : "small-btn"} type="button" onClick={() => setActiveTab("office_pc")}>사무실 PC</button>
       </div>
       {activeTab === "office_pc" ? (
-        <OfficePcCards devices={devices} onPatch={patchDevice} onDelete={deleteDevice} onSelect={setSelectedDevice} />
+        <OfficePcCards devices={devices} onPatch={patchDevice} onRequestDelete={setDeleteTarget} />
       ) : (
       <section className="panel overflow-hidden">
         <h2 className="mb-3 text-xl font-black">개인 기기 관리</h2>
         <div data-horizontal-scroll="true" className="overflow-x-auto">
           <table className="admin-table w-full min-w-[1180px] text-left text-sm">
-            <thead><tr className="border-b"><th>직원명</th><th>이메일</th><th>직책</th><th>기기 별칭</th><th>기종</th><th>상태</th><th>최근 접속</th><th>관리</th></tr></thead>
+            <thead><tr className="border-b"><th>직원명</th><th>이메일</th><th>직책</th><th>기기 별칭</th><th>기종</th><th>상태</th><th>최근 접속</th><th>작업</th></tr></thead>
             <tbody>
               {personalDevices.map((device) => (
                 <tr className="border-b" key={device.id}>
-                  <td><button className="font-black text-[#116149]" type="button" onClick={() => setSelectedDevice(device)}>{device.userName || "직원 미연결"}</button></td>
+                  <td className="font-black text-[#116149]">{device.userName || "직원 미연결"}</td>
                   <td>{device.email || "-"}</td><td>{device.position || "-"}</td><td>{device.deviceAlias || "-"}</td><td>{device.deviceModel || "-"}</td><td>{formatDeviceStatus(device.status)}</td><td>{formatDateTime(device.lastSeenAt)}</td>
-                  <td className="flex min-w-[360px] flex-wrap gap-1 py-2">
-                    <AssignSelect staff={staff} value={device.userId || ""} onChange={(userId) => patchDevice(device, { userId }, "기기 직원 연결이 변경되었습니다.")} />
+                  <td className="flex min-w-[220px] flex-wrap gap-1 py-2">
                     {isPendingDevice(device.status) ? <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "approve", userId: device.userId }, "기기가 승인되었습니다.")}>승인</button> : null}
-                    <button className="small-btn" type="button" onClick={() => patchDevice(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
-                    <button className="danger-btn" type="button" onClick={() => patchDevice(device, { action: "block" }, "기기가 차단되었고 세션이 종료되었습니다.")}>차단</button>
-                    <button className="danger-btn" type="button" onClick={() => deleteDevice(device)}>삭제</button>
-                    <button className="small-btn" type="button" onClick={() => setSelectedDevice(device)}>상세</button>
+                    <button className="danger-btn" type="button" onClick={() => setDeleteTarget(device)}>원격로그아웃 및 삭제</button>
                   </td>
                 </tr>
               ))}
@@ -97,12 +85,12 @@ export function DeviceManagement() {
         </div>
       </section>
       )}
-      {selectedDevice ? <DeviceDetailModal device={selectedDevice} onClose={() => setSelectedDevice(null)} /> : null}
+      {deleteTarget ? <DeviceDeleteConfirmModal device={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteDevice(deleteTarget)} /> : null}
     </section>
   );
 }
 
-function OfficePcCards({ devices, onPatch, onDelete, onSelect }: { devices: StaffDevice[]; onPatch: (device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) => void; onDelete: (device: StaffDevice) => void; onSelect: (device: StaffDevice) => void }) {
+function OfficePcCards({ devices, onPatch, onRequestDelete }: { devices: StaffDevice[]; onPatch: (device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) => void; onRequestDelete: (device: StaffDevice) => void }) {
   return (
     <section className="grid gap-3 md:grid-cols-2">
       {officePcTypes.map((type) => {
@@ -124,11 +112,8 @@ function OfficePcCards({ devices, onPatch, onDelete, onSelect }: { devices: Staf
                 <p>승인 요청 이메일: {device.email || "-"}</p>
                 <p>최근 접속: {formatDateTime(device.lastSeenAt)}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  <button className="small-btn" type="button" onClick={() => onPatch(device, { action: "approve" }, "사무실 PC가 승인되었습니다.")}>승인</button>
-                  <button className="small-btn" type="button" onClick={() => onPatch(device, { action: "remoteLogout" }, "원격 로그아웃 처리되었습니다.")}>원격 로그아웃</button>
-                  <button className="danger-btn" type="button" onClick={() => onPatch(device, { action: "block" }, "사무실 PC가 차단되었습니다.")}>차단</button>
-                  <button className="danger-btn" type="button" onClick={() => onDelete(device)}>삭제</button>
-                  <button className="small-btn" type="button" onClick={() => onSelect(device)}>상세</button>
+                  {isPendingDevice(device.status) ? <button className="small-btn" type="button" onClick={() => onPatch(device, { action: "approve" }, "사무실 PC가 승인되었습니다.")}>승인</button> : null}
+                  <button className="danger-btn" type="button" onClick={() => onRequestDelete(device)}>원격로그아웃 및 삭제</button>
                 </div>
               </div>
             ) : (
@@ -141,59 +126,40 @@ function OfficePcCards({ devices, onPatch, onDelete, onSelect }: { devices: Staf
   );
 }
 
-function AssignSelect({ staff, value, onChange }: { staff: StaffUser[]; value: string; onChange: (value: string) => void }) {
-  return (
-    <select className="field min-h-10 w-36 py-1 text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">직원 변경</option>
-      {staff.filter((user) => user.status !== "퇴사").map((user) => <option value={user.id} key={user.id}>{user.name}</option>)}
-    </select>
-  );
-}
-
-function DeviceDetailModal({ device, onClose }: { device: StaffDevice; onClose: () => void }) {
-  const rows = [
-    ["직원명", device.userName || "직원 미연결"],
-    ["직책", device.position || "-"],
-    ["권한", device.role || "-"],
-    ["이메일", device.email || "-"],
-    ["기기 별칭", device.deviceAlias || "-"],
-    ["기종(Device Model)", device.deviceModel || "-"],
-    ["기기 유형", deviceTypeLabel(device.deviceType)],
-    ["소유 유형", device.deviceOwnerType === "office_pc" ? "사무실 PC" : "개인 기기"],
-    ["사무실 PC 구분", officePcLabel(device.officePcType)],
-    ["위치", device.location || "-"],
-    ["운영체제(OS)", device.os || "-"],
-    ["브라우저", device.browser || "-"],
-    ["Device ID", device.deviceId],
-    ["최초 등록일", formatDateTime(device.createdAt)],
-    ["최근 로그인", formatDateTime(device.lastSeenAt)],
-    ["상태", formatDeviceStatus(device.status)],
-    ["자동 로그인", device.autoLogin ? "ON" : "OFF"],
-    ["승인자", device.approvedBy || "-"],
-    ["승인일시", formatDateTime(device.approvedAt)],
-  ];
+function DeviceDeleteConfirmModal({ device, onCancel, onConfirm }: { device: StaffDevice; onCancel: () => void; onConfirm: () => void }) {
   return (
     <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/40 p-4">
-      <section className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-xl font-black">기기 상세</h3>
-          <button className="small-btn" type="button" onClick={onClose}>닫기</button>
+      <section className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl">
+        <div className="grid gap-3">
+          <h3 className="text-xl font-black">원격로그아웃 및 삭제</h3>
+          <p className="text-sm font-bold text-[#34423b]">{device.deviceAlias || device.deviceId}</p>
+          <p className="text-sm font-black text-[#16211d]">이 기기를 원격 로그아웃하고 삭제 처리하시겠습니까?</p>
+          <p className="rounded-lg bg-[#fff1ef] px-3 py-2 text-sm font-bold text-[#9f2d21]">삭제 처리 후 해당 기기는 다시 로그인하려면 새 기기 등록을 진행해야 합니다.</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <button className="small-btn" type="button" onClick={onCancel}>취소</button>
+            <button className="danger-btn" type="button" onClick={onConfirm}>원격로그아웃 및 삭제</button>
+          </div>
         </div>
-        <dl className="grid gap-2 sm:grid-cols-2">
-          {rows.map(([label, value]) => (
-            <div className="rounded-lg border border-[#d8ded8] bg-[#f6f7f4] p-3" key={label}>
-              <dt className="text-xs font-black text-[#68746d]">{label}</dt>
-              <dd className="mt-1 break-all text-sm font-black text-[#16211d]">{value}</dd>
-            </div>
-          ))}
-        </dl>
       </section>
     </div>
   );
 }
 
 function formatDateTime(value: string) {
-  return value ? value.replace("T", " ").slice(0, 16) : "-";
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}.${part("month")}.${part("day")} ${part("hour")}:${part("minute")}`;
 }
 
 function isPersonalDevice(device: StaffDevice) {
