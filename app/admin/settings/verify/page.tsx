@@ -19,6 +19,7 @@ function VerifyForm() {
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [devCode, setDevCode] = useState("");
+  const [sentTo, setSentTo] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function requestCode() {
@@ -29,6 +30,7 @@ function VerifyForm() {
       const data = (await response.json().catch(() => ({}))) as { error?: string; devCode?: string; sentTo?: string; emailReady?: boolean };
       if (!response.ok) throw new Error(data.error || "인증코드 발송에 실패했습니다.");
       setDevCode(data.devCode || "");
+      setSentTo(data.sentTo || "");
       setMessage(data.emailReady ? "인증코드를 이메일로 전송했습니다." : "인증코드를 확인한 뒤 입력해주세요.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -65,6 +67,7 @@ function VerifyForm() {
   return (
     <VerifyShell>
       <form className="grid gap-3" onSubmit={verify}>
+        {sentTo ? <p className="rounded-lg bg-[#eef4ed] px-3 py-2 text-sm font-black text-[#116149]">전송 이메일: {maskEmail(sentTo)}</p> : null}
         <label className="label">
           6자리 인증코드
           <input className="field text-center text-xl tracking-[0.4em]" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} required />
@@ -90,9 +93,16 @@ function VerifyShell({ children }: { children?: React.ReactNode }) {
             <p className="text-sm font-bold text-[#68746d]">관리자 설정센터 2단계 인증</p>
           </div>
         </div>
-        <p className="mb-4 text-sm font-bold text-[#68746d]">관리자 또는 팀장님 이메일로 전송된 인증코드를 입력해주세요.</p>
+        <p className="mb-4 text-sm font-bold text-[#68746d]">로그인한 이메일로 전송된 6자리 인증코드를 입력해주세요.</p>
         {children}
       </section>
     </main>
   );
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return email;
+  const visible = local.slice(0, Math.min(3, local.length));
+  return `${visible}***@${domain}`;
 }
