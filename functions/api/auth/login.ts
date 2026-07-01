@@ -114,7 +114,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
 function getPasswordAccount(accountType: string, env: Env): { password: string; role: Role; redirectTo: string; email: string; isDeveloper: boolean; displayName: string; position: string } | null {
   if (accountType === "admin") {
-    return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: firstTeamLeadEmail(env), isDeveloper: false, displayName: "관리자", position: "관리자" };
+    return { password: String(env.ADMIN_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: adminAccountEmail(env), isDeveloper: false, displayName: "관리자", position: "관리자" };
   }
   if (accountType === "developer") {
     return { password: String(env.DEVELOPER_PASSWORD || ""), role: "super_admin", redirectTo: "/admin", email: normalizeEmail(env.ADMIN_EMAIL || ""), isDeveloper: true, displayName: "개발자", position: "개발자" };
@@ -138,6 +138,10 @@ function temporarySessionEmail(accountType: string, account: { email: string }) 
 
 function firstTeamLeadEmail(env: Env) {
   return normalizeEmail(String(env.TEAM_LEAD_EMAILS || "").split(/[,\s;]+/).find(Boolean) || "");
+}
+
+function adminAccountEmail(env: Env) {
+  return firstTeamLeadEmail(env) || normalizeEmail(env.ADMIN_EMAIL || "");
 }
 
 async function getDeviceByDeviceId(db: any, deviceId: string) {

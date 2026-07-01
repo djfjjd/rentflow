@@ -29,7 +29,7 @@ export function isSettingsEmailAllowed(session: AuthSession, env: SettingsEnv) {
 
 export function isDeveloperSettingsBypass(session: AuthSession, env: SettingsEnv) {
   if (session.role !== "super_admin") return false;
-  return Boolean(session.isDeveloper) || normalizeEmail(session.email) === normalizeEmail(String(env.ADMIN_EMAIL || ""));
+  return Boolean(session.isDeveloper);
 }
 
 export async function hasSettings2faAccess(cookieHeader: string | null | undefined, session: AuthSession, env: SettingsEnv) {

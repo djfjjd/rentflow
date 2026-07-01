@@ -16,7 +16,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const token = readCookie(request.headers.get("Cookie"), authCookieName);
   const session = await verifyAuthToken(token, env.JWT_SECRET || "");
   if (!session) return Response.json({ user: null }, { status: 401 });
-  const isDeveloper = Boolean(session.isDeveloper) || session.email.toLowerCase() === String(env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const isDeveloper = Boolean(session.isDeveloper);
   const partnersAddressLevel = env.DB ? await getSessionPermissionLevel(env.DB, { ...session, isDeveloper }, "partners_address.view") : "none";
   const dispatchManageLevel = env.DB ? await getSessionPermissionLevel(env.DB, { ...session, isDeveloper }, "dispatch.manage") : "none";
   return Response.json({
