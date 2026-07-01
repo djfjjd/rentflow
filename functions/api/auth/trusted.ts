@@ -4,7 +4,7 @@ import { ensureStaffDeviceSchema } from "../admin/staff";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
 import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, readDeviceId, readTrustedDeviceToken, verifyTrustedDeviceToken } from "../../../lib/trusted-device";
-import { detectDeviceType, isDesktopDevice } from "../../../lib/device-detection";
+import { detectDeviceType, isDesktopDevice, type DeviceType } from "../../../lib/device-detection";
 
 type Env = {
   JWT_SECRET?: string;
@@ -72,7 +72,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   const url = new URL(request.url);
   return Response.json(
-    { user: { email, role, isDeveloper: false, displayName: device.user_name || "", position: device.user_position || "" }, redirectTo: redirectForRole(role) },
+    { user: { email, role, isDeveloper: false, displayName: device.user_name || "", position: device.user_position || "" }, redirectTo: getDefaultRedirectPath({ role, isDeveloper: false }, deviceType) },
     {
       headers: [
         ["Set-Cookie", buildSessionCookie(token, url.protocol === "https:")],
@@ -83,9 +83,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   );
 };
 
-function redirectForRole(role: string) {
-  if (role === "super_admin") return "/admin";
-  if (role === "manager") return "/admin/dispatches";
+function getDefaultRedirectPath(user: { role: Role; isDeveloper?: boolean }, deviceType: DeviceType) {
+  if (!isDesktopDevice(deviceType)) return "/app";
+  if (user.isDeveloper || user.role === "super_admin") return "/admin";
+  if (user.role === "manager") return "/admin/dispatches";
   return "/app";
 }
 

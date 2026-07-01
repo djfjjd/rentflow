@@ -4,7 +4,7 @@ import type { Role } from "../../../lib/auth/roles";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
 import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, expireTrustedDeviceCookie, readDeviceId } from "../../../lib/trusted-device";
-import { detectDeviceType, isDesktopDevice } from "../../../lib/device-detection";
+import { detectDeviceType, isDesktopDevice, type DeviceType } from "../../../lib/device-detection";
 import { officePcLabel, officePcRoles, roleAllowedForOfficePc } from "../../../lib/office-pc-policy";
 
 type Env = {
@@ -50,7 +50,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     const token = await createAuthToken({ email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, jwtSecret);
     await recordLoginLog(env, request, { email: account.email, role: account.role, status: "success", message: "developer login success" });
     return Response.json(
-      { user: { email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, redirectTo: account.redirectTo },
+      { user: { email: account.email, role: account.role, isDeveloper: true, displayName: "개발자", position: "개발자" }, redirectTo: getDefaultRedirectPath({ role: account.role, isDeveloper: true }, deviceType) },
       { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
     );
   }
@@ -61,7 +61,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     const token = await createAuthToken({ email, role: account.role, isDeveloper: false, displayName: account.displayName, position: account.position }, jwtSecret);
     await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "success", message: "temporary bypass login success" });
     return Response.json(
-      { user: { email, role: account.role, isDeveloper: false, displayName: account.displayName, position: account.position }, redirectTo: account.redirectTo },
+      { user: { email, role: account.role, isDeveloper: false, displayName: account.displayName, position: account.position }, redirectTo: getDefaultRedirectPath({ role: account.role, isDeveloper: false }, deviceType) },
       { headers: { "Set-Cookie": buildSessionCookie(token, url.protocol === "https:") } },
     );
   }
@@ -107,7 +107,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     headers.push(["Set-Cookie", buildTrustedDeviceCookie(trustedToken, url.protocol === "https:")]);
   }
   return Response.json(
-    { user: { email, role, isDeveloper, displayName, position }, redirectTo: redirectForRole(role), desktopReauth: isDesktopDevice(deviceType) },
+    { user: { email, role, isDeveloper, displayName, position }, redirectTo: getDefaultRedirectPath({ role, isDeveloper }, deviceType), desktopReauth: isDesktopDevice(deviceType) },
     { headers },
   );
 };
@@ -154,9 +154,10 @@ function effectiveDeviceRole(device: any): Role {
   return device.user_role === "super_admin" || device.user_role === "manager" || device.user_role === "staff" ? device.user_role : "staff";
 }
 
-function redirectForRole(role: Role) {
-  if (role === "super_admin") return "/admin";
-  if (role === "manager") return "/admin/dispatches";
+function getDefaultRedirectPath(user: { role: Role; isDeveloper?: boolean }, deviceType: DeviceType) {
+  if (!isDesktopDevice(deviceType)) return "/app";
+  if (user.isDeveloper || user.role === "super_admin") return "/admin";
+  if (user.role === "manager") return "/admin/dispatches";
   return "/app";
 }
 
