@@ -1,4 +1,3 @@
-import { emailsFromEnv } from "./auth/access";
 import { authCookieName, normalizeEmail, readCookie, verifyAuthToken, type AuthSession } from "./auth/jwt";
 
 export const settings2faCookieName = "settings_2fa";
@@ -22,9 +21,8 @@ export async function requireSettingsBaseSession(request: Request, env: Settings
   return { session };
 }
 
-export function isSettingsEmailAllowed(session: AuthSession, env: SettingsEnv) {
-  if (session.role !== "super_admin") return false;
-  return emailsFromEnv(env, ["ADMIN_EMAIL", "TEAM_LEAD_EMAILS"]).includes(normalizeEmail(session.email));
+export function isSettingsEmailAllowed(session: AuthSession, _env: SettingsEnv) {
+  return session.role === "super_admin";
 }
 
 export function isDeveloperSettingsBypass(session: AuthSession, env: SettingsEnv) {

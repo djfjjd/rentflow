@@ -482,7 +482,7 @@ function UnreadMessagesButton({
                       <td>{ret ? clean(returnSnapshot?.customerCarModel) : clean(linkedDispatch?.customerCarModel)}</td>
                       <td>{clean(dispatch?.fuelDisplay || ret?.fuelDisplay)}</td>
                       <td><SensitiveInline value={ret ? clean(returnSnapshot?.repairShop) : clean(linkedDispatch?.repairShop)} /></td>
-                      <td>{clean(ret?.notes || returnSnapshot?.dispatchMemo || linkedDispatch?.notes || dispatch?.notes)}</td>
+                      <td><SensitiveInline value={ret?.notes || returnSnapshot?.dispatchMemo || linkedDispatch?.notes || dispatch?.notes} /></td>
                     </tr>
                   );
                 })}</tbody>
@@ -3389,7 +3389,7 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
                 <td>{clean(String(item.mileage || ""))}</td>
                 <td>{clean(item.fuelDisplay)}</td>
                 <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
-                <td>{clean(item.notes)}</td>
+                <td><SensitiveInline value={item.notes} /></td>
                 <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
                 <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} label="사진추가" /></td>
                 {canEditDispatchRecords ? <td><button className="small-btn edit-button" type="button" onClick={() => setEditing(item)}>수정</button></td> : null}
@@ -3560,7 +3560,7 @@ function IncidentBoard({
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
           const plate = clean(row.item.plateNumber);
-          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td>{clean(row.item.memo || row.item.description)}</td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType="accidentRepair" vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td><SensitiveInline value={row.item.memo || row.item.description} /></td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType="accidentRepair" vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -3605,7 +3605,7 @@ function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; 
         <thead><tr className="border-b"><th>{tab === "done" ? "보관중으로" : "정리완료"}</th><th>차량번호</th><th>고객명</th><th>연락처</th><th>특이사항</th><th>수정</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const plate = clean(item.vehicleNumber);
-          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td><SensitiveInline value={item.customerName} /></td><td><PhoneCell phone={item.customerPhone} /></td><td>{clean(item.memo)}</td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td><SensitiveInline value={item.customerName} /></td><td><PhoneCell phone={item.customerPhone} /></td><td><SensitiveInline value={item.memo} /></td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -4275,6 +4275,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
             {paginate(rows, page).map((reservation) => {
               const reservationText = reservation.reservationText || reservation.memo || "";
               const displayCustomerName = privacyText(reservation.customerName, shouldMask);
+              const displayReservationText = privacyText(reservationText, shouldMask);
               return (
                 <tr className="border-b [&>td]:whitespace-nowrap [&>td]:align-middle" key={reservation.id}>
                   <td>
@@ -4291,9 +4292,9 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
                       ) : null}
                     </div>
                   </td>
-                  <td title={reservationText}>
+                  <td title={displayReservationText}>
                     <div className="flex min-w-0 items-center gap-2">
-                      <div className="min-w-0 flex-1 truncate">{reservationText}</div>
+                      <div className="min-w-0 flex-1 truncate">{displayReservationText}</div>
                       <button className="info-icon-button" type="button" aria-label="예약 상세내용" onClick={() => setDetail(reservation)}>
                         <Info size={16} />
                       </button>
@@ -4342,7 +4343,7 @@ function ReservationDetailModal({ reservation, onClose }: { reservation: Reserva
         <p><span className="text-[#667269]">예약일</span><br />{reservationRangeText(reservation) || "-"}</p>
         {reservationDurationText(reservation) ? <p><span className="text-[#667269]">기간</span><br />{reservationDurationText(reservation)}</p> : null}
         <p><span className="text-[#667269]">예약자</span><br />{privacyText(reservation.customerName || reservation.reserverName, shouldMask) || "-"}</p>
-        <p className="whitespace-pre-wrap break-words"><span className="text-[#667269]">예약내용</span><br />{reservation.reservationText || reservation.memo || "-"}</p>
+        <p className="whitespace-pre-wrap break-words"><span className="text-[#667269]">예약내용</span><br />{privacyText(reservation.reservationText || reservation.memo, shouldMask) || "-"}</p>
       </div>
     </ModalShell>
   );
@@ -5120,8 +5121,10 @@ function TruncatedCell({ value, className = "", sensitive = false }: { value: un
 }
 
 function MemoCell({ value, onOpen }: { value: unknown; onOpen: (memo: string) => void }) {
-  const textValue = clean(value);
-  if (!textValue) return <td className="h-11 whitespace-nowrap px-1 align-middle">-</td>;
+  const shouldMask = useDeveloperPrivacyMask();
+  const rawValue = clean(value);
+  const textValue = privacyText(rawValue, shouldMask);
+  if (!rawValue) return <td className="h-11 whitespace-nowrap px-1 align-middle">-</td>;
   return (
     <td className="h-11 whitespace-nowrap px-1 align-middle" title={textValue}>
       <div className="flex min-w-0 items-center gap-1">
