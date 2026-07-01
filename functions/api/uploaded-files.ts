@@ -1,6 +1,6 @@
 import { ensureColumns, noStoreHeaders, safeNullableText, safeText } from "./_d1-utils";
 import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures } from "./_photo-retention";
-import { getApiSession, isStaff } from "./_permissions";
+import { getApiSession, isStaff, requirePermission } from "./_permissions";
 
 type Env = {
   DB: any;
@@ -65,6 +65,8 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
 
 export async function onRequestPost({ request, env }: { request: Request, env: Env }) {
   try {
+    const auth = await requirePermission(request, env, "photos.upload");
+    if (auth.response) return auth.response;
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     const result = await env.DB.prepare(

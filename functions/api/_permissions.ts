@@ -9,6 +9,13 @@ type PermissionEnv = {
 export async function requirePermission(request: Request, env: PermissionEnv, key: PermissionKey) {
   const session = await getApiSession(request, env);
   if (!session) return { response: Response.json({ error: "인증이 필요합니다." }, { status: 401 }) };
+  const matrixRequirement = legacyPermissionRequirement(key);
+  if (env.DB && matrixRequirement) {
+    if (!await hasStoredPermissionLevel(env.DB, session, matrixRequirement.key, matrixRequirement.level)) {
+      return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }), session };
+    }
+    return { session };
+  }
   if (!hasPermission(session.role, key)) return { response: Response.json({ error: "권한이 없습니다." }, { status: 403 }), session };
   return { session };
 }
@@ -38,3 +45,26 @@ export function isDispatchingStatus(row: any) {
 }
 
 export type { PermissionKey };
+
+function legacyPermissionRequirement(key: PermissionKey): { key: MatrixPermissionKey; level: PermissionLevel } | null {
+  switch (key) {
+    case "dispatch.create":
+      return { key: "dispatch.manage", level: "read" };
+    case "dispatch.update":
+    case "dispatch.delete":
+      return { key: "dispatch.manage", level: "write" };
+    case "reservations.create":
+      return { key: "reservations.view", level: "read" };
+    case "reservations.update":
+    case "reservations.delete":
+      return { key: "reservations.view", level: "write" };
+    case "photos.view":
+    case "photos.upload":
+      return { key: "photos.manage", level: "read" };
+    case "photos.update":
+    case "photos.delete":
+      return { key: "photos.manage", level: "write" };
+    default:
+      return null;
+  }
+}
