@@ -128,6 +128,20 @@ export const matrixSubjects = [
   { label: "회사 정보 수정", key: "company.update" },
 ] as const;
 
+export const visibleMatrixSubjects = matrixSubjects.filter((subject) => ![
+  "insurers.view",
+  "repair_shops.view",
+  "partners.view",
+  "revenue.view",
+  "receivables.view",
+  "tax_invoices.view",
+  "payments.view",
+  "corporate_cards.view",
+  "company.update",
+  "backup.manage",
+  "system.settings",
+].includes(subject.key));
+
 export const permissionLevels = ["write", "read", "none"] as const;
 export const permissionColumns = ["developer", "admin", "manager", "staff"] as const;
 export const columnLabels: Record<PermissionColumn, string> = {
@@ -202,7 +216,7 @@ export function cycleColumnMode(mode: ColumnMode): ColumnMode {
 
 export function modeForColumn(matrix: PermissionPresetMatrix, column: PermissionColumn, custom: boolean): ColumnMode {
   if (custom) return "custom";
-  const values = matrixSubjects.map((subject) => matrix[column][subject.key]);
+  const values = visibleMatrixSubjects.map((subject) => matrix[column][subject.key]);
   if (values.every((value) => value === "write")) return "allWrite";
   if (values.every((value) => value === "none")) return "allNone";
   return "custom";
@@ -212,7 +226,7 @@ export function applyColumnMode(matrix: PermissionPresetMatrix, column: Permissi
   if (mode === "custom") return cloneMatrix(matrix);
   const next = cloneMatrix(matrix);
   const level = mode === "allWrite" ? "write" : "none";
-  matrixSubjects.forEach((subject) => {
+  visibleMatrixSubjects.forEach((subject) => {
     next[column][subject.key] = level;
   });
   return protectDeveloperMinimums(next);

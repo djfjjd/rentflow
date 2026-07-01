@@ -195,6 +195,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [lostItems, setLostItems] = useState<LostItemV2[]>([]);
   const [activeOverlay, setActiveOverlay] = useState<"calendar" | "unread" | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
+  const [isDeveloperSession, setIsDeveloperSession] = useState(false);
   const isAdmin = kind.startsWith("admin") || pathname.startsWith("/admin");
   const canShowDriveLinks = currentRole !== null && currentRole !== "staff";
   const canUploadContracts = currentRole !== "staff";
@@ -243,9 +244,15 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() as Promise<{ user?: { role?: string } }> : null)
-      .then((data) => setCurrentRole(data?.user?.role || null))
-      .catch(() => setCurrentRole(null));
+      .then((response) => response.ok ? response.json() as Promise<{ user?: { role?: string; isDeveloper?: boolean } }> : null)
+      .then((data) => {
+        setCurrentRole(data?.user?.role || null);
+        setIsDeveloperSession(Boolean(data?.user?.isDeveloper));
+      })
+      .catch(() => {
+        setCurrentRole(null);
+        setIsDeveloperSession(false);
+      });
     Promise.all([
       fetchJson<VehicleV2[]>("/api/vehicles", []),
       fetchJson<ReservationV2[]>("/api/reservations", []),
@@ -273,7 +280,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         <div className={headerInnerClass}>
           <div className="header-top-row">
             <div className="header-left">
-              <HeaderLogo isAdmin={isAdmin} />
+              <HeaderLogo isAdmin={isAdmin} role={currentRole} isDeveloper={isDeveloperSession} />
               <DeveloperBadge enabled />
             </div>
             <div className="header-center">
@@ -337,18 +344,26 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   );
 }
 
-function HeaderLogo({ isAdmin }: { isAdmin: boolean }) {
+function HeaderLogo({ isAdmin, role, isDeveloper }: { isAdmin: boolean; role: string | null; isDeveloper: boolean }) {
+  const title = getDisplayTitle(role, isDeveloper);
   return (
     <Link href={isAdmin ? "/admin" : "/app"} className="flex min-h-12 min-w-0 items-center gap-2 font-black">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#116149] text-white">
         <Home size={20} />
       </span>
       <span className="block min-w-0 leading-tight">
-        <span className="block text-base font-black sm:inline sm:text-lg">{isAdmin ? "사무실용 관리자" : "배회차톡"}</span>
-        {!isAdmin ? <span className="block text-xs font-bold text-[#6b756f] sm:inline sm:text-lg sm:text-[#16211d]"> <span className="sm:hidden">(현장용)</span><span className="hidden sm:inline">(현장용)</span></span> : null}
+        <span className="block text-base font-black sm:inline sm:text-lg">{title}</span>
       </span>
     </Link>
   );
+}
+
+function getDisplayTitle(role: string | null, isDeveloper: boolean) {
+  if (isDeveloper) return "배회차톡 (개발자용)";
+  if (role === "super_admin") return "배회차톡 (관리자용)";
+  if (role === "manager") return "배회차톡 (실장)";
+  if (role === "staff") return "배회차톡 (직원용)";
+  return "배회차톡";
 }
 
 function QuickMenu() {

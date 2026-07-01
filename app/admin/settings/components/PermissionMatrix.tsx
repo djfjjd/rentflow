@@ -8,10 +8,10 @@ import {
   cycleColumnMode,
   cyclePermissionLevel,
   defaultPermissionPresetMatrix,
-  matrixSubjects,
   modeForColumn,
   permissionColumns,
   protectDeveloperMinimums,
+  visibleMatrixSubjects,
   type ColumnMode,
   type PermissionColumn,
   type PermissionLevel,
@@ -148,7 +148,7 @@ export function PermissionMatrix() {
             </tr>
           </thead>
           <tbody>
-            {matrixSubjects.map((subject) => (
+            {visibleMatrixSubjects.map((subject) => (
               <tr key={subject.key}>
                 <th className="sticky left-0 z-10 border-b border-[#edf0ec] bg-white p-2 text-left font-black">
                   <span className="block">{subject.label}</span>
