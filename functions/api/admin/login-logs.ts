@@ -47,7 +47,7 @@ function mapLoginLog(row: any) {
     role: row.role || "",
     deviceId: row.device_id || "",
     userName: row.user_name || "",
-    position: row.user_position || positionFromRole(row.role),
+    position: loginPosition(row),
     deviceAlias: deviceName,
     deviceModel,
     os: row.current_os || row.os || detected.os || "",
@@ -65,4 +65,10 @@ function positionFromRole(role: string) {
   if (role === "manager") return "실장님";
   if (role === "staff") return "직원";
   return "";
+}
+
+function loginPosition(row: any) {
+  const emailPrefix = String(row.email || "").split("@")[0].toLowerCase();
+  if (emailPrefix === "djfjjd" || String(row.message || "").toLowerCase().includes("developer")) return "개발자";
+  return row.user_position || positionFromRole(row.role);
 }
