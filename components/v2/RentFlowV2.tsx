@@ -1894,7 +1894,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
     .filter((folder) => folder.files.length > 0);
   const selectedFolder = folders.find((folder) => folder.key === selectedFolderKey) || null;
   const visibleArchiveIds = useMemo(
-    () => canShowDriveLinks ? filteredFolders.flatMap((folder) => folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id))) : [],
+    () => canShowDriveLinks ? filteredFolders.flatMap((folder) => folder.files.filter(isDriveBackupUploadable).map((file) => Number(file.id)).filter((id) => Number.isFinite(id))) : [],
     [canShowDriveLinks, filteredFolders]
   );
   const selectedArchiveBatches = useMemo(
@@ -1902,7 +1902,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
       .map((folder) => ({
         key: folder.key,
         label: folder.folderName,
-        fileIds: folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id) && selectedArchiveIds.has(id)),
+        fileIds: folder.files.filter(isDriveBackupUploadable).map((file) => Number(file.id)).filter((id) => Number.isFinite(id) && selectedArchiveIds.has(id)),
       }))
       .filter((batch) => batch.fileIds.length > 0),
     [filteredFolders, selectedArchiveIds]
@@ -1942,7 +1942,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
           {sortedFiles.length ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {sortedFiles.map((file, index) => (
-                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
+                <button className="relative aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
                     <img alt={privacyText(fileName(file), shouldMask)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
@@ -1950,6 +1950,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
                   ) : (
                     <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{privacyText(fileName(file), shouldMask)}</span>
                   )}
+                  <span className={`absolute bottom-1 left-1 rounded-full px-2 py-0.5 text-[10px] font-black ${driveBackupBadgeClass(file)}`}>{driveBackupStatusLabel(file)}</span>
                 </button>
               ))}
             </div>
@@ -1996,9 +1997,11 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
           const photoCount = folder.files.filter((file) => !isVideoFile(file)).length;
           const videoCount = folder.files.filter(isVideoFile).length;
           const coverUrl = folderCoverThumbnailUrl(folder);
-          const folderFileIds = folder.files.filter((file) => !isDriveArchived(file)).map((file) => Number(file.id)).filter((id) => Number.isFinite(id));
+          const folderFileIds = folder.files.filter(isDriveBackupUploadable).map((file) => Number(file.id)).filter((id) => Number.isFinite(id));
           const checked = folderFileIds.length > 0 && folderFileIds.every((id) => selectedArchiveIds.has(id));
-          const archivedCount = folder.files.filter(isDriveArchived).length;
+          const archivedCount = folder.files.filter((file) => driveBackupStatus(file) === "completed").length;
+          const failedCount = folder.files.filter((file) => driveBackupStatus(file) === "failed").length;
+          const pendingCount = folder.files.filter((file) => driveBackupStatus(file) === "pending" || driveBackupStatus(file) === "canceled").length;
           function toggleFolder(checked: boolean) {
             setSelectedArchiveIds((current) => {
               const next = new Set(current);
@@ -2021,7 +2024,11 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
                   />
                   Drive 선택
                 </label>
-                {archivedCount > 0 ? <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-black text-green-700">Drive 보관 완료 {archivedCount}</span> : null}
+                <div className="flex flex-wrap justify-end gap-1">
+                  {pendingCount > 0 ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-black text-amber-700">대기 {pendingCount}</span> : null}
+                  {failedCount > 0 ? <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-black text-red-700">실패 {failedCount}</span> : null}
+                  {archivedCount > 0 ? <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-black text-green-700">완료 {archivedCount}</span> : null}
+                </div>
               </div>
               <button className="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-3 text-left" type="button" onClick={() => setSelectedFolderKey(folder.key)}>
                 <div className="aspect-square overflow-hidden rounded-lg bg-[#eef1ed]">
@@ -2204,41 +2211,74 @@ function DriveArchiveButton({
     setPushNotice("");
     setActiveNotice(false);
     try {
-      const response = await fetch("/api/drive-upload-jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderIds: selectedIds.map(String) }),
-      });
-      const data = await readJsonResponse<{ ok?: boolean; jobId?: string; error?: string }>(response);
-      if (!response.ok || !data.jobId) throw new Error(data.error || "Google Drive upload job create failed");
-      setActiveJobId(data.jobId);
-      await runJobLoop(data.jobId);
+      await runLocalDriveBackups(selectedIds);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
-      console.error("Google Drive job create failed", caught);
+      console.error("Google Drive backup failed", caught);
       setError(message);
     }
   }
 
   async function retryFailures() {
     const failedIds = (result?.results || [])
-      .filter((item) => item.status === "failed")
+      .filter((item) => item.status === "failed" || item.status === "cancelled")
       .map((item) => Number(item.id))
       .filter((id) => Number.isFinite(id) && id > 0);
     if (!failedIds.length) return;
     try {
-      const response = await fetch("/api/drive-upload-jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderIds: failedIds.map(String) }),
-      });
-      const data = await readJsonResponse<{ ok?: boolean; jobId?: string; error?: string }>(response);
-      if (!response.ok || !data.jobId) throw new Error(data.error || "retry job create failed");
-      setActiveJobId(data.jobId);
-      await runJobLoop(data.jobId);
+      await runLocalDriveBackups(failedIds);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     }
+  }
+
+  async function runLocalDriveBackups(ids: number[]) {
+    cancelRef.current = false;
+    setRunning(true);
+    setUploadCancelled(false);
+    setError("");
+    setResult(null);
+    setLogs([]);
+    setFailureListOpen(false);
+    let uploaded = 0;
+    let failed = 0;
+    let cancelled = 0;
+    const results: DriveArchiveResultItem[] = [];
+    setProgress({ total: ids.length, processed: 0, uploaded: 0, skipped: 0, failed: 0, cancelled: 0 });
+
+    for (let index = 0; index < ids.length; index += 1) {
+      const id = ids[index];
+      if (cancelRef.current) {
+        const remaining = ids.slice(index);
+        cancelled += remaining.length;
+        await markDriveBackupCanceled(remaining);
+        for (const remainingId of remaining) {
+          results.push({ id: remainingId, fileName: `photo-${remainingId}`, status: "cancelled", error: "업로드 중단됨" });
+        }
+        break;
+      }
+
+      try {
+        const file = await getOriginalPhotoFile(String(id));
+        if (!file) throw new Error("브라우저에 원본 파일이 남아 있지 않습니다. 원본을 다시 선택해 업로드해야 합니다.");
+        const data = await backupOriginalPhoto(String(id), file, {}) as { googleDriveViewUrl?: string; driveViewUrl?: string };
+        uploaded += 1;
+        results.push({ id, fileName: file.name, status: "uploaded", driveUrl: data.googleDriveViewUrl || data.driveViewUrl });
+        setLogs((current) => [{ key: `${id}-uploaded`, status: "uploaded" as const, text: `${file.name} 원본 백업 완료` }, ...current].slice(0, 20));
+      } catch (caught) {
+        failed += 1;
+        const message = caught instanceof Error ? caught.message : String(caught);
+        results.push({ id, fileName: `photo-${id}`, status: "failed", error: message });
+        setLogs((current) => [{ key: `${id}-failed`, status: "failed" as const, text: `photo-${id} 실패: ${message}` }, ...current].slice(0, 20));
+      }
+
+      setProgress({ total: ids.length, processed: index + 1 + cancelled, uploaded, skipped: 0, failed, cancelled });
+    }
+
+    const result = { total: ids.length, uploaded, skipped: 0, failed, cancelled, results };
+    setResult(result);
+    setRunning(false);
+    await onArchived();
   }
 
   async function resumeActiveJob() {
@@ -3750,7 +3790,7 @@ function PhotoFolderGalleryModal({
           {sortedFiles.length ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
               {sortedFiles.map((file, index) => (
-                <button className="aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
+                <button className="relative aspect-square overflow-hidden rounded-lg border border-[#d8ded8] bg-[#f3f5f2]" key={`${file.id}-${fileName(file)}`} type="button" onClick={() => setSelectedIndex(index)}>
                   {isImageFile(file) ? (
                     <img alt={privacyText(fileName(file), shouldMask)} className="h-full w-full object-cover" src={fileThumbnailUrl(file)} />
                   ) : isVideoFile(file) ? (
@@ -3758,6 +3798,7 @@ function PhotoFolderGalleryModal({
                   ) : (
                     <span className="grid h-full place-items-center p-2 text-xs font-black text-[#68746d]">{privacyText(fileName(file), shouldMask)}</span>
                   )}
+                  <span className={`absolute bottom-1 left-1 rounded-full px-2 py-0.5 text-[10px] font-black ${driveBackupBadgeClass(file)}`}>{driveBackupStatusLabel(file)}</span>
                 </button>
               ))}
             </div>
@@ -3925,7 +3966,7 @@ function PhotoDetailView({
         <button className="small-btn" type="button" onClick={onBack}>← 닫기</button>
         <p className="truncate text-center text-sm font-black" title={displayFileName}>{displayFileName}</p>
         <div className="flex items-center justify-end gap-2">
-        {canOpenOriginalPhoto && driveViewUrl ? (
+        {canOpenOriginalPhoto && driveBackupStatus(file) === "completed" && driveViewUrl ? (
           <button className="small-btn" type="button" onClick={() => window.open(driveViewUrl, "_blank", "noopener,noreferrer")}>
             Google Drive로 열기
           </button>
@@ -4838,8 +4879,16 @@ async function uploadSelectedFiles(
       const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
       if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
       const uploaded = (await uploadResponse.json()) as Record<string, unknown>;
-      await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded });
-      uploadedFiles.push({ ...fileMetadata, ...uploaded } as unknown as UploadedFileV2);
+      const saved = await sendJson("/api/uploaded-files", { ...fileMetadata, ...uploaded }) as { id?: number | string };
+      const savedId = saved.id ? String(saved.id) : "";
+      const savedFile = { ...fileMetadata, ...uploaded, id: saved.id, driveBackupStatus: "pending" } as unknown as UploadedFileV2;
+      if (savedId) {
+        await saveOriginalPhotoFile(savedId, file);
+        void backupOriginalPhoto(savedId, file, fileMetadata).catch((error) => {
+          console.error("background drive backup failed", { id: savedId, error });
+        });
+      }
+      uploadedFiles.push(savedFile);
       success += 1;
     } catch (error) {
       failed += 1;
@@ -4877,6 +4926,72 @@ async function uploadContractFilesDirectly(
   const success = Array.isArray(data.files) ? data.files.length : files.length;
   onProgress?.({ completed: success, total: files.length, failed: 0, label });
   return { success, failed: 0 };
+}
+
+const ORIGINAL_PHOTO_DB = "rentflow-original-photos";
+const ORIGINAL_PHOTO_STORE = "files";
+
+function openOriginalPhotoDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ORIGINAL_PHOTO_DB, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(ORIGINAL_PHOTO_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
+  });
+}
+
+async function saveOriginalPhotoFile(id: string, file: File) {
+  if (typeof indexedDB === "undefined") return;
+  const db = await openOriginalPhotoDb();
+  await idbRequest((store) => store.put(file, id), db, "readwrite");
+  db.close();
+}
+
+async function getOriginalPhotoFile(id: string) {
+  if (typeof indexedDB === "undefined") return null;
+  const db = await openOriginalPhotoDb();
+  const file = await idbRequest<File | undefined>((store) => store.get(id), db, "readonly");
+  db.close();
+  return file || null;
+}
+
+async function removeOriginalPhotoFile(id: string) {
+  if (typeof indexedDB === "undefined") return;
+  const db = await openOriginalPhotoDb();
+  await idbRequest((store) => store.delete(id), db, "readwrite");
+  db.close();
+}
+
+function idbRequest<T>(createRequest: (store: IDBObjectStore) => IDBRequest<T>, db: IDBDatabase, mode: IDBTransactionMode) {
+  return new Promise<T>((resolve, reject) => {
+    const transaction = db.transaction(ORIGINAL_PHOTO_STORE, mode);
+    const request = createRequest(transaction.objectStore(ORIGINAL_PHOTO_STORE));
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB request failed"));
+    transaction.onerror = () => reject(transaction.error || new Error("IndexedDB transaction failed"));
+  });
+}
+
+async function backupOriginalPhoto(id: string, file: File, metadata: Record<string, unknown>) {
+  const formData = new FormData();
+  formData.append("id", id);
+  formData.append("file", file);
+  formData.append("metadata", JSON.stringify(metadata));
+  const response = await fetch("/api/uploads/drive-backup", { method: "POST", body: formData, cache: "no-store" });
+  if (!response.ok) throw new Error(await response.text());
+  await removeOriginalPhotoFile(id);
+  return response.json();
+}
+
+async function markDriveBackupCanceled(ids: number[]) {
+  if (!ids.length) return;
+  await fetch("/api/uploads/drive-backup", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: ids.map(String), status: "canceled", message: "업로드 중단됨" }),
+  });
 }
 
 async function uploadVehicleRegistrationDirectly(
@@ -5073,7 +5188,40 @@ function hasExplicitThumbnail(file: UploadedFileV2) {
 
 function isDriveArchived(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { archive_status?: string; drive_file_id?: string; drive_url?: string };
-  return raw.archiveStatus === "archived" || raw.archive_status === "archived" || Boolean(raw.driveFileId || raw.drive_file_id || raw.driveUrl || raw.drive_url);
+  return driveBackupStatus(file) === "completed" || raw.archiveStatus === "archived" || raw.archive_status === "archived" || Boolean(raw.driveFileId || raw.drive_file_id || raw.driveUrl || raw.drive_url);
+}
+
+function driveBackupStatus(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { drive_backup_status?: string };
+  const status = clean(raw.driveBackupStatus || raw.drive_backup_status).toLowerCase();
+  if (status === "success" || status === "archived") return "completed";
+  if (status === "cancelled") return "canceled";
+  if (["pending", "uploading", "completed", "failed", "canceled"].includes(status)) return status;
+  if (raw.driveFileId || raw.drive_file_id || raw.driveUrl || raw.drive_url) return "completed";
+  return "pending";
+}
+
+function isDriveBackupUploadable(file: UploadedFileV2) {
+  return ["pending", "failed", "canceled"].includes(driveBackupStatus(file));
+}
+
+function driveBackupStatusLabel(file: UploadedFileV2) {
+  const status = driveBackupStatus(file);
+  if (status === "pending") return "원본 백업 대기";
+  if (status === "uploading") return "원본 백업 중";
+  if (status === "completed") return "원본 백업 완료";
+  if (status === "failed") return "원본 백업 실패";
+  if (status === "canceled") return "원본 백업 중단";
+  return "원본 백업 대기";
+}
+
+function driveBackupBadgeClass(file: UploadedFileV2) {
+  const status = driveBackupStatus(file);
+  if (status === "completed") return "bg-green-100 text-green-700";
+  if (status === "failed") return "bg-red-100 text-red-700";
+  if (status === "uploading") return "bg-blue-100 text-blue-700";
+  if (status === "canceled") return "bg-gray-100 text-gray-700";
+  return "bg-amber-100 text-amber-700";
 }
 
 function folderCoverThumbnailUrl(folder: PhotoArchiveFolder) {

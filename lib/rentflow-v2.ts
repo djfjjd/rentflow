@@ -66,7 +66,14 @@ export type UploadedFileV2 = {
   thumbnail_url?: string;
   thumbnail_key?: string;
   driveUrl?: string;
+  drive_url?: string;
   driveFileId?: string;
+  drive_file_id?: string;
+  driveBackupStatus?: "pending" | "uploading" | "completed" | "failed" | "canceled" | "success" | "none" | string | null;
+  driveUploadedAt?: string;
+  drive_uploaded_at?: string;
+  driveErrorMessage?: string;
+  drive_error_message?: string;
   googleDriveFileId?: string;
   google_drive_file_id?: string;
   googleDriveViewUrl?: string;

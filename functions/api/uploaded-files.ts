@@ -70,7 +70,7 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     await ensureUploadedFilesSchema(env);
     const f = await request.json() as any;
     const result = await env.DB.prepare(
-      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, r2_thumbnail_key, drive_backup_status, drive_file_id, drive_url, google_drive_file_id, google_drive_view_url, google_drive_download_url, drive_folder_id, drive_folder_url, original_file_name, original_file_size, vehicle_number, insurance_number, customer_name, intake_type, file_type, mime_type, record_type, record_id, folder_key, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO uploaded_files (file_name, r2_url, r2_key, thumbnail_url, thumbnail_key, r2_thumbnail_key, drive_backup_status, drive_file_id, drive_url, google_drive_file_id, google_drive_view_url, google_drive_download_url, drive_uploaded_at, drive_error_message, drive_folder_id, drive_folder_url, original_file_name, original_file_size, vehicle_number, insurance_number, customer_name, intake_type, file_type, mime_type, record_type, record_id, folder_key, vehicle_folder_url, insurance_folder_url, customer_folder_url, uploaded_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(f.fileName),
       safeText(f.r2Url),
@@ -84,6 +84,8 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(f.googleDriveFileId || f.driveFileId),
       safeNullableText(f.googleDriveViewUrl || f.driveUrl),
       safeNullableText(f.googleDriveDownloadUrl),
+      safeNullableText(f.driveUploadedAt || f.drive_uploaded_at),
+      safeNullableText(f.driveErrorMessage || f.drive_error_message),
       safeNullableText(f.driveFolderId),
       safeNullableText(f.driveFolderUrl),
       safeNullableText(f.originalFileName || f.fileName),
@@ -126,7 +128,11 @@ function mapFile(row: any, includeDriveFields: boolean) {
     thumbnail_key: row.thumbnail_key,
     r2ThumbnailKey: row.r2_thumbnail_key || row.thumbnail_key || row.r2_key,
     r2_thumbnail_key: row.r2_thumbnail_key || row.thumbnail_key || row.r2_key,
-    driveBackupStatus: includeDriveFields ? row.drive_backup_status : null,
+    driveBackupStatus: row.drive_backup_status,
+    driveUploadedAt: row.drive_uploaded_at,
+    drive_uploaded_at: row.drive_uploaded_at,
+    driveErrorMessage: row.drive_error_message,
+    drive_error_message: row.drive_error_message,
     driveFileId: includeDriveFields ? row.drive_file_id : null,
     drive_file_id: includeDriveFields ? row.drive_file_id : null,
     driveUrl: includeDriveFields ? row.drive_url : null,
@@ -260,6 +266,8 @@ async function ensureUploadedFilesSchema(env: Env) {
     { name: "drive_folder_id", definition: "TEXT" },
     { name: "drive_folder_url", definition: "TEXT" },
     { name: "drive_backup_status", definition: "TEXT" },
+    { name: "drive_uploaded_at", definition: "DATETIME" },
+    { name: "drive_error_message", definition: "TEXT" },
     { name: "original_file_name", definition: "TEXT" },
     { name: "original_file_size", definition: "INTEGER" },
     { name: "insurance_number", definition: "TEXT" },

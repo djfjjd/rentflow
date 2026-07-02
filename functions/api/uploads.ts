@@ -24,7 +24,7 @@ type FileRecord = {
   thumbnailUrl?: string;
   thumbnailKey?: string;
   r2ThumbnailKey?: string;
-  driveBackupStatus: "success" | "failed" | "none";
+  driveBackupStatus: "pending" | "uploading" | "completed" | "failed" | "canceled" | "success" | "none";
   driveFileId?: string;
   driveUrl?: string;
   googleDriveFileId?: string;
@@ -67,10 +67,6 @@ export async function onRequestPost({ request, env }: UploadContext) {
   if (!env.RENTFLOW_UPLOADS) {
     return Response.json({ stored: false, error: "RENTFLOW_UPLOADS is not configured" }, { status: 500, headers: noStoreHeaders() });
   }
-  const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
-  if (!rootFolderId) {
-    return Response.json({ stored: false, error: "GOOGLE_DRIVE_FOLDER_ID is not configured" }, { status: 500, headers: noStoreHeaders() });
-  }
 
   const uploadedAt = new Date().toISOString();
   const fileName = String(metadata.fileName || metadata.storedFileName || file.name);
@@ -83,21 +79,7 @@ export async function onRequestPost({ request, env }: UploadContext) {
   });
   const thumbnailUrl = `/api/uploads?key=${encodeURIComponent(thumbnailKey)}`;
 
-  const accessToken = await getGoogleAccessToken(env);
-  const photoRootId = await getOrCreateFolder(accessToken, rootFolderId, "사진원본");
-  const monthFolderId = await getOrCreateFolder(accessToken, photoRootId, uploadedAt.slice(0, 7));
-  const caseFolderId = await getOrCreateFolder(accessToken, monthFolderId, sanitizeDriveName(`${recordType}_${recordId}_${metadata.vehicleNumber || "unknown"}`));
-  const driveFile = await uploadDriveFile(accessToken, caseFolderId, buildOriginalDriveFileName(file, recordType, recordId, timestamp), file);
-  const driveView = driveFile.webViewLink || driveViewUrl(driveFile.id);
-
-  const record = toFileRecord(thumbnailKey, thumbnailUrl, thumbnailKey, thumbnailUrl, "success", {
-    driveFileId: driveFile.id,
-    driveUrl: driveView,
-    googleDriveFileId: driveFile.id,
-    googleDriveViewUrl: driveView,
-    googleDriveDownloadUrl: driveDownloadUrl(driveFile.id),
-    driveFolderId: caseFolderId,
-    driveFolderUrl: driveFolderUrl(caseFolderId),
+  const record = toFileRecord(thumbnailKey, thumbnailUrl, thumbnailKey, thumbnailUrl, "pending", {
     fileName,
     originalFileName: file.name,
     originalFileSize: file.size,
@@ -213,6 +195,12 @@ function mapUploadedFile(row: any, includeDriveFields: boolean) {
     googleDriveViewUrl: includeDriveFields ? row.google_drive_view_url || row.drive_url : null,
     google_drive_download_url: includeDriveFields ? row.google_drive_download_url : null,
     googleDriveDownloadUrl: includeDriveFields ? row.google_drive_download_url : null,
+    driveBackupStatus: row.drive_backup_status,
+    drive_backup_status: row.drive_backup_status,
+    driveUploadedAt: row.drive_uploaded_at,
+    drive_uploaded_at: row.drive_uploaded_at,
+    driveErrorMessage: row.drive_error_message,
+    drive_error_message: row.drive_error_message,
     drive_folder_id: includeDriveFields ? row.drive_folder_id : null,
     driveFolderId: includeDriveFields ? row.drive_folder_id : null,
     drive_folder_url: includeDriveFields ? row.drive_folder_url : null,
@@ -275,6 +263,9 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
   `).run();
   await ensureColumns(env.DB, "uploaded_files", [
     { name: "drive_url", definition: "TEXT" },
+    { name: "drive_backup_status", definition: "TEXT" },
+    { name: "drive_uploaded_at", definition: "DATETIME" },
+    { name: "drive_error_message", definition: "TEXT" },
     { name: "vehicle_number", definition: "TEXT" },
     { name: "file_type", definition: "TEXT" },
     { name: "mime_type", definition: "TEXT" },
@@ -382,7 +373,7 @@ function toFileRecord(
   r2Url: string, 
   thumbnailKey: string,
   thumbnailUrl: string,
-  driveBackupStatus: "success" | "failed" | "none",
+  driveBackupStatus: FileRecord["driveBackupStatus"],
   driveResult: Record<string, unknown>, 
   fallback: Record<string, unknown>
 ): FileRecord {
@@ -396,7 +387,7 @@ function toFileRecord(
     thumbnailKey: thumbnailKey || String(driveResult.thumbnailKey || fallback.thumbnailKey || ""),
     thumbnailUrl: thumbnailUrl || String(driveResult.thumbnailUrl || fallback.thumbnailUrl || ""),
     r2ThumbnailKey: thumbnailKey || String(driveResult.r2ThumbnailKey || driveResult.thumbnailKey || fallback.thumbnailKey || ""),
-    driveBackupStatus: driveBackupStatus === "success" || driveFileId ? "success" : driveBackupStatus,
+    driveBackupStatus: driveFileId && driveBackupStatus === "pending" ? "completed" : driveBackupStatus,
     driveFileId,
     driveUrl: String(driveResult.driveUrl || driveResult.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
     googleDriveFileId: String(driveResult.googleDriveFileId || driveFileId),
