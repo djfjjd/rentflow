@@ -121,7 +121,6 @@ export const matrixSubjects = [
   { label: "퇴사 처리", key: "staff.resign" },
   { label: "권한 변경", key: "roles.update" },
   { label: "기기 승인", key: "devices.approve" },
-  { label: "기기 차단", key: "devices.block" },
   { label: "원격 로그아웃", key: "devices.remote_logout" },
   { label: "시스템 설정", key: "system.settings" },
   { label: "백업 관리", key: "backup.manage" },

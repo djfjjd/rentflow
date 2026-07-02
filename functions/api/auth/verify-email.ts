@@ -51,12 +51,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (staff.status === "deleted" || staff.deleted_at) return Response.json({ error: "삭제 처리된 직원은 기기 등록을 할 수 없습니다." }, { status: 403 });
 
   const existingDevice = await env.DB.prepare("SELECT * FROM devices WHERE device_id = ?").bind(deviceId).first();
-  if (existingDevice?.status === "차단" || existingDevice?.status === "blocked") {
-    return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
-  }
-  if (existingDevice?.status === "deleted" || existingDevice?.deleted_at) {
-    return Response.json({ error: "삭제 처리된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
-  }
   const ownerType: DeviceOwnerType = existingDevice?.device_owner_type === "office_pc" || body.deviceOwnerType === "office_pc" || body.device_owner_type === "office_pc" ? "office_pc" : "personal";
   const officePcType = ownerType === "office_pc" ? normalizeOfficePcType(existingDevice?.office_pc_type || body.officePcType || body.office_pc_type) : "";
   const userAgent = request.headers.get("User-Agent") || "";
@@ -75,8 +69,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
        SET user_id = ?, device_name = COALESCE(NULLIF(device_name, ''), ?), device_alias = COALESCE(NULLIF(device_alias, ''), ?),
            device_model = COALESCE(NULLIF(device_model, ''), ?), device_type = ?, device_scope = ?, device_owner_type = ?,
            office_pc_type = ?, location = COALESCE(NULLIF(location, ''), ?), os = ?, browser = ?, email = ?,
-           status = 'pending_approval', updated_at = ?
-       WHERE device_id = ? AND status NOT IN ('차단', 'blocked', '승인', 'approved', 'deleted')`,
+           status = 'pending_approval', trusted = 0, auto_login = 0, approved_by = NULL, approved_at = NULL, deleted_at = NULL, revoked_at = NULL, updated_at = ?
+       WHERE device_id = ? AND status NOT IN ('승인', 'approved')`,
     ).bind(...safeBindValues([
       ownerType === "personal" ? safeText(staff.id) : null,
       safeNullableText(detected.deviceName),

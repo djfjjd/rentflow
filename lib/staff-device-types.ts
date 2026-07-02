@@ -2,7 +2,7 @@ import type { Role } from "./roles";
 
 export const positions = ["개발자", "관리자", "실장님", "직원"] as const;
 export const staffStatuses = ["재직", "휴직", "퇴사"] as const;
-export const deviceStatuses = ["승인대기", "pending_approval", "email_verified_pending", "이메일인증대기", "승인", "차단", "deleted"] as const;
+export const deviceStatuses = ["승인대기", "pending_approval", "email_verified_pending", "이메일인증대기", "승인"] as const;
 export const sessionStatuses = ["active", "revoked", "expired"] as const;
 
 export type Position = (typeof positions)[number];

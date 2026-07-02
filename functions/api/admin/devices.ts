@@ -16,7 +16,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         `SELECT devices.*, users.name AS user_name, users.position AS user_position, users.role AS user_role
          FROM devices
          LEFT JOIN users ON users.id = devices.user_id
-         WHERE COALESCE(devices.status, '') != 'deleted' AND devices.deleted_at IS NULL
+         WHERE devices.status IS NULL OR devices.status = '' OR devices.status IN ('승인대기', 'pending_approval', 'email_verified_pending', '이메일인증대기', '승인', 'approved')
          ORDER BY devices.updated_at DESC`,
       ).all();
       return Response.json((results || []).map(mapDevice));
@@ -46,7 +46,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         safeNullableText(body.os),
         safeNullableText(body.browser),
         safeNullableText(body.email),
-        safeText(body.status || "승인대기"),
+        normalizeDeviceStatus(body.status || "승인대기"),
         now,
         now,
         safeNullableText(body.lastSeenAt || body.last_seen_at),
@@ -77,12 +77,6 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
           fields.push("user_id = ?");
           values.push(safeText(body.userId || body.user_id));
         }
-      } else if (action === "block") {
-        const now = new Date().toISOString();
-        fields.push("status = ?", "trusted = ?", "auto_login = ?", "revoked_at = ?");
-        values.push("차단", 0, 0, now);
-        await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
-        await writeAuditLog(env.DB, { event: "device_blocked", actorEmail: auth.session.email, targetId: id });
       } else if (action === "remoteLogout") {
         const now = new Date().toISOString();
         fields.push("trusted = ?", "auto_login = ?", "revoked_at = ?");
@@ -120,7 +114,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (body.os !== undefined) { fields.push("os = ?"); values.push(safeNullableText(body.os)); }
       if (body.browser !== undefined) { fields.push("browser = ?"); values.push(safeNullableText(body.browser)); }
       if (body.email !== undefined) { fields.push("email = ?"); values.push(safeNullableText(body.email)); }
-      if (body.status !== undefined) { fields.push("status = ?"); values.push(safeText(body.status)); }
+      if (body.status !== undefined) { fields.push("status = ?"); values.push(normalizeDeviceStatus(body.status)); }
       if (body.lastSeenAt !== undefined || body.last_seen_at !== undefined) { fields.push("last_seen_at = ?"); values.push(safeNullableText(body.lastSeenAt ?? body.last_seen_at)); }
 
       if (!fields.length) return Response.json({ device: await getDevice(env.DB, id) });
@@ -138,11 +132,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
       const now = new Date().toISOString();
       await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
-      await env.DB.prepare(
-        `UPDATE devices
-         SET status = 'deleted', deleted_at = ?, revoked_at = ?, trusted = 0, auto_login = 0, updated_at = ?
-         WHERE id = ?`,
-      ).bind(now, now, now, safeText(id)).run();
+      await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(safeText(id)).run();
       await writeAuditLog(env.DB, { event: "device_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });
     }
@@ -162,6 +152,11 @@ async function getDevice(db: any, id: string) {
      WHERE devices.id = ?`,
   ).bind(safeText(id)).first();
   return row ? mapDevice(row) : null;
+}
+
+function normalizeDeviceStatus(value: unknown) {
+  const status = safeText(value);
+  return ["승인대기", "pending_approval", "email_verified_pending", "이메일인증대기", "승인", "approved"].includes(status) ? status : "승인대기";
 }
 
 function mapDevice(row: any) {

@@ -230,7 +230,7 @@ async function getUser(db: any, id: string) {
 async function retireUser(db: any, id: string) {
   const now = new Date().toISOString();
   await db.prepare("UPDATE users SET status = '퇴사', revoked_at = ?, updated_at = ? WHERE id = ?").bind(now, now, safeText(id)).run();
-  await db.prepare("UPDATE devices SET status = '차단', trusted = 0, auto_login = 0, revoked_at = ?, updated_at = ? WHERE user_id = ?").bind(now, now, safeText(id)).run();
+  await revokeAndDeleteUserDevices(db, id, now);
   await db.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE user_id = ? AND status = 'active'").bind(now, safeText(id)).run();
 }
 
@@ -240,12 +240,19 @@ async function deleteUserSoft(db: any, id: string) {
   await db.prepare(
     "UPDATE users SET status = 'deleted', deleted_at = ?, revoked_at = ?, updated_at = ? WHERE id = ?",
   ).bind(now, now, now, userId).run();
-  await db.prepare(
-    `UPDATE devices
-     SET status = 'deleted', trusted = 0, auto_login = 0, deleted_at = ?, revoked_at = ?, updated_at = ?
-     WHERE user_id = ?`,
-  ).bind(now, now, now, userId).run();
+  await revokeAndDeleteUserDevices(db, userId, now);
   await db.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE user_id = ? AND status = 'active'").bind(now, userId).run();
+}
+
+async function revokeAndDeleteUserDevices(db: any, id: string, now: string) {
+  const userId = safeText(id);
+  await db.prepare(
+    `UPDATE sessions
+     SET status = 'revoked', revoked_at = ?
+     WHERE status = 'active'
+       AND device_id IN (SELECT id FROM devices WHERE user_id = ?)`,
+  ).bind(now, userId).run();
+  await db.prepare("DELETE FROM devices WHERE user_id = ?").bind(userId).run();
 }
 
 async function hashPassword(password: string) {

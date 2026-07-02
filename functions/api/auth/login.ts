@@ -72,10 +72,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
   const device = await getDeviceByDeviceId(env.DB, deviceId);
   if (!device || device.status !== "승인") {
-    if (device?.status === "차단") {
-      await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "blocked device" });
-      return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
-    }
     return Response.json(
       {
         requiresDeviceRegistration: true,
@@ -99,8 +95,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ error: loginFailureMessage("role_not_allowed", { allowedRole: role, requestedRole: account.role, deviceId }) }, { status: 403 });
   }
   if (device.device_owner_type === "office_pc" && !roleAllowedForOfficePc(String(device.office_pc_type || ""), account.role)) {
-    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "office pc role blocked" });
-    return Response.json({ error: loginFailureMessage("office_pc_role_blocked", { allowedRole: role, requestedRole: account.role, deviceId }) }, { status: 403 });
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "office pc role not allowed" });
+    return Response.json({ error: loginFailureMessage("office_pc_role_not_allowed", { allowedRole: role, requestedRole: account.role, deviceId }) }, { status: 403 });
   }
   const displayName = device.device_owner_type === "office_pc" ? officePcLabel(String(device.office_pc_type || "")) : device.user_name || account.displayName;
   const position = device.device_owner_type === "office_pc" ? displayName : device.user_position || account.position;
@@ -171,7 +167,7 @@ function effectiveDeviceRole(device: any): Role | "" {
 }
 
 function loginFailureMessage(
-  reason: "device_not_approved" | "role_not_allowed" | "office_pc_role_blocked" | "unknown_office_pc_type",
+  reason: "device_not_approved" | "role_not_allowed" | "office_pc_role_not_allowed" | "unknown_office_pc_type",
   details: { allowedRole?: string; requestedRole?: string; officePcType?: string; deviceId?: string; deviceStatus?: string } = {},
 ) {
   if (reason === "device_not_approved") {

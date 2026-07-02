@@ -21,7 +21,6 @@ export function DeviceManagement() {
   }, []);
 
   async function patchDevice(device: StaffDevice, payload: Record<string, unknown>, doneMessage: string) {
-    if (payload.action === "block" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 차단하시겠습니까? 해당 기기의 세션이 종료됩니다.`)) return;
     if (payload.action === "approve" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 승인하시겠습니까?`)) return;
     if (payload.action === "remoteLogout" && !confirm(`${device.deviceAlias || device.deviceId} 기기를 원격 로그아웃하시겠습니까? 다음 접속부터 비밀번호 로그인이 필요합니다.`)) return;
     if (payload.action === "setAutoLogin" && payload.autoLogin === false && !confirm(`${device.deviceAlias || device.deviceId} 기기의 자동 로그인을 끄시겠습니까?`)) return;
@@ -48,7 +47,7 @@ export function DeviceManagement() {
     }
     await load();
     setDeleteTarget(null);
-    setMessage("기기가 삭제 처리되었습니다.");
+    setMessage("기기가 원격 로그아웃되고 삭제되었습니다.");
   }
 
   const personalDevices = devices.filter(isPersonalDevice);
@@ -173,7 +172,5 @@ function isPendingDevice(status: string) {
 function formatDeviceStatus(status: string) {
   if (isPendingDevice(status)) return "승인대기";
   if (status === "approved" || status === "승인") return "승인";
-  if (status === "blocked" || status === "차단") return "차단";
-  if (status === "deleted") return "삭제됨";
   return status || "-";
 }

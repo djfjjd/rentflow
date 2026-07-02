@@ -55,7 +55,7 @@ export function StaffManagement() {
   }
 
   async function patchUser(user: StaffUser, payload: Record<string, unknown>, doneMessage: string) {
-    if (payload.action === "retire" && !confirm(`${user.name} 직원을 퇴사 처리하시겠습니까? 모든 기기와 세션이 차단됩니다.`)) return;
+    if (payload.action === "retire" && !confirm(`${user.name} 직원을 퇴사 처리하시겠습니까? 연결된 개인 기기와 세션이 삭제됩니다.`)) return;
     const response = await fetch(`/api/admin/staff?id=${encodeURIComponent(user.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -71,7 +71,7 @@ export function StaffManagement() {
   }
 
   async function deleteUser(user: StaffUser) {
-    if (!confirm(`${user.name} 직원을 삭제하시겠습니까? 모든 기기와 세션이 먼저 차단됩니다.`)) return;
+    if (!confirm(`${user.name} 직원을 삭제하시겠습니까? 연결된 개인 기기와 세션이 삭제됩니다.`)) return;
     const response = await fetch(`/api/admin/staff?id=${encodeURIComponent(user.id)}`, { method: "DELETE" });
     if (!response.ok) {
       const data = (await response.json().catch(() => ({}))) as { error?: string };
@@ -115,7 +115,7 @@ export function StaffManagement() {
                   <td>{user.name}</td><td>{user.email}</td><td>{user.position}</td><td>{user.status}</td><td>{formatDate(user.createdAt)}</td>
                   <td className="flex min-w-[220px] flex-wrap gap-1 py-2">
                     <button className="small-btn" type="button" onClick={() => startEdit(user)}>수정</button>
-                    <button className="danger-btn" type="button" onClick={() => patchUser(user, { action: "retire" }, "퇴사 처리되었고 모든 기기와 세션이 차단되었습니다.")}>퇴사 처리</button>
+                    <button className="danger-btn" type="button" onClick={() => patchUser(user, { action: "retire" }, "퇴사 처리되었고 연결된 개인 기기와 세션이 삭제되었습니다.")}>퇴사 처리</button>
                     <button className="danger-btn" type="button" onClick={() => deleteUser(user)}>삭제</button>
                   </td>
                 </tr>

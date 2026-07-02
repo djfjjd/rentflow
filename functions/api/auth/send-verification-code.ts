@@ -57,7 +57,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (ownerType === "personal") {
       const existingPersonal = await env.DB.prepare(
         `SELECT id, device_id FROM devices
-         WHERE user_id = ? AND device_owner_type = 'personal' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
+         WHERE user_id = ? AND device_owner_type = 'personal' AND status != 'deleted' AND deleted_at IS NULL AND device_id != ?
          LIMIT 1`,
       ).bind(staff.id, deviceId).first();
       if (existingPersonal?.id) return Response.json({ error: "개인 휴대폰/태블릿은 직원 이메일 1개당 1대만 등록할 수 있습니다." }, { status: 409 });
@@ -66,7 +66,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const officePcPlaceholders = officePcValues.map(() => "?").join(", ");
       const existingOfficePc = await env.DB.prepare(
         `SELECT id, device_id FROM devices
-         WHERE office_pc_type IN (${officePcPlaceholders}) AND device_owner_type = 'office_pc' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
+         WHERE office_pc_type IN (${officePcPlaceholders}) AND device_owner_type = 'office_pc' AND status != 'deleted' AND deleted_at IS NULL AND device_id != ?
          LIMIT 1`,
       ).bind(...officePcValues, deviceId).first();
       if (existingOfficePc?.id) return Response.json({ error: "해당 사무실 PC는 이미 등록되어 있습니다." }, { status: 409 });
@@ -109,10 +109,10 @@ async function upsertRegistrationDevice(
 ) {
   const existing = await db.prepare("SELECT id, status FROM devices WHERE device_id = ?").bind(input.deviceId).first();
   if (existing?.id) {
-    const status = existing.status === "승인" || existing.status === "차단" ? existing.status : "이메일인증대기";
+    const status = existing.status === "승인" ? existing.status : "이메일인증대기";
     await db.prepare(
       `UPDATE devices
-       SET user_id = ?, device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_scope = ?, device_owner_type = ?, office_pc_type = ?, location = ?, os = ?, browser = ?, email = ?, status = ?, updated_at = ?
+       SET user_id = ?, device_name = ?, device_alias = ?, device_model = ?, device_type = ?, device_scope = ?, device_owner_type = ?, office_pc_type = ?, location = ?, os = ?, browser = ?, email = ?, status = ?, trusted = 0, auto_login = 0, approved_by = NULL, approved_at = NULL, deleted_at = NULL, revoked_at = NULL, updated_at = ?
        WHERE device_id = ?`,
     ).bind(...safeBindValues([
       input.ownerType === "personal" ? safeNullableText(input.userId) : null,

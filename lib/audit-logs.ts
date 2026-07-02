@@ -9,7 +9,6 @@ export type AuditEvent =
   | "device_registered"
   | "device_approved"
   | "device_remote_logout"
-  | "device_blocked"
   | "device_deleted"
   | "trusted_device_enabled"
   | "trusted_device_disabled"

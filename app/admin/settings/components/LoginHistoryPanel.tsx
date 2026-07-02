@@ -103,13 +103,12 @@ function truncate(value: string, max: number) {
 function StatusBadge({ status, message }: { status: string; message?: string }) {
   const label = statusLabel(status, message);
   const success = label === "성공";
-  const blocked = label === "차단" || label === "실패";
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${success ? "bg-[#e3f3eb] text-[#116149]" : blocked ? "bg-[#fff1ef] text-[#a13f24]" : "bg-[#f1f2ef] text-[#68746d]"}`}>{label}</span>;
+  const failure = label === "실패";
+  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${success ? "bg-[#e3f3eb] text-[#116149]" : failure ? "bg-[#fff1ef] text-[#a13f24]" : "bg-[#f1f2ef] text-[#68746d]"}`}>{label}</span>;
 }
 
 function statusLabel(status: string, message = "") {
   const source = `${status} ${message}`.toLowerCase();
-  if (source.includes("blocked") || source.includes("차단")) return "차단";
   if (source.includes("pending") || source.includes("승인대기")) return "승인대기";
   if (source.includes("remote") || source.includes("logout") || source.includes("원격")) return "원격로그아웃";
   if (status === "success") return "성공";
