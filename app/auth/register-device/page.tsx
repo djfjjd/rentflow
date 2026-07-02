@@ -8,7 +8,7 @@ import { officePcLabels, officePcTypes, type DeviceOwnerType } from "@/lib/offic
 const initialForm = {
   deviceOwnerType: "personal" as DeviceOwnerType,
   name: "",
-  officePcType: "director_pc",
+  officePcType: "owner_pc",
   location: "",
   email: "",
   code: "",

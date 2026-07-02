@@ -4,7 +4,7 @@ import { createSixDigitCode, emailVerificationTtlMs, ensureEmailVerificationSche
 import { buildDeviceCookie } from "../../../lib/trusted-device";
 import { safeBindValues, safeNullableText, safeText } from "../_d1-utils";
 import { ensureStaffDeviceSchema } from "../admin/staff";
-import { normalizeOfficePcType, type DeviceOwnerType } from "../../../lib/office-pc-policy";
+import { normalizeOfficePcType, officePcTypeStorageValues, type DeviceOwnerType } from "../../../lib/office-pc-policy";
 
 type Env = {
   RESEND_API_KEY?: string;
@@ -62,11 +62,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       ).bind(staff.id, deviceId).first();
       if (existingPersonal?.id) return Response.json({ error: "개인 휴대폰/태블릿은 직원 이메일 1개당 1대만 등록할 수 있습니다." }, { status: 409 });
     } else {
+      const officePcValues = officePcTypeStorageValues(officePcType);
+      const officePcPlaceholders = officePcValues.map(() => "?").join(", ");
       const existingOfficePc = await env.DB.prepare(
         `SELECT id, device_id FROM devices
-         WHERE office_pc_type = ? AND device_owner_type = 'office_pc' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
+         WHERE office_pc_type IN (${officePcPlaceholders}) AND device_owner_type = 'office_pc' AND status NOT IN ('차단', 'blocked', 'deleted') AND deleted_at IS NULL AND device_id != ?
          LIMIT 1`,
-      ).bind(officePcType, deviceId).first();
+      ).bind(...officePcValues, deviceId).first();
       if (existingOfficePc?.id) return Response.json({ error: "해당 사무실 PC는 이미 등록되어 있습니다." }, { status: 409 });
     }
     await upsertRegistrationDevice(env.DB, {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { StaffDevice } from "@/lib/staff-device-types";
-import { officePcLabels, officePcRoles, officePcTypes } from "@/lib/office-pc-policy";
+import { normalizeOfficePcType, officePcLabels, officePcRoles, officePcTypes } from "@/lib/office-pc-policy";
 
 export function DeviceManagement() {
   const [devices, setDevices] = useState<StaffDevice[]>([]);
@@ -94,7 +94,7 @@ function OfficePcCards({ devices, onPatch, onRequestDelete }: { devices: StaffDe
   return (
     <section className="grid gap-3 md:grid-cols-2">
       {officePcTypes.map((type) => {
-        const device = devices.find((item) => item.deviceOwnerType === "office_pc" && item.officePcType === type);
+        const device = devices.find((item) => item.deviceOwnerType === "office_pc" && normalizeOfficePcType(item.officePcType) === type);
         return (
           <article className="panel min-h-56" key={type}>
             <div className="flex items-start justify-between gap-3">

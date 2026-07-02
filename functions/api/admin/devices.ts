@@ -3,7 +3,7 @@ import { requireAdminSession, type AdminApiEnv } from "./_auth";
 import { ensureStaffDeviceSchema } from "./staff";
 import { writeAuditLog } from "../../../lib/audit-logs";
 import { isDesktopDevice } from "../../../lib/device-detection";
-import { officePcLabel, officePcRoles, officePcTypes } from "../../../lib/office-pc-policy";
+import { normalizeOfficePcType, officePcLabel, officePcRoles, officePcTypes } from "../../../lib/office-pc-policy";
 
 export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) => {
   try {
@@ -41,7 +41,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
         safeText(body.deviceType || body.device_type || "desktop"),
         safeText(body.deviceScope || body.device_scope || ((body.deviceOwnerType || body.device_owner_type) === "office_pc" ? "office_pc" : "personal_mobile")),
         safeText(body.deviceOwnerType || body.device_owner_type || "personal"),
-        safeNullableText(body.officePcType || body.office_pc_type),
+        safeNullableText(normalizeOfficePcType(body.officePcType || body.office_pc_type) || body.officePcType || body.office_pc_type),
         safeNullableText(body.location),
         safeNullableText(body.os),
         safeNullableText(body.browser),
@@ -111,7 +111,11 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       if (body.deviceType !== undefined || body.device_type !== undefined) { fields.push("device_type = ?"); values.push(safeText(body.deviceType ?? body.device_type)); }
       if (body.deviceScope !== undefined || body.device_scope !== undefined) { fields.push("device_scope = ?"); values.push(safeText(body.deviceScope ?? body.device_scope)); }
       if (body.deviceOwnerType !== undefined || body.device_owner_type !== undefined) { fields.push("device_owner_type = ?"); values.push(safeText(body.deviceOwnerType ?? body.device_owner_type)); }
-      if (body.officePcType !== undefined || body.office_pc_type !== undefined) { fields.push("office_pc_type = ?"); values.push(safeNullableText(body.officePcType ?? body.office_pc_type)); }
+      if (body.officePcType !== undefined || body.office_pc_type !== undefined) {
+        const officePcType = body.officePcType ?? body.office_pc_type;
+        fields.push("office_pc_type = ?");
+        values.push(safeNullableText(normalizeOfficePcType(officePcType) || officePcType));
+      }
       if (body.location !== undefined) { fields.push("location = ?"); values.push(safeNullableText(body.location)); }
       if (body.os !== undefined) { fields.push("os = ?"); values.push(safeNullableText(body.os)); }
       if (body.browser !== undefined) { fields.push("browser = ?"); values.push(safeNullableText(body.browser)); }
@@ -174,7 +178,7 @@ function mapDevice(row: any) {
     deviceType: row.device_type || "desktop",
     deviceScope: row.device_scope || (row.device_owner_type === "office_pc" ? "office_pc" : "personal_mobile"),
     deviceOwnerType: row.device_owner_type || "personal",
-    officePcType: row.office_pc_type || "",
+    officePcType: normalizeOfficePcType(row.office_pc_type) || row.office_pc_type || "",
     location: row.location || "",
     os: row.os || "",
     browser: row.browser || "",
@@ -194,7 +198,7 @@ function mapDevice(row: any) {
 
 export function buildOfficePcCards(devices: ReturnType<typeof mapDevice>[]) {
   return officePcTypes.map((type) => {
-    const device = devices.find((item) => item.deviceOwnerType === "office_pc" && item.officePcType === type);
+    const device = devices.find((item) => item.deviceOwnerType === "office_pc" && normalizeOfficePcType(item.officePcType) === type);
     return {
       type,
       label: officePcLabel(type),

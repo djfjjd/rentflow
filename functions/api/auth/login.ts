@@ -5,7 +5,7 @@ import { writeAuditLog } from "../../../lib/audit-logs";
 import { safeText } from "../_d1-utils";
 import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, expireTrustedDeviceCookie, readDeviceId } from "../../../lib/trusted-device";
 import { detectDeviceType, isDesktopDevice, type DeviceType } from "../../../lib/device-detection";
-import { officePcLabel, officePcRoles, roleAllowedForOfficePc } from "../../../lib/office-pc-policy";
+import { officePcLabel, officePcTypeToRole, roleAllowedForOfficePc } from "../../../lib/office-pc-policy";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -35,9 +35,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const deviceId = String(body.deviceId || body.device_id || readDeviceId(request.headers.get("Cookie")) || crypto.randomUUID());
   const account = getPasswordAccount(accountType, env);
   let email = account?.email || "";
-  if (!account || !account.password || password !== account.password) {
-    await recordLoginLog(env, request, { email, deviceId, status: "failure", message: "invalid credentials" });
+  if (!account) {
+    await recordLoginLog(env, request, { email, deviceId, status: "failure", message: "unknown account type" });
     return Response.json({ error: "인증 정보가 올바르지 않습니다." }, { status: 401 });
+  }
+  if (!account.password || password !== account.password) {
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "password mismatch" });
+    return Response.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 401 });
   }
   if (account.isDeveloper && !account.email) {
     return Response.json({ error: "ADMIN_EMAIL is not configured." }, { status: 500 });
@@ -73,7 +77,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       return Response.json({ error: "차단된 기기입니다. 관리자에게 문의해주세요." }, { status: 403 });
     }
     return Response.json(
-      { requiresDeviceRegistration: true, redirectTo: "/auth/register-device", deviceId },
+      {
+        requiresDeviceRegistration: true,
+        redirectTo: "/auth/register-device",
+        deviceId,
+        error: loginFailureMessage("device_not_approved", { deviceId, deviceStatus: device?.status }),
+      },
       { status: 202, headers: { "Set-Cookie": buildDeviceCookie(deviceId, url.protocol === "https:") } },
     );
   }
@@ -81,13 +90,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
   const isDeveloper = account.isDeveloper;
   const role = effectiveDeviceRole(device);
+  if (!role) {
+    await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "unknown office pc type" });
+    return Response.json({ error: loginFailureMessage("unknown_office_pc_type", { officePcType: device.office_pc_type, deviceId }) }, { status: 403 });
+  }
   if (account.role !== role) {
     await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "role not allowed for device" });
-    return Response.json({ error: "이 기기에서 선택한 직책으로 로그인할 수 없습니다." }, { status: 403 });
+    return Response.json({ error: loginFailureMessage("role_not_allowed", { allowedRole: role, requestedRole: account.role, deviceId }) }, { status: 403 });
   }
   if (device.device_owner_type === "office_pc" && !roleAllowedForOfficePc(String(device.office_pc_type || ""), account.role)) {
     await recordLoginLog(env, request, { email, role: account.role, deviceId, status: "failure", message: "office pc role blocked" });
-    return Response.json({ error: "이 사무실 PC에서 선택한 직책으로 로그인할 수 없습니다." }, { status: 403 });
+    return Response.json({ error: loginFailureMessage("office_pc_role_blocked", { allowedRole: role, requestedRole: account.role, deviceId }) }, { status: 403 });
   }
   const displayName = device.device_owner_type === "office_pc" ? officePcLabel(String(device.office_pc_type || "")) : device.user_name || account.displayName;
   const position = device.device_owner_type === "office_pc" ? displayName : device.user_position || account.position;
@@ -150,12 +163,28 @@ async function getDeviceByDeviceId(db: any, deviceId: string) {
   return db.prepare("SELECT devices.*, users.role AS user_role, users.position AS user_position, users.name AS user_name FROM devices LEFT JOIN users ON users.id = devices.user_id WHERE device_id = ?").bind(safeText(deviceId)).first();
 }
 
-function effectiveDeviceRole(device: any): Role {
+function effectiveDeviceRole(device: any): Role | "" {
   if (device.device_owner_type === "office_pc") {
-    const officeRole = officePcRoles[String(device.office_pc_type || "") as keyof typeof officePcRoles];
-    return officeRole || "staff";
+    return officePcTypeToRole(device.office_pc_type);
   }
   return device.user_role === "super_admin" || device.user_role === "manager" || device.user_role === "staff" ? device.user_role : "staff";
+}
+
+function loginFailureMessage(
+  reason: "device_not_approved" | "role_not_allowed" | "office_pc_role_blocked" | "unknown_office_pc_type",
+  details: { allowedRole?: string; requestedRole?: string; officePcType?: string; deviceId?: string; deviceStatus?: string } = {},
+) {
+  if (reason === "device_not_approved") {
+    const status = details.deviceStatus ? ` 상태: ${details.deviceStatus}.` : " 현재 deviceId와 승인된 deviceId가 다릅니다.";
+    return `승인된 사무실 PC가 아닙니다.${status}`;
+  }
+  if (reason === "unknown_office_pc_type") {
+    return `승인된 사무실 PC 구분을 확인할 수 없습니다. PC 구분: ${details.officePcType || "-"}.`;
+  }
+  if (details.allowedRole === "staff") return "이 PC에서는 직원 계정만 로그인할 수 있습니다.";
+  if (details.allowedRole === "manager") return "이 PC에서는 실장님 계정만 로그인할 수 있습니다.";
+  if (details.allowedRole === "super_admin") return "이 PC에서는 소장님/팀장님 계정만 로그인할 수 있습니다.";
+  return "이 기기에서 선택한 직책으로 로그인할 수 없습니다.";
 }
 
 function getDefaultRedirectPath(user: { role: Role; isDeveloper?: boolean }, deviceType: DeviceType) {
