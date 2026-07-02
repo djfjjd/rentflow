@@ -20,7 +20,7 @@ export function SettingsDashboard() {
       <header className="panel">
         <h1 className="text-2xl font-black">관리자 설정센터</h1>
         <p className="mt-2 whitespace-pre-line text-sm font-bold leading-6 text-[#68746d]">
-          {"1. 직원관리에서 이름 이메일 직책을 설정하고 추가해주세요.\n2. 어플 설치 후 초기화면에서 로그인 해주세요\n관리자, 실장님 (비번 동일), 직원(4321) > 이름 이메일 인증\n3. 기기관리에서 해당 기기를 승인해주세요\n- 퇴사 시 직원관리와 기기관리에서 삭제하기"}
+          {"1. 직원관리에서 이름 이메일 직책을 설정하고 추가해주세요.\n2. 어플 설치 후 초기화면에서 로그인 해주세요\n- 관리자, 실장님 (비번 동일), 직원(4321) > 이름 이메일 인증\n3. 기기관리에서 해당 기기를 승인해주세요\n- 퇴사 시 직원관리와 기기관리에서 삭제하기"}
         </p>
       </header>
 
