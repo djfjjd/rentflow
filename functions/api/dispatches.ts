@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { isDispatchingStatus, isStaff, requirePermission } from "./_permissions";
 
 type Env = {
@@ -42,8 +43,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const customerPhone = d.customerPhone ?? d.customer_phone;
     const memo = d.memo ?? d.notes;
     const isCorporate = safeBoolInt(d.isCorporate ?? d.is_corporate ?? d.corporateVehicle);
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, business_type, status, customer_name, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, notes, is_corporate, corporate_vehicle, is_completed, return_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+      "INSERT INTO dispatches (id, date, time, vehicle_number, dispatch_type, business_type, status, customer_name, orderer, repair_shop, customer_car_model, fuel_level_text, customer_phone, memo, notes, is_corporate, corporate_vehicle, is_completed, return_completed, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(d.id),
       safeNullableText(d.date),
@@ -63,7 +65,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       isCorporate,
       isCorporate,
       safeBoolInt(d.isCompleted),
-      0
+      0,
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
 
     console.log("dispatch saved", d.id);
@@ -101,18 +108,23 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const returnCompleted = body.returnCompleted ?? body.return_completed;
     const returnAt = body.returnAt ?? body.return_at;
     const keys = Object.keys(body);
+    const actor = await getAuditActor(env.DB, auth.session);
 
     if (isCompleted !== undefined && keys.every((key) => key === "isCompleted" || key === "is_completed")) {
-      await env.DB.prepare("UPDATE dispatches SET is_completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
+      await env.DB.prepare("UPDATE dispatches SET is_completed = ?, updated_by_id = ?, updated_by_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
         safeBoolInt(isCompleted),
+        actor.id,
+        actor.name,
         safeText(id)
       ).run();
       return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
     }
     if ((returnCompleted !== undefined || returnAt !== undefined) && keys.every((key) => ["returnCompleted", "return_completed", "returnAt", "return_at"].includes(key))) {
-      await env.DB.prepare("UPDATE dispatches SET return_completed = COALESCE(?, return_completed), return_at = COALESCE(?, return_at), updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
+      await env.DB.prepare("UPDATE dispatches SET return_completed = COALESCE(?, return_completed), return_at = COALESCE(?, return_at), updated_by_id = ?, updated_by_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(
         returnCompleted === undefined ? null : safeBoolInt(returnCompleted),
         returnAt === undefined ? null : safeNullableText(returnAt),
+        actor.id,
+        actor.name,
         safeText(id)
       ).run();
       return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
@@ -138,6 +150,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
         notes = ?,
         is_corporate = ?,
         corporate_vehicle = ?,
+        updated_by_id = ?,
+        updated_by_name = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     ).bind(
@@ -159,6 +173,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       safeText(memo),
       safeBoolInt(isCorporate),
       safeBoolInt(isCorporate),
+      actor.id,
+      actor.name,
       safeText(id)
     ).run();
 
@@ -250,7 +266,7 @@ function mapDispatch(row: any) {
     intakeType: row.intake_type,
     uploadedAt: row.uploaded_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -312,5 +328,6 @@ async function ensureDispatchSchema(env: Env) {
     { name: "contract_drive_url", definition: "TEXT" },
     { name: "retention_archived_at", definition: "DATETIME" },
     { name: "retention_archived_reason", definition: "TEXT" },
+    ...auditColumns(),
   ]);
 }

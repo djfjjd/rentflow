@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeNullableText, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { resolveReservationDateRange } from "../../lib/reservation-date-range";
 import { requirePermission } from "./_permissions";
 
@@ -27,8 +28,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
     const range = resolveReservationDateRange({ startDate: safeText(r.startDate || r.date), endDate: safeText(r.endDate), reservationText: safeText(r.reservationText || r.memo) });
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "INSERT INTO reservations (id, date, start_date, end_date, duration_days, time, end_time, vehicle_number, rent_car_number, customer_name, reserver_name, reservation_text, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO reservations (id, date, start_date, end_date, duration_days, time, end_time, vehicle_number, rent_car_number, customer_name, reserver_name, reservation_text, customer_car_number, customer_car_model, factory_name, pickup_location, delivery_location, order_person, memo, route, repair_shop_partner_id, status, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(r.id),
       range.startDate,
@@ -51,7 +53,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(r.memo),
       safeText(r.route || "예약"),
       safeNullableText(r.repairShopPartnerId),
-      safeText(r.status || "예약")
+      safeText(r.status || "예약"),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
 
     console.log("saved reservation id", r.id);
@@ -73,9 +80,10 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const r = await request.json() as any;
     const reserverName = r.reserverName ?? r.customerName;
     const range = resolveReservationDateRange({ startDate: safeText(r.startDate || r.date), endDate: safeText(r.endDate), reservationText: safeText(r.reservationText || r.memo) });
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "UPDATE reservations SET date = ?, start_date = ?, end_date = ?, duration_days = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).bind(...safeBindValues([range.startDate, range.startDate, range.endDate, range.durationDays, safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), safeText(id)])).run();
+      "UPDATE reservations SET date = ?, start_date = ?, end_date = ?, duration_days = ?, time = ?, customer_name = ?, reserver_name = ?, reservation_text = ?, memo = ?, status = ?, updated_by_id = ?, updated_by_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    ).bind(...safeBindValues([range.startDate, range.startDate, range.endDate, range.durationDays, safeText(r.time || "09:00"), safeText(reserverName || "예약"), safeText(reserverName || "예약"), safeNullableText(r.reservationText), safeNullableText(r.memo), safeText(r.status || "예약"), actor.id, actor.name, safeText(id)])).run();
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("reservation update failed", { error: error instanceof Error ? error.message : String(error) });
@@ -152,7 +160,7 @@ function mapReservation(row: any) {
     route: row.route,
     repairShopPartnerId: row.repair_shop_partner_id,
     status: row.status,
-    createdAt: row.created_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -193,5 +201,6 @@ async function ensureReservationSchema(env: Env) {
     { name: "repair_shop_partner_id", definition: "TEXT" },
     { name: "status", definition: "TEXT" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
 }

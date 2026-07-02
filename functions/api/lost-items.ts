@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { requirePermission } from "./_permissions";
 
 type Env = {
@@ -42,6 +43,9 @@ export async function onRequestPatch({ request, env }: { request: Request; env: 
     if (updates.date !== undefined || updates.foundDate !== undefined) { fields.push("date = ?", "found_date = ?"); values.push(safeNullableText(updates.date ?? updates.foundDate), safeNullableText(updates.date ?? updates.foundDate)); }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
+    const actor = await getAuditActor(env.DB, auth.session);
+    fields.push("updated_by_id = ?", "updated_by_name = ?");
+    values.push(actor.id, actor.name);
     values.push(id);
     await env.DB.prepare(`UPDATE lost_items SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
@@ -59,8 +63,9 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const item = await request.json() as any;
     const date = item.date ?? item.foundDate;
     const isResolved = safeBoolInt(item.isResolved ?? item.isCompleted);
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, customer_phone, source_dispatch_id, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, resolved_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+      "INSERT INTO lost_items (id, date, vehicle_number, item_name, customer_name, customer_phone, source_dispatch_id, found_date, found_location, storage_location, memo, status, is_completed, is_resolved, resolved_at, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
     ).bind(
       safeText(item.id),
       safeNullableText(date),
@@ -77,6 +82,11 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       isResolved,
       isResolved,
       isResolved ? safeNullableText(item.resolvedAt || new Date().toISOString()) : null,
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name,
     ).run();
     console.log("saved lost item id", item.id);
     return Response.json({ ok: true, success: true, id: safeText(item.id) }, { headers: noStoreHeaders() });
@@ -106,7 +116,7 @@ function mapLostItem(row: any) {
     isCompleted: Boolean(row.is_resolved ?? row.is_completed),
     resolvedAt: row.resolved_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    ...mapAuditFields(row),
   };
 }
 
@@ -141,5 +151,6 @@ async function ensureLostItemsSchema(env: Env) {
     { name: "resolved_at", definition: "DATETIME" },
     { name: "photo_url", definition: "TEXT" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
 }

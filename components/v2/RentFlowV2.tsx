@@ -55,6 +55,8 @@ import {
 } from "@/lib/rentflow-v2";
 
 const DeveloperPrivacyMaskContext = createContext(false);
+const OriginalPhotoAccessContext = createContext(false);
+const PhotoDeleteAccessContext = createContext(false);
 
 type PageKind =
   | "home"
@@ -202,6 +204,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const [permissions, setPermissions] = useState<Record<string, PermissionLevel>>({});
   const isAdmin = kind.startsWith("admin") || pathname.startsWith("/admin");
   const canShowDriveLinks = currentRole !== null && currentRole !== "staff";
+  const canDeletePhotos = currentRole === "super_admin";
   const canUploadContracts = currentRole !== "staff";
   const canEditDispatchRecords = permissions["dispatch.manage"] === "write";
   const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
@@ -283,7 +286,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
 
   return (
     <DeveloperPrivacyMaskContext.Provider value={isDeveloperSession}>
-      <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
+      <OriginalPhotoAccessContext.Provider value={canShowDriveLinks}>
+        <PhotoDeleteAccessContext.Provider value={canDeletePhotos}>
+          <main className="min-h-screen w-full overflow-x-hidden bg-[#f6f7f4] text-[#16211d]">
         <header className="app-header sticky top-0 z-30 bg-[#f6f7f4]/95 py-3 backdrop-blur">
           <div className={headerInnerClass}>
             <div className="header-top-row">
@@ -348,7 +353,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
           {kind === "admin-settings" ? <SettingsAdmin /> : null}
           {kind === "admin-stats" ? <StatsAdmin vehicles={vehicles} dispatches={dispatches} /> : null}
         </div>
-      </main>
+          </main>
+        </PhotoDeleteAccessContext.Provider>
+      </OriginalPhotoAccessContext.Provider>
     </DeveloperPrivacyMaskContext.Provider>
   );
 }
@@ -1952,7 +1959,7 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
         </div>
         {selectedIndex !== null ? (
           <OverlayModal onClose={() => setSelectedIndex(null)} panelClassName="h-[90vh] w-[95vw] max-w-5xl overflow-hidden rounded-2xl bg-white p-4 shadow-2xl">
-            <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onIndexChange={setSelectedIndex} />
+            <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onDeleted={(deleted) => setFiles((current) => current.filter((file) => file.id !== deleted.id))} onIndexChange={setSelectedIndex} />
           </OverlayModal>
         ) : null}
       </section>
@@ -3280,11 +3287,11 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches, canEditD
         <Segmented value={tab} values={["active", "history"]} labels={{ active: "배차중", history: "배차기록" }} onChange={(value) => setTab(value as "active" | "history")} />
       </div>
       <div data-horizontal-scroll="true" className="dispatch-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className={`w-full ${canEditDispatchRecords ? "min-w-[1700px]" : "min-w-[1560px]"} table-fixed text-left text-sm`}>
+        <table className={`w-full ${canEditDispatchRecords ? "min-w-[1800px]" : "min-w-[1660px]"} table-fixed text-left text-sm`}>
           <colgroup>
             {visibleColumns.map((column) => <col className={column.width} key={column.label} />)}
           </colgroup>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th className="text-center">계약서</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}</tr></thead>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>연락처</th><th>구분</th><th>차종/색상</th><th>오더자</th><th>고객차종</th><th>주유량</th><th>수리처</th><th>메모</th><th className="text-center">계약서</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}<th>작성자</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
             const contract = contractForRecord(contracts, item.id);
@@ -3307,6 +3314,7 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches, canEditD
                 <td className="h-11 whitespace-nowrap"><AdditionalUploadButton recordType="dispatch" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} /></td>
                 {canEditDispatchRecords ? <td className="h-11 whitespace-nowrap"><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td> : null}
                 {canEditDispatchRecords ? <td className="h-11 whitespace-nowrap"><button className="danger-btn" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td> : null}
+                <td className="h-11 whitespace-nowrap">{auditAuthorLabel(item)}</td>
               </tr>
             );
           })}</tbody>
@@ -3376,8 +3384,8 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
         </div>
       </div>
       <div data-horizontal-scroll="true" className="return-board-wrapper return-table-wrapper return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className={`return-table w-full ${canEditDispatchRecords ? "min-w-[1200px]" : "min-w-[1060px]"} text-left text-sm`}>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}</tr></thead>
+        <table className={`return-table w-full ${canEditDispatchRecords ? "min-w-[1300px]" : "min-w-[1160px]"} text-left text-sm`}>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}<th>작성자</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
             return (
@@ -3394,6 +3402,7 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
                 <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} label="사진추가" /></td>
                 {canEditDispatchRecords ? <td><button className="small-btn edit-button" type="button" onClick={() => setEditing(item)}>수정</button></td> : null}
                 {canEditDispatchRecords ? <td><button className="danger-btn delete-button" type="button" onClick={() => setDeleting(item)}><Trash2 size={16} /> 삭제</button></td> : null}
+                <td className="whitespace-nowrap">{auditAuthorLabel(item)}</td>
               </tr>
             );
           })}</tbody>
@@ -3554,13 +3563,13 @@ function IncidentBoard({
         <h2 className="text-xl font-black">사고/정비 현황판</h2>
         <Segmented value={tab} values={["open", "done"]} labels={{ open: "수리전", done: "수리완료" }} onChange={(value) => setTab(value as "open" | "done")} />
       </div>
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead><tr className="border-b"><th>{tab === "done" ? "수리전으로" : "작업완료"}</th><th>차량번호</th><th>사고부위 또는 정비내용</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
+      <table className="w-full min-w-[860px] text-left text-sm">
+        <thead><tr className="border-b"><th>{tab === "done" ? "수리전으로" : "작업완료"}</th><th>차량번호</th><th>사고부위 또는 정비내용</th><th>특이사항</th><th>날짜</th><th>사진촬영본 링크</th><th>작성자</th></tr></thead>
         <tbody>{paginate(rows, page).map((row) => {
           const content = row.type === "사고" ? row.item.accidentPart : row.item.title || row.item.maintenanceType;
           const date = row.type === "사고" ? row.item.accidentDate : row.item.foundDate;
           const plate = clean(row.item.plateNumber);
-          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td><SensitiveInline value={row.item.memo || row.item.description} /></td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType="accidentRepair" vehicleNumber={row.item.plateNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={`${row.type}-${row.item.id}`}><td><input type="checkbox" checked={isIncidentCompleted(row.item)} onChange={(event) => toggle(row, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td>{clean(content)}</td><td><SensitiveInline value={row.item.memo || row.item.description} /></td><td>{clean(date)}</td><td><PhotoGalleryButton date={date} kind={row.type} recordId={row.item.id} recordType="accidentRepair" vehicleNumber={row.item.plateNumber || ""} /></td><td className="whitespace-nowrap">{auditAuthorLabel(row.item)}</td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -3601,11 +3610,11 @@ function LostItemBoard({ items, vehicles, onLostItems }: { items: LostItemV2[]; 
         <h2 className="text-xl font-black">분실물 현황판</h2>
         <Segmented value={tab} values={["open", "done"]} labels={{ open: "보관중", done: "정리완료" }} onChange={(value) => setTab(value as "open" | "done")} />
       </div>
-      <table className="w-full min-w-[880px] text-left text-sm">
-        <thead><tr className="border-b"><th>{tab === "done" ? "보관중으로" : "정리완료"}</th><th>차량번호</th><th>고객명</th><th>연락처</th><th>특이사항</th><th>수정</th><th>날짜</th><th>사진촬영본 링크</th></tr></thead>
+      <table className="w-full min-w-[980px] text-left text-sm">
+        <thead><tr className="border-b"><th>{tab === "done" ? "보관중으로" : "정리완료"}</th><th>차량번호</th><th>고객명</th><th>연락처</th><th>특이사항</th><th>수정</th><th>날짜</th><th>사진촬영본 링크</th><th>작성자</th></tr></thead>
         <tbody>{paginate(rows, page).map((item) => {
           const plate = clean(item.vehicleNumber);
-          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td><SensitiveInline value={item.customerName} /></td><td><PhoneCell phone={item.customerPhone} /></td><td><SensitiveInline value={item.memo} /></td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td></tr>;
+          return <tr className="border-b" key={item.id}><td><input type="checkbox" checked={isLostItemCompleted(item)} onChange={(event) => toggle(item.id, event.target.checked)} /></td><td><VehicleNumberText vehicle={findVehicle(vehicles, plate)} value={plate} /></td><td><SensitiveInline value={item.customerName} /></td><td><PhoneCell phone={item.customerPhone} /></td><td><SensitiveInline value={item.memo} /></td><td><button className="small-btn" type="button" onClick={() => setEditing(item)}>수정</button></td><td>{clean(item.foundDate || item.date)}</td><td><PhotoGalleryButton date={item.foundDate} kind="분실물" recordId={item.id} recordType="lostItem" vehicleNumber={item.vehicleNumber || ""} /></td><td className="whitespace-nowrap">{auditAuthorLabel(item)}</td></tr>;
         })}</tbody>
       </table>
       <Pagination page={page} totalItems={rows.length} onPageChange={setPage} />
@@ -3731,7 +3740,7 @@ function PhotoFolderGalleryModal({
       </div>
 
       {selectedIndex !== null ? (
-        <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onIndexChange={setSelectedIndex} />
+        <PhotoDetailView currentIndex={selectedIndex} files={sortedFiles} onBack={() => setSelectedIndex(null)} onDeleted={(deleted) => setFiles((current) => current.filter((file) => file.id !== deleted.id))} onIndexChange={setSelectedIndex} />
       ) : galleryOpen ? (
         <div>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -3779,16 +3788,21 @@ function PhotoDetailView({
   files,
   currentIndex,
   onIndexChange,
+  onDeleted,
   onBack,
 }: {
   files: UploadedFileV2[];
   currentIndex: number;
   onIndexChange: (index: number) => void;
+  onDeleted?: (file: UploadedFileV2) => void;
   onBack: () => void;
 }) {
   const shouldMask = useDeveloperPrivacyMask();
+  const canOpenOriginalPhoto = useContext(OriginalPhotoAccessContext);
+  const canDeletePhoto = useContext(PhotoDeleteAccessContext);
   const file = files[currentIndex];
-  const url = fileUrl(file);
+  const url = fileThumbnailUrl(file);
+  const driveViewUrl = photoDriveViewUrl(file);
   const displayFileName = privacyText(fileName(file), shouldMask);
   const [zoom, setZoom] = useState(1);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -3797,6 +3811,7 @@ function PhotoDetailView({
   const canNext = currentIndex < files.length - 1;
   const isVideo = isVideoFile(file);
   const [sharing, setSharing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function goTo(index: number) {
     if (index < 0 || index >= files.length) return;
@@ -3842,6 +3857,23 @@ function PhotoDetailView({
       await sharePhotoFile(file);
     } finally {
       setSharing(false);
+    }
+  }
+
+  async function deleteCurrentPhoto() {
+    if (deleting || !file?.id) return;
+    if (!confirm("사진을 삭제하시겠습니까?")) return;
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/uploads?id=${encodeURIComponent(String(file.id))}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await response.text());
+      onDeleted?.(file);
+      onBack();
+    } catch (error) {
+      console.error("photo delete failed", error);
+      alert("사진 삭제에 실패했습니다.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -3892,11 +3924,23 @@ function PhotoDetailView({
       <div className="photo-detail-header mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <button className="small-btn" type="button" onClick={onBack}>← 닫기</button>
         <p className="truncate text-center text-sm font-black" title={displayFileName}>{displayFileName}</p>
+        <div className="flex items-center justify-end gap-2">
+        {canOpenOriginalPhoto && driveViewUrl ? (
+          <button className="small-btn" type="button" onClick={() => window.open(driveViewUrl, "_blank", "noopener,noreferrer")}>
+            Google Drive로 열기
+          </button>
+        ) : null}
+        {canDeletePhoto && file?.id ? (
+          <button className="danger-btn" type="button" disabled={deleting} onClick={deleteCurrentPhoto}>
+            {deleting ? "삭제 중" : "삭제"}
+          </button>
+        ) : null}
         {url ? (
           <button className="small-btn" type="button" disabled={sharing} onClick={shareCurrentPhoto}>
             {sharing ? "준비 중" : "저장/공유"}
           </button>
         ) : null}
+        </div>
       </div>
       <p className="mb-2 text-center text-xs font-bold text-[#68746d]">{currentIndex + 1} / {files.length}</p>
       {!isVideo ? (
@@ -3925,9 +3969,9 @@ function PhotoDetailView({
         >
           →
         </button>
-        {isVideo ? (
+        {isVideo && !hasExplicitThumbnail(file) ? (
           <video className="max-h-[72vh] max-w-full" controls src={url} />
-        ) : isImageFile(file) ? (
+        ) : isImageFile(file) || hasExplicitThumbnail(file) ? (
           <img
             alt={displayFileName}
             className="max-h-[72vh] max-w-full object-contain transition-transform"
@@ -4008,6 +4052,7 @@ type VehicleDashboardRow = {
   fuelLevelText: string;
   customerCarModel: string;
   ordererRepairShop: string;
+  authorLabel: string;
   updatedAt?: string;
 };
 
@@ -4054,8 +4099,9 @@ function VehicleStatusBoard({ rows, query, onQueryChange }: { rows: VehicleDashb
             <col className="w-[130px]" />
             <col className="w-[190px]" />
             <col className="w-[150px]" />
+            <col className="w-[100px]" />
           </colgroup>
-          <thead><tr className="border-b"><th>차량번호</th><th className="text-center">등록증</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th></tr></thead>
+          <thead><tr className="border-b"><th>차량번호</th><th className="text-center">등록증</th><th>차종</th><th>연락처</th><th>상태</th><th>배차날짜</th><th>주유량</th><th>피해차량</th><th>오더자/수리처</th><th>최근 업데이트</th><th>작성자</th></tr></thead>
           <tbody>{filteredRows.map((row) => (
             <tr className="border-b" key={row.key}>
               <td><VehicleNumberText companyType={row.companyType} value={row.vehicleNumber} /></td>
@@ -4068,6 +4114,7 @@ function VehicleStatusBoard({ rows, query, onQueryChange }: { rows: VehicleDashb
               <td>{row.customerCarModel || "-"}</td>
               <td><SensitiveInline value={row.ordererRepairShop} /></td>
               <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
+              <td className="whitespace-nowrap">{row.authorLabel}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -4260,7 +4307,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
         <Segmented value={tab} values={["upcoming", "done"]} labels={{ upcoming: "다가오는 일정", done: "완료" }} onChange={(value) => setTab(value as "upcoming" | "done")} />
       </div>
       <div data-horizontal-scroll="true" className="reservation-table-wrap schedule-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[1080px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[145px]" />
             <col className="w-[110px]" />
@@ -4269,8 +4316,9 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
             <col className="w-[90px]" />
             <col className="w-[70px]" />
             <col className="w-[70px]" />
+            <col className="w-[100px]" />
           </colgroup>
-          <thead><tr className="border-b [&>th]:whitespace-nowrap [&>th]:align-middle"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>사진보기</th><th>사진추가</th><th>수정</th><th>삭제</th></tr></thead>
+          <thead><tr className="border-b [&>th]:whitespace-nowrap [&>th]:align-middle"><th>날짜</th><th>예약자명</th><th>예약내용</th><th>사진보기</th><th>사진추가</th><th>수정</th><th>삭제</th><th>작성자</th></tr></thead>
           <tbody>
             {paginate(rows, page).map((reservation) => {
               const reservationText = reservation.reservationText || reservation.memo || "";
@@ -4313,6 +4361,7 @@ function ReservationList({ reservations, onReservations }: { reservations: Reser
                   <td><AdditionalUploadButton recordType="reservation" recordId={reservation.id} vehicleNumber="" label="사진추가" /></td>
                   <td><button className="small-btn" type="button" onClick={() => setEditing(reservation)}>수정</button></td>
                   <td><button className="danger-btn" type="button" onClick={() => remove(reservation.id)}><Trash2 size={16} /> 삭제</button></td>
+                  <td>{auditAuthorLabel(reservation)}</td>
                 </tr>
               );
             })}
@@ -4782,8 +4831,9 @@ async function uploadSelectedFiles(
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const thumbnail = await createImageThumbnail(file);
-      if (thumbnail) formData.append("thumbnail", thumbnail);
+      const thumbnail = await createUploadThumbnail(file, metadata.recordType, metadata.recordId || "legacy");
+      if (!thumbnail) throw new Error("thumbnail create failed");
+      formData.append("thumbnail", thumbnail);
       formData.append("metadata", JSON.stringify(fileMetadata));
       const uploadResponse = await fetch("/api/uploads", { method: "POST", body: formData, cache: "no-store" });
       if (!uploadResponse.ok) throw new Error(await uploadResponse.text());
@@ -4866,14 +4916,19 @@ async function uploadVehicleRegistrationDirectly(
   };
 }
 
-async function createImageThumbnail(file: File) {
+async function createUploadThumbnail(file: File, recordType: string, recordId: string) {
+  if (file.type.startsWith("video/")) return createVideoThumbnail(file, recordType, recordId);
+  return createImageThumbnail(file, recordType, recordId);
+}
+
+async function createImageThumbnail(file: File, recordType: string, recordId: string) {
   if (!file.type.startsWith("image/")) return null;
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = new Image();
     image.src = objectUrl;
     await image.decode();
-    const maxSize = 300;
+    const maxSize = 1200;
     const ratio = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
     const width = Math.max(1, Math.round(image.naturalWidth * ratio));
     const height = Math.max(1, Math.round(image.naturalHeight * ratio));
@@ -4883,9 +4938,9 @@ async function createImageThumbnail(file: File) {
     const context = canvas.getContext("2d");
     if (!context) return null;
     context.drawImage(image, 0, 0, width, height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.78));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
     if (!blob) return null;
-    return new File([blob], thumbnailFileName(file.name), { type: "image/webp" });
+    return new File([blob], thumbnailFileName(recordType, recordId), { type: "image/jpeg" });
   } catch (error) {
     console.error("thumbnail create failed", error);
     return null;
@@ -4894,10 +4949,45 @@ async function createImageThumbnail(file: File) {
   }
 }
 
-function thumbnailFileName(fileName: string) {
-  const dotIndex = fileName.lastIndexOf(".");
-  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-  return `${baseName}_thumb.webp`;
+async function createVideoThumbnail(file: File, recordType: string, recordId: string) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = objectUrl;
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () => reject(new Error("video thumbnail load failed"));
+    });
+    const maxSize = 1200;
+    const sourceWidth = video.videoWidth || 1200;
+    const sourceHeight = video.videoHeight || 675;
+    const ratio = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * ratio));
+    canvas.height = Math.max(1, Math.round(sourceHeight * ratio));
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
+    if (!blob) return null;
+    return new File([blob], thumbnailFileName(recordType, recordId), { type: "image/jpeg" });
+  } catch (error) {
+    console.error("video thumbnail create failed", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function thumbnailFileName(recordType: string, recordId: string) {
+  return `thumbnail_${safeFileSegment(recordType)}_${safeFileSegment(recordId)}_${Date.now()}.jpg`;
+}
+
+function safeFileSegment(value: string) {
+  return clean(value).replace(/[\\/:*?"<>|#%{}~&\s]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
 }
 
 function fileCountLabel(files: File[]) {
@@ -4919,6 +5009,11 @@ function formatFileSize(size: number) {
 function fileUrl(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { r2_url?: string; drive_url?: string };
   return raw.r2Url || raw.r2_url || raw.driveUrl || raw.drive_url || "";
+}
+
+function photoDriveViewUrl(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { google_drive_view_url?: string; drive_url?: string };
+  return raw.googleDriveViewUrl || raw.google_drive_view_url || raw.driveUrl || raw.drive_url || "";
 }
 
 function photoDownloadUrl(file: UploadedFileV2) {
@@ -4969,6 +5064,11 @@ async function sharePhotoFile(file: UploadedFileV2) {
 function fileThumbnailUrl(file: UploadedFileV2) {
   const raw = file as UploadedFileV2 & { thumbnail_url?: string };
   return raw.thumbnailUrl || raw.thumbnail_url || fileUrl(file);
+}
+
+function hasExplicitThumbnail(file: UploadedFileV2) {
+  const raw = file as UploadedFileV2 & { thumbnail_url?: string };
+  return Boolean(raw.thumbnailUrl || raw.thumbnail_url);
 }
 
 function isDriveArchived(file: UploadedFileV2) {
@@ -5477,6 +5577,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         fuelLevelText: firstText(latestReturn.fuelLevelText, latestReturn.fuelDisplay),
         customerCarModel: "",
         ordererRepairShop: normalizeParkingLocation(firstText(latestReturn.parkingZone, latestReturn.arrivalAddress, latestReturn.returnAddress)),
+        authorLabel: auditAuthorLabel(latestDispatch),
         updatedAt: latestReturn.updatedAt || latestReturn.createdAt || vehicle.updatedAt,
       };
     }
@@ -5498,6 +5599,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
         ordererRepairShop: statusLabel === "셀프"
           ? formatOrdererName(firstText(latestDispatch.customerName, latestDispatch.orderer, latestDispatch.orderedBy), latestDispatch.corporateVehicle)
           : formatDashboardOrdererShop(firstText(latestDispatch.orderer, latestDispatch.orderedBy, latestDispatch.customerName), latestDispatch.repairShop, latestDispatch.corporateVehicle),
+        authorLabel: auditAuthorLabel(latestDispatch),
         updatedAt: latestDispatch.updatedAt || latestDispatch.createdAt || vehicle.updatedAt,
       };
     }
@@ -5515,6 +5617,7 @@ function buildVehicleDashboardRows(vehicles: VehicleV2[], dispatches: DispatchV2
       fuelLevelText: vehicle.fuelDisplay || "",
       customerCarModel: "",
       ordererRepairShop: normalizeParkingLocation(vehicle.location || vehicle.activeSummary),
+      authorLabel: "-",
       updatedAt: vehicle.updatedAt,
     };
   });
@@ -5620,6 +5723,27 @@ function firstText(...values: unknown[]) {
 
 function normalizeSearchText(value: unknown) {
   return clean(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function auditAuthorLabel(item?: { createdByRole?: string; createdByName?: string; createdBy?: string } | null) {
+  if (!item) return "-";
+  const role = clean(item.createdByRole || legacyCreatedByRole(item.createdBy)).trim();
+  const name = clean(item.createdByName || legacyCreatedByName(item.createdBy)).trim();
+  if (!role && !name) return "-";
+  if (!name || name === role) return role || name || "-";
+  return `${role} ${name}`.trim();
+}
+
+function legacyCreatedByRole(value?: string) {
+  const text = clean(value);
+  if (["관리자", "실장", "직원"].includes(text)) return text;
+  return "";
+}
+
+function legacyCreatedByName(value?: string) {
+  const text = clean(value);
+  if (!text || text === "field" || ["관리자", "실장", "직원"].includes(text)) return "";
+  return text;
 }
 
 function formatOrdererShop(orderer: unknown, repairShop: unknown) {

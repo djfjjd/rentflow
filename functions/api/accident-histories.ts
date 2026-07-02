@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { requirePermission } from "./_permissions";
 
 type Env = {
@@ -35,6 +36,9 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
+    const actor = await getAuditActor(env.DB, auth.session);
+    fields.push("updated_by_id = ?", "updated_by_name = ?");
+    values.push(actor.id, actor.name);
     values.push(id);
     await env.DB.prepare(`UPDATE accident_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
@@ -52,8 +56,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const ah = await request.json() as any;
     const date = ah.date ?? ah.accidentDate;
     const vehicleNumber = ah.vehicleNumber ?? ah.plateNumber;
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "INSERT INTO accident_histories (id, date, vehicle_number, vehicle_id, plate_number, insurance_number, accident_date, accident_location, accident_type, accident_part, description, customer_name, customer_car_number, customer_car_model, insurance_company, repair_shop_id, repair_shop_name, repair_cost, claim_amount, photos, videos, documents, status, is_completed, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO accident_histories (id, date, vehicle_number, vehicle_id, plate_number, insurance_number, accident_date, accident_location, accident_type, accident_part, description, customer_name, customer_car_number, customer_car_model, insurance_company, repair_shop_id, repair_shop_name, repair_cost, claim_amount, photos, videos, documents, status, is_completed, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(ah.id),
       safeNullableText(date),
@@ -83,7 +88,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(ah.linkedReturnId),
       safeNullableText(ah.linkedSmartInboxItemId),
       safeText(ah.memo),
-      safeText(ah.createdBy || "field")
+      safeText(ah.createdBy || actor.name),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
 
     console.log("saved accident id", ah.id);
@@ -129,7 +139,7 @@ function mapHistory(row: any) {
     memo: row.memo,
     createdBy: row.created_by,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -179,5 +189,6 @@ async function ensureAccidentSchema(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "created_by", definition: "TEXT" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
 }

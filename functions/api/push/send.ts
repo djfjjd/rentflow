@@ -1,4 +1,6 @@
 import { ensureColumns, safeText } from "../_d1-utils";
+import { getAuditActor } from "../_audit";
+import { getApiSession } from "../_permissions";
 
 type Env = {
   DB: any;
@@ -7,6 +9,7 @@ type Env = {
   VAPID_PUBLIC_KEY?: string;
   NEXT_PUBLIC_VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  JWT_SECRET?: string;
 };
 
 const DEFAULT_PUSH_SERVER_URL = "https://push-server-sage.vercel.app/api/send";
@@ -31,12 +34,16 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const rows = directSubscription
       ? [{ id: "current-device", endpoint: directSubscription.endpoint, p256dh: directSubscription.keys.p256dh, auth: directSubscription.keys.auth, source: "request" }]
       : ((await env.DB.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions ORDER BY created_at DESC").all()).results || []).map((row: any) => ({ ...row, source: "db" }));
+    const actor = await getAuditActor(env.DB, await getApiSession(request, env));
+    const subtitle = pushSubtitle(actor);
+    const originalBody = safeText(body.body);
     const payloadObject = {
       title: safeText(body.title || "RentFlow 알림"),
-      body: safeText(body.body),
+      body: originalBody,
+      subtitle,
       url: safeText(body.url || "/app"),
       tag: safeText(body.tag),
-      data: body.data && typeof body.data === "object" ? body.data : {},
+      data: { ...(body.data && typeof body.data === "object" ? body.data : {}), message: originalBody, actor },
     };
     const vapid = {
       publicKey: safeText(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
@@ -183,7 +190,7 @@ async function sendViaNodePushServer(
   pushServerUrl: string,
   pushServerSecret: string,
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
-  payload: { title: string; body: string; url: string; tag: string; data: Record<string, unknown> },
+  payload: { title: string; body: string; subtitle?: string; url: string; tag: string; data: Record<string, unknown> },
   vapid: { publicKey: string; privateKey: string },
 ) {
   const targetUrl = pushServerUrl.endsWith("/send") ? pushServerUrl : `${pushServerUrl}/send`;
@@ -207,6 +214,13 @@ async function sendViaNodePushServer(
     body: text,
     error: safeText(parsed?.error || parsed?.message || (response.ok ? "" : response.statusText)),
   };
+}
+
+function pushSubtitle(actor: { role: string; name: string }) {
+  const role = safeText(actor.role || "직원");
+  const name = safeText(actor.name);
+  if (role === "직원") return `from 렌트플로우 (직원${name && name !== role ? ` ${name}` : ""})`;
+  return `from 렌트플로우 (${role})`;
 }
 
 function createPushServerError(result: Awaited<ReturnType<typeof sendViaNodePushServer>>) {

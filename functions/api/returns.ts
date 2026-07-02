@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { requirePermission } from "./_permissions";
 
 type Env = {
@@ -42,12 +43,14 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       ? await env.DB.prepare("SELECT * FROM dispatches WHERE id = ?").bind(dispatchId).first()
       : null;
     const snapshot = buildDispatchSnapshot(r, dispatchSnapshot);
+    const actor = await getAuditActor(env.DB, auth.session);
     const columns = [
       "id", "date", "time", "vehicle_number", "rental_car_number", "return_address", "arrival_address", "mileage",
       "fuel_level", "fuel_display", "fuel_level_text", "vehicle_color", "parking_zone", "notes", "memo", "status", "is_completed",
       "dispatch_id", "dispatch_date_snapshot", "dispatch_info_snapshot", "dispatch_fuel_snapshot", "dispatch_parking_location_snapshot",
       "dispatch_memo_snapshot", "orderer_snapshot", "repair_shop_snapshot", "customer_car_model_snapshot", "customer_phone_snapshot",
-      "car_model_color_snapshot", "status_snapshot", "is_corporate_vehicle_snapshot", "updated_at"
+      "car_model_color_snapshot", "status_snapshot", "is_corporate_vehicle_snapshot",
+      "created_by_id", "created_by_name", "created_by_role", "updated_by_id", "updated_by_name", "updated_at"
     ];
     const values = [
       safeText(r.id),
@@ -80,6 +83,11 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(snapshot.carModelColor),
       safeNullableText(snapshot.status),
       safeBoolInt(snapshot.isCorporateVehicle),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name,
       "CURRENT_TIMESTAMP"
     ];
     const placeholders = values.map((value) => value === "CURRENT_TIMESTAMP" ? "CURRENT_TIMESTAMP" : "?").join(", ");
@@ -110,6 +118,7 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return Response.json({ error: "id is required" }, { status: 400 });
     const updates = await request.json() as any;
+    const actor = await getAuditActor(env.DB, auth.session);
     const fields = [];
     const values = [];
     const vehicleNumber = updates.vehicleNumber ?? updates.rentalCarNumber;
@@ -143,6 +152,8 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
       values.push(safeBoolInt(updates.isCompleted ?? updates.is_completed));
     }
     if (fields.length === 0) return Response.json({ success: true });
+    fields.push("updated_by_id = ?", "updated_by_name = ?");
+    values.push(actor.id, actor.name);
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(id);
     await env.DB.prepare(`UPDATE returns SET ${fields.join(", ")} WHERE id = ?`).bind(...safeBindValues(values)).run();
@@ -222,7 +233,7 @@ function mapReturn(row: any) {
     status: row.status,
     isCompleted: Boolean(row.is_completed),
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -294,6 +305,7 @@ async function ensureReturnSchema(env: Env) {
     { name: "updated_at", definition: "DATETIME" },
     { name: "retention_archived_at", definition: "DATETIME" },
     { name: "retention_archived_reason", definition: "TEXT" },
+    ...auditColumns(),
   ]);
 }
 

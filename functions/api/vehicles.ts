@@ -1,8 +1,11 @@
 import { vehicles as seedVehicles } from "../../lib/erp-data";
 import { ensureColumns, safeBindValues, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
+import { getApiSession } from "./_permissions";
 
 type Env = {
   DB: any;
+  JWT_SECRET?: string;
 };
 
 export async function onRequestGet({ env }: { env: Env }) {
@@ -40,9 +43,10 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     
     // Get max sort_order
     const maxSortOrder = await env.DB.prepare("SELECT MAX(sort_order) as maxOrder FROM vehicles").first("maxOrder") || 0;
+    const actor = await getAuditActor(env.DB, await getApiSession(request, env));
     
     await env.DB.prepare(
-      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, company_type, location, status, sort_order, memo, registration_file_url, registration_drive_file_id, registration_file_name, registration_uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO vehicles (id, plate_number, model, color, fuel_type, fuel_level, fuel_display, mileage, purchase_date, company_type, location, status, sort_order, memo, registration_file_url, registration_drive_file_id, registration_file_name, registration_uploaded_at, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       safeText(vehicle.id),
       safeText(vehicle.plateNumber),
@@ -61,7 +65,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(vehicle.registrationFileUrl ?? vehicle.registration_file_url),
       safeNullableText(vehicle.registrationDriveFileId ?? vehicle.registration_drive_file_id),
       safeNullableText(vehicle.registrationFileName ?? vehicle.registration_file_name),
-      safeNullableText(vehicle.registrationUploadedAt ?? vehicle.registration_uploaded_at)
+      safeNullableText(vehicle.registrationUploadedAt ?? vehicle.registration_uploaded_at),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
 
     return Response.json({ success: true });
@@ -107,6 +116,9 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     
     if (fields.length === 0) return Response.json({ success: true });
     
+    const actor = await getAuditActor(env.DB, await getApiSession(request, env));
+    fields.push("updated_by_id = ?", "updated_by_name = ?");
+    values.push(actor.id, actor.name);
     fields.push("updated_at = CURRENT_TIMESTAMP");
     values.push(safeText(id || plateNumber));
     
@@ -164,7 +176,7 @@ function mapVehicle(row: any) {
     registrationUploadedAt: row.registration_uploaded_at,
     registration_uploaded_at: row.registration_uploaded_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -180,5 +192,6 @@ async function ensureVehicleSchema(env: Env) {
     { name: "registration_drive_file_id", definition: "TEXT" },
     { name: "registration_file_name", definition: "TEXT" },
     { name: "registration_uploaded_at", definition: "TEXT" },
+    ...auditColumns(),
   ]);
 }

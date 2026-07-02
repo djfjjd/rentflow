@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBoolInt, safeNullableText, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { requirePermission } from "./_permissions";
 
 type Env = {
@@ -14,8 +15,8 @@ export async function onRequestGet({ env }: { env: Env }) {
       env.DB.prepare("SELECT * FROM maintenance_histories ORDER BY created_at DESC").all(),
     ]);
     return Response.json({
-      accidents: (accidents.results || []).map((row: any) => ({ ...row, type: "accident" })),
-      maintenance: (maintenance.results || []).map((row: any) => ({ ...row, type: "maintenance" })),
+      accidents: (accidents.results || []).map((row: any) => ({ ...row, ...mapAuditFields(row), createdAt: row.created_at, type: "accident" })),
+      maintenance: (maintenance.results || []).map((row: any) => ({ ...row, ...mapAuditFields(row), createdAt: row.created_at, type: "maintenance" })),
     }, { headers: noStoreHeaders() });
   } catch (error) {
     console.error("incident list failed", { error: error instanceof Error ? error.message : String(error) });
@@ -34,31 +35,42 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
     const date = safeNullableText(body.date || body.accidentDate || body.foundDate);
     const vehicleNumber = safeText(body.vehicleNumber || body.plateNumber);
     const memo = safeText(body.memo || body.notes || body.description);
+    const actor = await getAuditActor(env.DB, auth.session);
 
     if (kind === "maintenance" || kind === "정비") {
       await env.DB.prepare(
-        "INSERT INTO maintenance_histories (id, date, vehicle_number, maintenance_content, memo, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+        "INSERT INTO maintenance_histories (id, date, vehicle_number, maintenance_content, memo, is_completed, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
       ).bind(
         id,
         date,
         vehicleNumber,
         safeText(body.maintenanceContent || body.content || body.title),
         memo,
-        safeBoolInt(body.isCompleted)
+        safeBoolInt(body.isCompleted),
+        actor.id,
+        actor.name,
+        actor.role,
+        actor.id,
+        actor.name
       ).run();
       console.log("saved maintenance id", id);
       return Response.json({ ok: true, success: true, id, type: "maintenance" }, { headers: noStoreHeaders() });
     }
 
     await env.DB.prepare(
-      "INSERT INTO accident_histories (id, date, vehicle_number, accident_part, memo, is_completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO accident_histories (id, date, vehicle_number, accident_part, memo, is_completed, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
       id,
       date,
       vehicleNumber,
       safeText(body.accidentPart || body.content),
       memo,
-      safeBoolInt(body.isCompleted)
+      safeBoolInt(body.isCompleted),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
     console.log("saved accident id", id);
     return Response.json({ ok: true, success: true, id, type: "accident" }, { headers: noStoreHeaders() });
@@ -100,6 +112,7 @@ async function ensureIncidentSchemas(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
   await ensureColumns(env.DB, "maintenance_histories", [
     { name: "date", definition: "TEXT" },
@@ -108,5 +121,6 @@ async function ensureIncidentSchemas(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
 }

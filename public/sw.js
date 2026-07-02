@@ -84,7 +84,7 @@ self.addEventListener("push", function (event) {
   const tag = data.tag || "rentflow-notification";
   const clickUrl = data.url || defaultNotificationUrl(tag);
   const options = {
-    body: data.body || "새 알림이 있습니다.",
+    body: data.subtitle || data.body || "새 알림이 있습니다.",
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
     renotify: true,

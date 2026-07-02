@@ -1,5 +1,6 @@
 import { noStoreHeaders, safeText } from "../_d1-utils";
 import { activePhotoRetentionWhere, cleanupExpiredPhotoCaptures, isActivePhotoCaptureObject } from "../_photo-retention";
+import { getApiSession, isStaff } from "../_permissions";
 
 type Env = {
   DB?: any;
@@ -7,6 +8,7 @@ type Env = {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
+  JWT_SECRET?: string;
 };
 
 type UploadedFileRow = {
@@ -56,6 +58,10 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
     }
 
     if (driveFileId) {
+      const session = await getApiSession(request, env);
+      if (!session || isStaff(session)) {
+        return new Response("Forbidden", { status: 403, headers: noStoreHeaders() });
+      }
       return await downloadDriveFile(env, driveFileId, filename, contentType);
     }
 

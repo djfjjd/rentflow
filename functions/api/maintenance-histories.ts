@@ -1,4 +1,5 @@
 import { ensureColumns, noStoreHeaders, safeBindValues, safeBoolInt, safeJson, safeNullableText, safeNumber, safeText } from "./_d1-utils";
+import { auditColumns, getAuditActor, mapAuditFields } from "./_audit";
 import { requirePermission } from "./_permissions";
 
 type Env = {
@@ -35,6 +36,9 @@ export async function onRequestPatch({ request, env }: { request: Request, env: 
     }
     if (updates.status !== undefined) { fields.push("status = ?"); values.push(safeText(updates.status)); }
     if (fields.length === 0) return Response.json({ success: true }, { headers: noStoreHeaders() });
+    const actor = await getAuditActor(env.DB, auth.session);
+    fields.push("updated_by_id = ?", "updated_by_name = ?");
+    values.push(actor.id, actor.name);
     values.push(id);
     await env.DB.prepare(`UPDATE maintenance_histories SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...safeBindValues(values)).run();
     return Response.json({ ok: true, success: true, id: safeText(id) }, { headers: noStoreHeaders() });
@@ -53,8 +57,9 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
     const date = mh.date ?? mh.foundDate;
     const vehicleNumber = mh.vehicleNumber ?? mh.plateNumber;
     const content = mh.maintenanceContent ?? mh.title ?? mh.description ?? mh.maintenanceType;
+    const actor = await getAuditActor(env.DB, auth.session);
     await env.DB.prepare(
-      "INSERT INTO maintenance_histories (id, date, vehicle_number, maintenance_content, vehicle_id, plate_number, maintenance_type, title, description, repair_shop_id, repair_shop_name, found_date, scheduled_date, completed_date, mileage, cost, priority, status, is_completed, photos, videos, documents, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+      "INSERT INTO maintenance_histories (id, date, vehicle_number, maintenance_content, vehicle_id, plate_number, maintenance_type, title, description, repair_shop_id, repair_shop_name, found_date, scheduled_date, completed_date, mileage, cost, priority, status, is_completed, photos, videos, documents, linked_dispatch_id, linked_return_id, linked_smart_inbox_item_id, memo, created_by, created_by_id, created_by_name, created_by_role, updated_by_id, updated_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
     ).bind(
       safeText(mh.id),
       safeNullableText(date),
@@ -82,7 +87,12 @@ export async function onRequestPost({ request, env }: { request: Request, env: E
       safeNullableText(mh.linkedReturnId),
       safeNullableText(mh.linkedSmartInboxItemId),
       safeText(mh.memo),
-      safeText(mh.createdBy || "field")
+      safeText(mh.createdBy || actor.name),
+      actor.id,
+      actor.name,
+      actor.role,
+      actor.id,
+      actor.name
     ).run();
 
     console.log("saved maintenance id", mh.id);
@@ -126,7 +136,7 @@ function mapHistory(row: any) {
     memo: row.memo,
     createdBy: row.created_by,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    ...mapAuditFields(row)
   };
 }
 
@@ -174,5 +184,6 @@ async function ensureMaintenanceHistorySchema(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "created_by", definition: "TEXT" },
     { name: "updated_at", definition: "DATETIME" },
+    ...auditColumns(),
   ]);
 }
