@@ -130,6 +130,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const url = new URL(request.url);
       const id = url.searchParams.get("id");
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+      await snapshotDeviceLoginLogs(env.DB, id);
       await env.DB.prepare("DELETE FROM sessions WHERE device_id = ?").bind(safeText(id)).run();
       await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(safeText(id)).run();
       await writeAuditLog(env.DB, { event: "device_deleted", actorEmail: auth.session.email, targetId: id });
@@ -151,6 +152,28 @@ async function getDevice(db: any, id: string) {
      WHERE devices.id = ?`,
   ).bind(safeText(id)).first();
   return row ? mapDevice(row) : null;
+}
+
+async function snapshotDeviceLoginLogs(db: any, id: string) {
+  const device = await db.prepare("SELECT id, device_id, device_name, device_alias, device_model, os, browser FROM devices WHERE id = ?").bind(safeText(id)).first();
+  if (!device?.id) return;
+  await db.prepare(
+    `UPDATE login_logs
+     SET device_name = COALESCE(NULLIF(device_name, ''), ?),
+         device_alias = COALESCE(NULLIF(device_alias, ''), ?),
+         device_model = COALESCE(NULLIF(device_model, ''), ?),
+         os = COALESCE(NULLIF(os, ''), ?),
+         browser = COALESCE(NULLIF(browser, ''), ?)
+     WHERE device_id = ? OR device_id = ?`,
+  ).bind(
+    device.device_name || "",
+    device.device_alias || "",
+    device.device_model || "",
+    device.os || "",
+    device.browser || "",
+    device.id,
+    device.device_id || "",
+  ).run();
 }
 
 function normalizeDeviceStatus(value: unknown) {

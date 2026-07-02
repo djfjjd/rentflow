@@ -234,15 +234,23 @@ async function recordLoginLog(
   try {
     if (!env.DB) return;
     await ensureStaffDeviceSchema(env.DB);
+    const device = input.deviceId ? await env.DB.prepare(
+      "SELECT device_name, device_alias, device_model, os, browser FROM devices WHERE device_id = ? OR id = ? LIMIT 1",
+    ).bind(safeText(input.deviceId), safeText(input.deviceId)).first() : null;
     await env.DB.prepare(
-      `INSERT INTO login_logs (id, email, login_id, role, device_id, ip, user_agent, status, message, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO login_logs (id, email, login_id, role, device_id, device_name, device_alias, device_model, os, browser, ip, user_agent, status, message, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       crypto.randomUUID(),
       input.email,
       input.loginId || "",
       input.role || "",
       input.deviceId || "",
+      device?.device_name || "",
+      device?.device_alias || "",
+      device?.device_model || "",
+      device?.os || "",
+      device?.browser || "",
       request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "",
       request.headers.get("User-Agent") || "",
       input.status,

@@ -190,6 +190,11 @@ export async function ensureStaffDeviceSchema(db: any) {
       login_id TEXT,
       role TEXT,
       device_id TEXT,
+      device_name TEXT,
+      device_alias TEXT,
+      device_model TEXT,
+      os TEXT,
+      browser TEXT,
       ip TEXT,
       user_agent TEXT,
       status TEXT NOT NULL,
@@ -219,6 +224,13 @@ export async function ensureStaffDeviceSchema(db: any) {
   ]);
   await ensureColumns(db, "sessions", [
     { name: "revoked_at", definition: "TEXT" },
+  ]);
+  await ensureColumns(db, "login_logs", [
+    { name: "device_name", definition: "TEXT" },
+    { name: "device_alias", definition: "TEXT" },
+    { name: "device_model", definition: "TEXT" },
+    { name: "os", definition: "TEXT" },
+    { name: "browser", definition: "TEXT" },
   ]);
 }
 
@@ -251,8 +263,34 @@ async function revokeAndDeleteUserDevices(db: any, id: string, now: string) {
      SET status = 'revoked', revoked_at = ?
      WHERE status = 'active' AND user_id = ?`,
   ).bind(now, userId).run();
+  await snapshotUserDeviceLoginLogs(db, userId);
   await db.prepare("DELETE FROM sessions WHERE device_id IN (SELECT id FROM devices WHERE user_id = ?)").bind(userId).run();
   await db.prepare("DELETE FROM devices WHERE user_id = ?").bind(userId).run();
+}
+
+async function snapshotUserDeviceLoginLogs(db: any, userId: string) {
+  const { results } = await db.prepare(
+    "SELECT id, device_id, device_name, device_alias, device_model, os, browser FROM devices WHERE user_id = ?",
+  ).bind(userId).all();
+  for (const device of results || []) {
+    await db.prepare(
+      `UPDATE login_logs
+       SET device_name = COALESCE(NULLIF(device_name, ''), ?),
+           device_alias = COALESCE(NULLIF(device_alias, ''), ?),
+           device_model = COALESCE(NULLIF(device_model, ''), ?),
+           os = COALESCE(NULLIF(os, ''), ?),
+           browser = COALESCE(NULLIF(browser, ''), ?)
+       WHERE device_id = ? OR device_id = ?`,
+    ).bind(
+      device.device_name || "",
+      device.device_alias || "",
+      device.device_model || "",
+      device.os || "",
+      device.browser || "",
+      device.id,
+      device.device_id || "",
+    ).run();
+  }
 }
 
 async function hashPassword(password: string) {
