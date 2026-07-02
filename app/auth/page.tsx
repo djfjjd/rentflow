@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+type AccountType = "developer" | "admin" | "manager" | "staff";
+
 export default function AuthPage() {
   return (
     <Suspense fallback={<AuthShell />}>
@@ -17,7 +19,8 @@ function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
-  const [accountType, setAccountType] = useState<"developer" | "admin" | "manager" | "staff">("admin");
+  const [accountType, setAccountType] = useState<AccountType>("admin");
+  const [developerLoginVisible, setDeveloperLoginVisible] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -25,6 +28,15 @@ function AuthForm() {
 
   useEffect(() => {
     let cancelled = false;
+    fetch("/api/auth/options", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ accounts?: { developer?: boolean } }> : null)
+      .then((data) => {
+        if (cancelled) return;
+        setDeveloperLoginVisible(Boolean(data?.accounts?.developer));
+      })
+      .catch(() => {
+        if (!cancelled) setDeveloperLoginVisible(true);
+      });
     fetch("/api/auth/trusted", { method: "POST" })
       .then(async (response) => {
         const data = (await response.json().catch(() => ({}))) as { user?: { role?: string }; redirectTo?: string; desktopApproved?: boolean; message?: string };
@@ -83,8 +95,8 @@ function AuthForm() {
         <form className="grid gap-3" onSubmit={login}>
           <label className="label">
             역할 선택
-            <select className="field" value={accountType} onChange={(event) => setAccountType(event.target.value as "developer" | "admin" | "manager" | "staff")}>
-              <option value="developer">개발자</option>
+            <select className="field" value={accountType} onChange={(event) => setAccountType(event.target.value as AccountType)}>
+              {developerLoginVisible ? <option value="developer">개발자</option> : null}
               <option value="admin">관리자</option>
               <option value="manager">실장님</option>
               <option value="staff">직원</option>

@@ -228,14 +228,6 @@ export function applyColumnMode(matrix: PermissionPresetMatrix, column: Permissi
   visibleMatrixSubjects.forEach((subject) => {
     next[column][subject.key] = level;
   });
-  return protectDeveloperMinimums(next);
-}
-
-export function protectDeveloperMinimums(matrix: PermissionPresetMatrix): PermissionPresetMatrix {
-  const next = cloneMatrix(matrix);
-  (["settings.view", "roles.update", "system.settings"] as MatrixPermissionKey[]).forEach((key) => {
-    next.developer[key] = "write";
-  });
   return next;
 }
 
@@ -264,7 +256,7 @@ export async function getPermissionPresetMatrix(db: any): Promise<PermissionPres
 export async function savePermissionPresetMatrix(db: any, matrix: PermissionPresetMatrix) {
   await ensurePermissionPresetSchema(db);
   const now = new Date().toISOString();
-  const normalized = protectDeveloperMinimums(normalizePermissionPresetMatrix(matrix));
+  const normalized = normalizePermissionPresetMatrix(matrix);
   await db.prepare(
     `INSERT INTO position_permission_presets (id, matrix_json, created_at, updated_at)
      VALUES (?, ?, ?, ?)
@@ -284,7 +276,17 @@ export function normalizePermissionPresetMatrix(value: unknown): PermissionPrese
       }
     });
   });
-  return protectDeveloperMinimums(next);
+  return next;
+}
+
+export function isPermissionColumnFullyDisabled(matrix: PermissionPresetMatrix, column: PermissionColumn) {
+  return visibleMatrixSubjects.every((subject) => getPermissionLevel(matrix, column, subject.key) === "none");
+}
+
+export async function isDeveloperLoginEnabled(db: any) {
+  if (!db) return true;
+  const matrix = await getPermissionPresetMatrix(db);
+  return !isPermissionColumnFullyDisabled(matrix, "developer");
 }
 
 export function permissionColumnForSession(session: Pick<AuthSession, "role" | "isDeveloper">): PermissionColumn {

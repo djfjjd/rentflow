@@ -10,7 +10,6 @@ import {
   defaultPermissionPresetMatrix,
   modeForColumn,
   permissionColumns,
-  protectDeveloperMinimums,
   visibleMatrixSubjects,
   type ColumnMode,
   type PermissionColumn,
@@ -62,7 +61,7 @@ export function PermissionMatrix() {
       .then((response) => response.ok ? response.json() as Promise<{ matrix?: PermissionPresetMatrix }> : null)
       .then((data) => {
         if (!data?.matrix) return;
-        const next = protectDeveloperMinimums(data.matrix);
+        const next = data.matrix;
         setSaved(cloneMatrix(next));
         setMatrix(cloneMatrix(next));
       })
@@ -74,7 +73,7 @@ export function PermissionMatrix() {
     setMatrix((current) => {
       const next = cloneMatrix(current);
       next[column][key] = cyclePermissionLevel(next[column][key]);
-      return protectDeveloperMinimums(next);
+      return next;
     });
     setCustomColumns((current) => ({ ...current, [column]: true }));
     setMessage("");
@@ -88,7 +87,7 @@ export function PermissionMatrix() {
   }
 
   async function save() {
-    const next = protectDeveloperMinimums(matrix);
+    const next = matrix;
     const response = await fetch("/api/admin/permission-presets", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -99,7 +98,7 @@ export function PermissionMatrix() {
       return;
     }
     const data = (await response.json().catch(() => ({}))) as { matrix?: PermissionPresetMatrix };
-    const savedMatrix = protectDeveloperMinimums(data.matrix || next);
+    const savedMatrix = data.matrix || next;
     setSaved(cloneMatrix(savedMatrix));
     setMatrix(cloneMatrix(savedMatrix));
     setMessage("권한이 저장되었습니다.");
