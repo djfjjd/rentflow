@@ -130,8 +130,7 @@ export const onRequest: PagesFunction<AdminApiEnv> = async ({ request, env }) =>
       const url = new URL(request.url);
       const id = url.searchParams.get("id");
       if (!id) return Response.json({ error: "id is required" }, { status: 400 });
-      const now = new Date().toISOString();
-      await env.DB.prepare("UPDATE sessions SET status = 'revoked', revoked_at = ? WHERE device_id = ? AND status = 'active'").bind(now, safeText(id)).run();
+      await env.DB.prepare("DELETE FROM sessions WHERE device_id = ?").bind(safeText(id)).run();
       await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(safeText(id)).run();
       await writeAuditLog(env.DB, { event: "device_deleted", actorEmail: auth.session.email, targetId: id });
       return Response.json({ success: true });

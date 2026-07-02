@@ -249,9 +249,9 @@ async function revokeAndDeleteUserDevices(db: any, id: string, now: string) {
   await db.prepare(
     `UPDATE sessions
      SET status = 'revoked', revoked_at = ?
-     WHERE status = 'active'
-       AND device_id IN (SELECT id FROM devices WHERE user_id = ?)`,
+     WHERE status = 'active' AND user_id = ?`,
   ).bind(now, userId).run();
+  await db.prepare("DELETE FROM sessions WHERE device_id IN (SELECT id FROM devices WHERE user_id = ?)").bind(userId).run();
   await db.prepare("DELETE FROM devices WHERE user_id = ?").bind(userId).run();
 }
 
