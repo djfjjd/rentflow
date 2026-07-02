@@ -4712,7 +4712,6 @@ function PhotoUploadButton({ recordType, recordId, vehicleNumber }: { recordType
       const result = await uploadSelectedFiles(files, { recordType, recordId, vehicleNumber }, setProgress);
       setProgress({ completed: result.success, total: files.length, failed: result.failed, label, done: true });
       setStatusTone(result.failed ? "error" : "success");
-      setTimeout(() => setProgress(null), 3000);
     } catch (error) {
       setProgress({ completed: 0, total: files.length, failed: files.length, label, done: true });
       setStatusTone("error");
