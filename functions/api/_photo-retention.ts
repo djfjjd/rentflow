@@ -25,8 +25,11 @@ const PHOTO_CAPTURE_WHERE = `
 export function activePhotoRetentionWhere(alias = "") {
   const prefix = alias ? `${alias}.` : "";
   return `(
-    NOT ${PHOTO_CAPTURE_WHERE.replaceAll("mime_type", `${prefix}mime_type`).replaceAll("file_type", `${prefix}file_type`).replaceAll("file_name", `${prefix}file_name`).replaceAll("record_type", `${prefix}record_type`)}
-    OR datetime(COALESCE(${prefix}uploaded_at, ${prefix}created_at)) >= datetime('now', '-${PHOTO_CAPTURE_RETENTION_DAYS} days')
+    COALESCE(${prefix}archive_status, '') != 'deleted'
+    AND (
+      NOT ${PHOTO_CAPTURE_WHERE.replaceAll("mime_type", `${prefix}mime_type`).replaceAll("file_type", `${prefix}file_type`).replaceAll("file_name", `${prefix}file_name`).replaceAll("record_type", `${prefix}record_type`)}
+      OR datetime(COALESCE(${prefix}uploaded_at, ${prefix}created_at)) >= datetime('now', '-${PHOTO_CAPTURE_RETENTION_DAYS} days')
+    )
   )`;
 }
 

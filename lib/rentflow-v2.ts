@@ -1,4 +1,14 @@
-export type VehicleV2 = {
+export type AuditFieldsV2 = {
+  createdById?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  updatedById?: string;
+  updatedByName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type VehicleV2 = AuditFieldsV2 & {
   id: string;
   plateNumber: string;
   model: string;
@@ -22,10 +32,9 @@ export type VehicleV2 = {
   registration_file_name?: string;
   registrationUploadedAt?: string;
   registration_uploaded_at?: string;
-  updatedAt?: string;
 };
 
-export type ReservationV2 = {
+export type ReservationV2 = AuditFieldsV2 & {
   id: string;
   date: string;
   startDate?: string;
@@ -43,7 +52,6 @@ export type ReservationV2 = {
   orderPerson?: string;
   memo?: string;
   status?: string;
-  createdAt?: string;
 };
 
 export type UploadedFileV2 = {
@@ -53,10 +61,22 @@ export type UploadedFileV2 = {
   r2Key: string;
   thumbnailUrl?: string;
   thumbnailKey?: string;
+  r2ThumbnailKey?: string;
+  r2_thumbnail_key?: string;
   thumbnail_url?: string;
   thumbnail_key?: string;
   driveUrl?: string;
   driveFileId?: string;
+  googleDriveFileId?: string;
+  google_drive_file_id?: string;
+  googleDriveViewUrl?: string;
+  google_drive_view_url?: string;
+  googleDriveDownloadUrl?: string;
+  google_drive_download_url?: string;
+  originalFileName?: string;
+  original_file_name?: string;
+  originalFileSize?: number;
+  original_file_size?: number;
   archivedAt?: string;
   archiveStatus?: string;
   archived_at?: string;
@@ -93,7 +113,7 @@ export type PartnerAddressV2 = {
   updatedAt?: string;
 };
 
-export type DispatchV2 = {
+export type DispatchV2 = AuditFieldsV2 & {
   id: string;
   dispatchId?: string;
   dispatch_id?: string;
@@ -129,11 +149,9 @@ export type DispatchV2 = {
   memo?: string;
   notes?: string;
   status?: string;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
-export type ReturnV2 = {
+export type ReturnV2 = AuditFieldsV2 & {
   id: string;
   dispatchId?: string;
   dispatch_id?: string;
@@ -169,11 +187,9 @@ export type ReturnV2 = {
   notes?: string;
   status?: string;
   isCompleted?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
-export type IncidentRecordV2 = {
+export type IncidentRecordV2 = AuditFieldsV2 & {
   id: string;
   plateNumber: string;
   accidentPart?: string;
@@ -187,10 +203,9 @@ export type IncidentRecordV2 = {
   isCompleted?: boolean;
   repaired?: boolean;
   completedAt?: string;
-  createdAt?: string;
 };
 
-export type LostItemV2 = {
+export type LostItemV2 = AuditFieldsV2 & {
   id: string;
   vehicleNumber?: string;
   customerName?: string;
@@ -205,7 +220,6 @@ export type LostItemV2 = {
   isResolved?: boolean;
   isCompleted?: boolean;
   resolvedAt?: string;
-  createdAt?: string;
 };
 
 export const fuelTypes = ["가솔린", "디젤", "LPG"];

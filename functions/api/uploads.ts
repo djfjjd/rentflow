@@ -5,6 +5,10 @@ import { getApiSession, isStaff, requirePermission } from "./_permissions";
 type UploadEnv = {
   DB?: any;
   RENTFLOW_UPLOADS?: any; // R2Bucket
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_DRIVE_FOLDER_ID?: string;
   JWT_SECRET?: string;
 };
 
@@ -19,11 +23,17 @@ type FileRecord = {
   r2Key: string;
   thumbnailUrl?: string;
   thumbnailKey?: string;
+  r2ThumbnailKey?: string;
   driveBackupStatus: "success" | "failed" | "none";
   driveFileId?: string;
   driveUrl?: string;
+  googleDriveFileId?: string;
+  googleDriveViewUrl?: string;
+  googleDriveDownloadUrl?: string;
   driveFolderId?: string;
   driveFolderUrl?: string;
+  originalFileName?: string;
+  originalFileSize?: number;
   vehicleNumber: string;
   insuranceNumber?: string;
   customerName?: string;
@@ -38,6 +48,8 @@ type FileRecord = {
   uploadedAt: string;
 };
 
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
 export async function onRequestPost({ request, env }: UploadContext) {
   const auth = await requirePermission(request, env, "photos.upload");
   if (auth.response) return auth.response;
@@ -49,38 +61,48 @@ export async function onRequestPost({ request, env }: UploadContext) {
   if (!(file instanceof File)) {
     return Response.json({ stored: false, error: "file is required" }, { status: 400, headers: noStoreHeaders() });
   }
+  if (!(thumbnail instanceof File)) {
+    return Response.json({ stored: false, error: "thumbnail is required" }, { status: 400, headers: noStoreHeaders() });
+  }
+  if (!env.RENTFLOW_UPLOADS) {
+    return Response.json({ stored: false, error: "RENTFLOW_UPLOADS is not configured" }, { status: 500, headers: noStoreHeaders() });
+  }
+  const rootFolderId = safeText(env.GOOGLE_DRIVE_FOLDER_ID).trim();
+  if (!rootFolderId) {
+    return Response.json({ stored: false, error: "GOOGLE_DRIVE_FOLDER_ID is not configured" }, { status: 500, headers: noStoreHeaders() });
+  }
 
   const uploadedAt = new Date().toISOString();
   const fileName = String(metadata.fileName || metadata.storedFileName || file.name);
-  
-  // 1. Primary Storage: Cloudflare R2
-  let r2Key = "";
-  let r2Url = "";
-  let thumbnailKey = "";
-  let thumbnailUrl = "";
-  
-  if (env.RENTFLOW_UPLOADS) {
-    const timestamp = Date.now();
-    r2Key = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${fileName}`;
-    await env.RENTFLOW_UPLOADS.put(r2Key, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type || "application/octet-stream", cacheControl: "public,max-age=31536000,immutable" },
-    });
-    // In production, this would be a custom domain or a proxy route
-    r2Url = `/api/uploads?key=${encodeURIComponent(r2Key)}`;
+  const timestamp = Date.now();
+  const recordType = safeText(metadata.recordType || "unknown");
+  const recordId = safeText(metadata.recordId || "legacy");
+  const thumbnailKey = `${safePathSegment(String(metadata.vehicleNumber || "unknown"))}/${thumbnailFileName(recordType, recordId, timestamp)}`;
+  await env.RENTFLOW_UPLOADS.put(thumbnailKey, await thumbnail.arrayBuffer(), {
+    httpMetadata: { contentType: thumbnail.type || "image/jpeg", cacheControl: "public,max-age=31536000,immutable" },
+  });
+  const thumbnailUrl = `/api/uploads?key=${encodeURIComponent(thumbnailKey)}`;
 
-    if (thumbnail instanceof File) {
-      thumbnailKey = `${metadata.vehicleNumber || "unknown"}/${timestamp}_${thumbnailFileName(fileName)}`;
-      await env.RENTFLOW_UPLOADS.put(thumbnailKey, await thumbnail.arrayBuffer(), {
-        httpMetadata: { contentType: "image/webp", cacheControl: "public,max-age=31536000,immutable" },
-      });
-      thumbnailUrl = `/api/uploads?key=${encodeURIComponent(thumbnailKey)}`;
-    }
-  }
+  const accessToken = await getGoogleAccessToken(env);
+  const photoRootId = await getOrCreateFolder(accessToken, rootFolderId, "사진원본");
+  const monthFolderId = await getOrCreateFolder(accessToken, photoRootId, uploadedAt.slice(0, 7));
+  const caseFolderId = await getOrCreateFolder(accessToken, monthFolderId, sanitizeDriveName(`${recordType}_${recordId}_${metadata.vehicleNumber || "unknown"}`));
+  const driveFile = await uploadDriveFile(accessToken, caseFolderId, buildOriginalDriveFileName(file, recordType, recordId, timestamp), file);
+  const driveView = driveFile.webViewLink || driveViewUrl(driveFile.id);
 
-  let driveBackupStatus: "success" | "failed" | "none" = "none";
-  let driveResult: Record<string, unknown> = {};
-
-  const record = toFileRecord(r2Key, r2Url, thumbnailKey, thumbnailUrl, driveBackupStatus, driveResult, metadata);
+  const record = toFileRecord(thumbnailKey, thumbnailUrl, thumbnailKey, thumbnailUrl, "success", {
+    driveFileId: driveFile.id,
+    driveUrl: driveView,
+    googleDriveFileId: driveFile.id,
+    googleDriveViewUrl: driveView,
+    googleDriveDownloadUrl: driveDownloadUrl(driveFile.id),
+    driveFolderId: caseFolderId,
+    driveFolderUrl: driveFolderUrl(caseFolderId),
+    fileName,
+    originalFileName: file.name,
+    originalFileSize: file.size,
+    uploadedAt,
+  }, metadata);
 
   return Response.json({
     stored: true,
@@ -179,10 +201,18 @@ function mapUploadedFile(row: any, includeDriveFields: boolean) {
     thumbnailUrl: row.thumbnail_url,
     thumbnail_key: row.thumbnail_key,
     thumbnailKey: row.thumbnail_key,
+    r2_thumbnail_key: row.r2_thumbnail_key || row.thumbnail_key || row.r2_key,
+    r2ThumbnailKey: row.r2_thumbnail_key || row.thumbnail_key || row.r2_key,
     drive_url: includeDriveFields ? row.drive_url : null,
     driveUrl: includeDriveFields ? row.drive_url : null,
     drive_file_id: includeDriveFields ? row.drive_file_id : null,
     driveFileId: includeDriveFields ? row.drive_file_id : null,
+    google_drive_file_id: includeDriveFields ? row.google_drive_file_id || row.drive_file_id : null,
+    googleDriveFileId: includeDriveFields ? row.google_drive_file_id || row.drive_file_id : null,
+    google_drive_view_url: includeDriveFields ? row.google_drive_view_url || row.drive_url : null,
+    googleDriveViewUrl: includeDriveFields ? row.google_drive_view_url || row.drive_url : null,
+    google_drive_download_url: includeDriveFields ? row.google_drive_download_url : null,
+    googleDriveDownloadUrl: includeDriveFields ? row.google_drive_download_url : null,
     drive_folder_id: includeDriveFields ? row.drive_folder_id : null,
     driveFolderId: includeDriveFields ? row.drive_folder_id : null,
     drive_folder_url: includeDriveFields ? row.drive_folder_url : null,
@@ -203,6 +233,10 @@ function mapUploadedFile(row: any, includeDriveFields: boolean) {
     folderKey: row.folder_key,
     vehicle_number: row.vehicle_number,
     vehicleNumber: row.vehicle_number,
+    original_file_name: row.original_file_name || row.file_name,
+    originalFileName: row.original_file_name || row.file_name,
+    original_file_size: row.original_file_size,
+    originalFileSize: row.original_file_size,
     created_at: row.created_at,
     createdAt: row.created_at,
     uploaded_at: row.uploaded_at,
@@ -251,10 +285,16 @@ async function ensureUploadedFilesSchema(env: UploadContext["env"]) {
     { name: "created_at", definition: "DATETIME" },
     { name: "thumbnail_url", definition: "TEXT" },
     { name: "thumbnail_key", definition: "TEXT" },
+    { name: "r2_thumbnail_key", definition: "TEXT" },
     { name: "drive_file_id", definition: "TEXT" },
     { name: "drive_folder_id", definition: "TEXT" },
     { name: "drive_folder_url", definition: "TEXT" },
     { name: "drive_url", definition: "TEXT" },
+    { name: "google_drive_file_id", definition: "TEXT" },
+    { name: "google_drive_view_url", definition: "TEXT" },
+    { name: "google_drive_download_url", definition: "TEXT" },
+    { name: "original_file_name", definition: "TEXT" },
+    { name: "original_file_size", definition: "INTEGER" },
     { name: "archived_at", definition: "DATETIME" },
     { name: "archive_status", definition: "TEXT DEFAULT 'none'" },
   ]);
@@ -311,10 +351,27 @@ export async function onRequestDelete({ request, env }: UploadContext) {
   const auth = await requirePermission(request, env, "photos.delete");
   if (auth.response) return auth.response;
   const url = new URL(request.url);
+  const id = url.searchParams.get("id");
   const key = url.searchParams.get("key");
+  if (env.DB) await ensureUploadedFilesSchema(env);
+  const row = env.DB && (id || key) ? await env.DB.prepare(
+    `SELECT * FROM uploaded_files WHERE ${id ? "id = ?" : "r2_key = ? OR thumbnail_key = ? OR r2_thumbnail_key = ?"} LIMIT 1`
+  ).bind(...(id ? [safeText(id)] : [safeText(key), safeText(key), safeText(key)])).first() : null;
+  const keys = new Set([key, row?.r2_key, row?.thumbnail_key, row?.r2_thumbnail_key].map((value) => safeText(value)).filter(Boolean));
 
-  if (key && env.RENTFLOW_UPLOADS) {
-    await env.RENTFLOW_UPLOADS.delete(key);
+  if (env.RENTFLOW_UPLOADS) {
+    for (const itemKey of keys) {
+      await env.RENTFLOW_UPLOADS.delete(itemKey);
+    }
+  }
+
+  const driveFileId = safeText(row?.google_drive_file_id || row?.drive_file_id);
+  if (driveFileId) {
+    await trashDriveFile(env, driveFileId);
+  }
+
+  if (env.DB && row?.id) {
+    await env.DB.prepare("UPDATE uploaded_files SET archive_status = 'deleted', archived_at = CURRENT_TIMESTAMP WHERE id = ?").bind(String(row.id)).run();
   }
 
   return Response.json({ deleted: true }, { headers: noStoreHeaders() });
@@ -338,11 +395,17 @@ function toFileRecord(
     r2Url: r2Url || String(driveResult.r2Url || ""),
     thumbnailKey: thumbnailKey || String(driveResult.thumbnailKey || fallback.thumbnailKey || ""),
     thumbnailUrl: thumbnailUrl || String(driveResult.thumbnailUrl || fallback.thumbnailUrl || ""),
+    r2ThumbnailKey: thumbnailKey || String(driveResult.r2ThumbnailKey || driveResult.thumbnailKey || fallback.thumbnailKey || ""),
     driveBackupStatus: driveBackupStatus === "success" || driveFileId ? "success" : driveBackupStatus,
     driveFileId,
     driveUrl: String(driveResult.driveUrl || driveResult.webViewLink || (driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : "")),
+    googleDriveFileId: String(driveResult.googleDriveFileId || driveFileId),
+    googleDriveViewUrl: String(driveResult.googleDriveViewUrl || driveResult.driveUrl || (driveFileId ? driveViewUrl(driveFileId) : "")),
+    googleDriveDownloadUrl: String(driveResult.googleDriveDownloadUrl || (driveFileId ? driveDownloadUrl(driveFileId) : "")),
     driveFolderId,
     driveFolderUrl: String(driveResult.driveFolderUrl || driveResult.folderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : "")),
+    originalFileName: String(driveResult.originalFileName || fallback.originalFileName || fallback.fileName || ""),
+    originalFileSize: Number(driveResult.originalFileSize || fallback.originalFileSize || 0),
     vehicleNumber: String(driveResult.vehicleNumber || fallback.vehicleNumber || ""),
     insuranceNumber: String(driveResult.insuranceNumber || driveResult.claimNumber || fallback.insuranceNumber || ""),
     customerName: String(driveResult.customerName || fallback.customerName || ""),
@@ -358,10 +421,166 @@ function toFileRecord(
   };
 }
 
-function thumbnailFileName(fileName: string) {
-  const dotIndex = fileName.lastIndexOf(".");
-  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-  return `${baseName}_thumb.webp`;
+function thumbnailFileName(recordType: string, recordId: string, timestamp: number) {
+  return `thumbnail_${safePathSegment(recordType)}_${safePathSegment(recordId)}_${timestamp}.jpg`;
+}
+
+function buildOriginalDriveFileName(file: File, recordType: string, recordId: string, timestamp: number) {
+  const extension = file.name.includes(".") ? file.name.split(".").pop() || "jpg" : "jpg";
+  return `${timestamp}_${sanitizeDriveName(recordType)}_${sanitizeDriveName(recordId)}.${extension.toLowerCase()}`;
+}
+
+async function getGoogleAccessToken(env: UploadEnv) {
+  const clientId = safeText(env.GOOGLE_CLIENT_ID).trim();
+  const clientSecret = safeText(env.GOOGLE_CLIENT_SECRET).trim();
+  const refreshToken = safeText(env.GOOGLE_REFRESH_TOKEN).trim();
+  if (!clientId || !clientSecret || !refreshToken) throw new Error("Google OAuth credentials are not configured");
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = await readGoogleJson(response, "Google token failed") as { access_token?: string; error?: string; error_description?: string };
+  if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || `Google token failed: ${response.status}`);
+  return data.access_token;
+}
+
+async function getOrCreateFolder(token: string, parentFolderId: string, folderName: string) {
+  const existing = await findDriveFolder(token, parentFolderId, folderName);
+  if (existing) return existing.id;
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  url.searchParams.set("fields", "id,name,webViewLink");
+  url.searchParams.set("supportsAllDrives", "true");
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: folderName,
+      mimeType: FOLDER_MIME,
+      parents: [parentFolderId],
+    }),
+  });
+  const data = await readGoogleJson(response, "Drive folder create failed") as { id?: string; error?: { message?: string } };
+  if (!response.ok || !data.id) throw new Error(data.error?.message || `Drive folder create failed: ${response.status}`);
+  return data.id;
+}
+
+async function findDriveFolder(token: string, parentId: string, name: string) {
+  const query = [
+    `'${escapeDriveQuery(parentId)}' in parents`,
+    `name='${escapeDriveQuery(name)}'`,
+    "trashed=false",
+    `mimeType='${FOLDER_MIME}'`,
+  ].join(" and ");
+  const url = new URL("https://www.googleapis.com/drive/v3/files");
+  url.searchParams.set("q", query);
+  url.searchParams.set("fields", "files(id,name,webViewLink)");
+  url.searchParams.set("pageSize", "1");
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("includeItemsFromAllDrives", "true");
+  const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  const data = await readGoogleJson(response, "Drive search failed") as { files?: { id: string; name: string; webViewLink?: string }[]; error?: { message?: string } };
+  if (!response.ok) throw new Error(data.error?.message || `Drive search failed: ${response.status}`);
+  return data.files?.[0] || null;
+}
+
+async function uploadDriveFile(token: string, folderId: string, fileName: string, file: File) {
+  const safeMimeType = file.type || "application/octet-stream";
+  const bytes = await file.arrayBuffer();
+  const initUrl = new URL("https://www.googleapis.com/upload/drive/v3/files");
+  initUrl.searchParams.set("uploadType", "resumable");
+  initUrl.searchParams.set("fields", "id,name,webViewLink");
+  initUrl.searchParams.set("supportsAllDrives", "true");
+  const initResponse = await fetch(initUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": safeMimeType,
+      "X-Upload-Content-Length": String(bytes.byteLength),
+    },
+    body: JSON.stringify({ name: fileName, parents: [folderId] }),
+  });
+  if (!initResponse.ok) throw new Error(await readGoogleError(initResponse, `Drive upload session failed: ${initResponse.status}`));
+  const uploadUrl = initResponse.headers.get("Location");
+  if (!uploadUrl) throw new Error("Drive upload session location is missing");
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": safeMimeType,
+      "Content-Length": String(bytes.byteLength),
+    },
+    body: bytes,
+  });
+  const data = await readGoogleJson(uploadResponse, "Drive upload failed") as { id?: string; name?: string; webViewLink?: string; error?: { message?: string } };
+  if (!uploadResponse.ok || !data.id) throw new Error(data.error?.message || `Drive upload failed: ${uploadResponse.status}`);
+  return { id: data.id, webViewLink: data.webViewLink };
+}
+
+async function trashDriveFile(env: UploadEnv, fileId: string) {
+  const token = await getGoogleAccessToken(env);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ trashed: true }),
+  });
+  if (!response.ok) throw new Error(await readGoogleError(response, `Drive trash failed: ${response.status}`));
+}
+
+function driveViewUrl(fileId: string) {
+  return `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+function driveDownloadUrl(fileId: string) {
+  return `https://drive.google.com/uc?id=${encodeURIComponent(fileId)}&export=download`;
+}
+
+function driveFolderUrl(folderId: string) {
+  return `https://drive.google.com/drive/folders/${folderId}`;
+}
+
+function sanitizeDriveName(value: string) {
+  return safeText(value).replace(/[\\/:*?"<>|#%{}~&]/g, "_").replace(/\s+/g, " ").trim().slice(0, 120) || "unknown";
+}
+
+function safePathSegment(value: string) {
+  return sanitizeDriveName(value).replace(/\s+/g, "_");
+}
+
+async function readGoogleJson(response: Response, label: string) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${label}: Drive API JSON parse failed: ${text.slice(0, 120) || response.status}`);
+  }
+}
+
+async function readGoogleError(response: Response, fallback: string) {
+  const text = await response.text();
+  if (!text) return fallback;
+  try {
+    const data = JSON.parse(text) as { error?: { message?: string } | string };
+    if (typeof data.error === "string") return data.error;
+    return data.error?.message || fallback;
+  } catch {
+    return text;
+  }
+}
+
+function escapeDriveQuery(value: string) {
+  return safeText(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 function parseMetadata(value: FormDataEntryValue | null) {
