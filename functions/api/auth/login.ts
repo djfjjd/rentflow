@@ -87,7 +87,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || ""));
+  email = account.isDeveloper ? account.email : normalizeEmail(String(device.email || account.email || temporarySessionEmail(accountType, account)));
   const isDeveloper = account.isDeveloper;
   const role = effectiveDeviceRole(device);
   if (!role) {
@@ -105,7 +105,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const displayName = device.device_owner_type === "office_pc" ? officePcLabel(String(device.office_pc_type || "")) : device.user_name || account.displayName;
   const position = device.device_owner_type === "office_pc" ? displayName : device.user_position || account.position;
   const token = await createAuthToken({ email, role, isDeveloper, displayName, position, deviceId }, jwtSecret);
-  await createSessionRecord(env.DB, device.id, device.user_id || "", deviceId);
+  await createSessionRecord(env.DB, device.id, device.user_id || "", deviceId, email);
   const autoLogin = device.device_owner_type === "office_pc" || isDesktopDevice(deviceType) ? 0 : 1;
   await env.DB.prepare("UPDATE devices SET device_type = ?, trusted = ?, auto_login = ?, last_seen_at = ?, updated_at = ? WHERE id = ?").bind(deviceType, autoLogin ? 1 : 0, autoLogin, new Date().toISOString(), new Date().toISOString(), safeText(device.id)).run();
   await recordLoginLog(env, request, { email, role, deviceId, status: "success", message: "login success" });
@@ -194,14 +194,40 @@ function getDefaultRedirectPath(user: { role: Role; isDeveloper?: boolean }, dev
   return "/app";
 }
 
-async function createSessionRecord(db: any, deviceRowId: string, userId: string, publicDeviceId: string) {
+async function createSessionRecord(db: any, deviceRowId: string, userId: string, publicDeviceId: string, email: string) {
   if (!db) return;
   const now = new Date();
   const expires = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 180);
+  const sessionUserId = userId || await findUserIdByEmail(db, email) || await ensureOfficePcSessionUser(db, email || publicDeviceId);
   await db.prepare(
     `INSERT INTO sessions (id, user_id, device_id, status, created_at, expires_at)
      VALUES (?, ?, ?, 'active', ?, ?)`,
-  ).bind(crypto.randomUUID(), userId || publicDeviceId, safeText(deviceRowId), now.toISOString(), expires.toISOString()).run();
+  ).bind(crypto.randomUUID(), sessionUserId, safeText(deviceRowId), now.toISOString(), expires.toISOString()).run();
+}
+
+async function findUserIdByEmail(db: any, email: string) {
+  const normalized = normalizeEmail(email || "");
+  if (!normalized) return "";
+  const row = await db.prepare("SELECT id FROM users WHERE lower(email) = ? AND COALESCE(status, '') NOT IN ('퇴사', 'deleted') AND deleted_at IS NULL LIMIT 1").bind(normalized).first();
+  return safeText(row?.id || "");
+}
+
+async function ensureOfficePcSessionUser(db: any, email: string) {
+  const normalized = normalizeEmail(email || "office-pc@rentflow.local");
+  const loginId = `office_pc_${encodeSessionLoginId(normalized)}`;
+  const existing = await db.prepare("SELECT id FROM users WHERE login_id = ? LIMIT 1").bind(loginId).first();
+  if (existing?.id) return safeText(existing.id);
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await db.prepare(
+    `INSERT INTO users (id, name, position, role, login_id, password_hash, email, status, created_at, updated_at)
+     VALUES (?, '사무실 PC', '사무실 PC', 'staff', ?, '', ?, '재직', ?, ?)`,
+  ).bind(id, loginId, normalized, now, now).run();
+  return id;
+}
+
+function encodeSessionLoginId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48) || "device";
 }
 
 async function recordLoginLog(
