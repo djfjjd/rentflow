@@ -35,15 +35,15 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       ? [{ id: "current-device", endpoint: directSubscription.endpoint, p256dh: directSubscription.keys.p256dh, auth: directSubscription.keys.auth, source: "request" }]
       : ((await env.DB.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions ORDER BY created_at DESC").all()).results || []).map((row: any) => ({ ...row, source: "db" }));
     const actor = await getAuditActor(env.DB, await getApiSession(request, env));
-    const subtitle = pushSubtitle(actor);
     const originalBody = safeText(body.body);
+    const displayBody = prependActorLabel(originalBody, actor);
     const payloadObject = {
       title: safeText(body.title || "RentFlow 알림"),
-      body: originalBody,
-      subtitle,
+      body: displayBody,
+      subtitle: "from 렌트플로우",
       url: safeText(body.url || "/app"),
       tag: safeText(body.tag),
-      data: { ...(body.data && typeof body.data === "object" ? body.data : {}), message: originalBody, actor },
+      data: { ...(body.data && typeof body.data === "object" ? body.data : {}), message: originalBody, displayMessage: displayBody, actor },
     };
     const vapid = {
       publicKey: safeText(env.VAPID_PUBLIC_KEY || env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
@@ -155,7 +155,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: E
       note: "Cloudflare web-push 직접 발송은 지원하지 않습니다. 외부 Node Push Server를 통해 발송합니다.",
       payload: payloadObject,
       title: safeText(body.title),
-      body: safeText(body.body),
+      body: displayBody,
       url: safeText(body.url || "/app"),
     }, { status: ok || sent > 0 ? 200 : failed > 0 ? 502 : 404 });
   } catch (error) {
@@ -216,11 +216,18 @@ async function sendViaNodePushServer(
   };
 }
 
-function pushSubtitle(actor: { role: string; name: string }) {
+function prependActorLabel(body: string, actor: { role: string; name: string }) {
+  const label = pushActorLabel(actor);
+  const text = safeText(body);
+  return text ? `${label} : ${text}` : `${label} :`;
+}
+
+function pushActorLabel(actor: { role: string; name: string }) {
   const role = safeText(actor.role || "직원");
   const name = safeText(actor.name);
-  if (role === "직원") return `from 렌트플로우 (직원${name && name !== role ? ` ${name}` : ""})`;
-  return `from 렌트플로우 (${role})`;
+  if (role === "직원" && name && name !== role) return `직원(${name})`;
+  if (role === "개발자" || role === "관리자" || role === "실장") return role;
+  return "직원";
 }
 
 function createPushServerError(result: Awaited<ReturnType<typeof sendViaNodePushServer>>) {

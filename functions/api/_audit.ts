@@ -8,7 +8,7 @@ export type AuditActor = {
 };
 
 export async function getAuditActor(db: any, session: AuthSession | null | undefined): Promise<AuditActor> {
-  const role = roleLabel(session?.role);
+  const role = roleLabel(session);
   const name = safeText(session?.displayName || session?.position || role);
   const email = safeText(session?.email);
   let id = email;
@@ -23,7 +23,11 @@ export async function getAuditActor(db: any, session: AuthSession | null | undef
   return { id, name, role };
 }
 
-export function roleLabel(role?: string) {
+export function roleLabel(sessionOrRole?: AuthSession | string | null) {
+  const role = typeof sessionOrRole === "string" ? sessionOrRole : sessionOrRole?.role;
+  const position = typeof sessionOrRole === "string" ? "" : safeText(sessionOrRole?.position);
+  if (typeof sessionOrRole !== "string" && sessionOrRole?.isDeveloper) return "개발자";
+  if (position === "개발자") return "개발자";
   if (role === "super_admin") return "관리자";
   if (role === "manager") return "실장";
   if (role === "staff") return "직원";
