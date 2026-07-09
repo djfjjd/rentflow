@@ -18,6 +18,7 @@ import {
   GripVertical,
   Home,
   Info,
+  ListChecks,
   LogOut,
   MapPin,
   PackageSearch,
@@ -68,12 +69,14 @@ type PageKind =
   | "lost-items"
   | "photos"
   | "partners"
+  | "dispatch-return-history"
   | "calendar"
   | "app-dashboard"
   | "admin-dashboard"
   | "admin-vehicles"
   | "admin-reservations"
   | "admin-dispatches"
+  | "admin-dispatch-return-history"
   | "admin-billing"
   | "admin-receivables"
   | "admin-incidents"
@@ -82,6 +85,23 @@ type PageKind =
 
 type ReloadHandler<T> = (items?: T[]) => void | Promise<void>;
 type PermissionLevel = "none" | "read" | "write";
+
+type DispatchReturnHistoryType = "all" | "dispatch" | "return";
+
+type DispatchReturnHistoryRow = {
+  id: string;
+  type: "dispatch" | "return";
+  completed_at?: string;
+  vehicle_number?: string;
+  customer_phone?: string;
+  orderer?: string;
+  customer_car_model?: string;
+  fuel?: string;
+  repair_shop?: string;
+  memo?: string;
+  created_by?: string;
+  updated_at?: string;
+};
 
 type ContractV2 = {
   id: string;
@@ -116,6 +136,7 @@ type ContractV2 = {
 const appActions = [
   { href: "/app/dispatch", label: "배차", icon: Car, primary: true },
   { href: "/app/return", label: "회차", icon: Check, primary: true },
+  { href: "/app/dispatch-return-history", label: "배회차현황기록", icon: ListChecks },
   { href: "/app/dashboard", label: "차량현황판", icon: Car, emoji: "🚗" },
   { href: "/app/reservation", label: "예약일정 추가", icon: CalendarDays },
   { href: "/app/incident", label: "사고/정비 기록", icon: Wrench },
@@ -125,6 +146,7 @@ const appActions = [
 
 const adminItems = [
   { href: "/admin/dispatches", label: "배회차관리", icon: ClipboardList },
+  { href: "/admin/dispatch-return-history", label: "배회차현황기록", icon: ListChecks },
   { href: "/admin/billing", label: "계약서/청구", icon: FileText },
   { href: "/admin/dashboard", label: "차량현황판", icon: BarChart3 },
   { href: "/admin/vehicles", label: "차량수정", icon: Car },
@@ -175,12 +197,14 @@ const pageTitles: Record<PageKind, string> = {
   "lost-items": "분실물 관리",
   photos: "사진촬영본",
   partners: "거래처주소",
+  "dispatch-return-history": "배회차현황기록",
   calendar: "예약 캘린더",
   "app-dashboard": "차량현황판",
   "admin-dashboard": "관리자 대시보드",
   "admin-vehicles": "차량관리",
   "admin-reservations": "예약관리",
   "admin-dispatches": "배회차관리",
+  "admin-dispatch-return-history": "배회차현황기록",
   "admin-billing": "계약서/청구",
   "admin-receivables": "미수금",
   "admin-incidents": "정비/사고",
@@ -207,6 +231,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
   const canDeletePhotos = currentRole === "super_admin";
   const canUploadContracts = currentRole !== "staff";
   const canEditDispatchRecords = permissions["dispatch.manage"] === "write";
+  const canViewDispatchManage = permissions["dispatch.manage"] === "read" || permissions["dispatch.manage"] === "write";
   const headerInnerClass = isAdmin ? "admin-header-inner" : "app-header-inner";
   const mainInnerClass = isAdmin ? "admin-main-inner admin-content" : "app-main-inner";
   const pageClassName =
@@ -308,7 +333,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 />
               </div>
               <div className="header-right">
-                <QuickMenu />
+                <QuickMenu isAdmin={isAdmin} canViewDispatchManage={canViewDispatchManage} />
                 <div className="desktop-calendar-button">
                   <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
                 </div>
@@ -330,9 +355,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         </header>
         <div className={`${mainInnerClass} flex flex-col gap-4 py-4 ${pageClassName}`}>
 
-          {isAdmin ? <AdminNav /> : null}
+          {isAdmin ? <AdminNav canViewDispatchManage={canViewDispatchManage} /> : null}
 
-          {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
+          {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} canViewDispatchManage={canViewDispatchManage} /> : null}
           {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} canEditDispatchRecords={canEditDispatchRecords} /> : null}
           {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
           {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
@@ -341,12 +366,14 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
           {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
           {kind === "photos" ? <PhotosPage admin={isAdmin} canShowDriveLinks={canShowDriveLinks} /> : null}
           {kind === "partners" ? <PartnersPage /> : null}
+          {kind === "dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} /> : null}
           {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
           {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
           {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
           {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
           {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
           {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
+          {kind === "admin-dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} /> : null}
           {kind === "admin-billing" ? <BillingAdmin /> : null}
           {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
           {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -382,7 +409,7 @@ function getDisplayTitle(role: string | null, isDeveloper: boolean) {
   return "배회차톡";
 }
 
-function QuickMenu() {
+function QuickMenu({ isAdmin, canViewDispatchManage }: { isAdmin: boolean; canViewDispatchManage: boolean }) {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     window.location.href = "/auth";
@@ -403,6 +430,16 @@ function QuickMenu() {
         <LogOut size={17} />
         <span className="hidden sm:inline">로그아웃</span>
       </button>
+      {canViewDispatchManage ? (
+        <Link
+          className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3"
+          href={isAdmin ? "/admin/dispatch-return-history" : "/app/dispatch-return-history"}
+          title="배회차현황기록"
+          aria-label="배회차현황기록"
+        >
+          <ListChecks size={17} />
+        </Link>
+      ) : null}
     </nav>
   );
 }
@@ -706,8 +743,12 @@ export function VehicleSearchCombobox({
   );
 }
 
-function HomeScreen({ canUploadContracts }: { canUploadContracts: boolean }) {
-  const visibleActions = appActions.filter((item) => canUploadContracts || item.href !== "/app/billing");
+function HomeScreen({ canUploadContracts, canViewDispatchManage }: { canUploadContracts: boolean; canViewDispatchManage: boolean }) {
+  const visibleActions = appActions.filter((item) => {
+    if (!canUploadContracts && item.href === "/app/billing") return false;
+    if (!canViewDispatchManage && item.href === "/app/dispatch-return-history") return false;
+    return true;
+  });
   return (
     <section className="home-container space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -993,11 +1034,12 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
   );
 }
 
-function AdminNav() {
+function AdminNav({ canViewDispatchManage }: { canViewDispatchManage: boolean }) {
   const pathname = usePathname();
   const normalizedPathname = normalizeRoutePath(pathname);
-  const showSettingsButton = normalizedPathname === "/admin" || normalizedPathname === "/admin/dispatches" || normalizedPathname === "/admin/vehicles";
+  const showSettingsButton = normalizedPathname === "/admin" || normalizedPathname === "/admin/dispatches" || normalizedPathname === "/admin/dispatch-return-history" || normalizedPathname === "/admin/vehicles";
   const dispatchItem = adminItems.find((item) => item.href === "/admin/dispatches");
+  const historyItem = adminItems.find((item) => item.href === "/admin/dispatch-return-history");
   const vehiclesItem = adminItems.find((item) => item.href === "/admin/vehicles");
 
   return (
@@ -1006,6 +1048,7 @@ function AdminNav() {
         {dispatchItem ? <AdminNavLink item={dispatchItem} pathname={normalizedPathname} /> : null}
       </div>
       <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
+        {historyItem && canViewDispatchManage ? <AdminNavLink item={historyItem} pathname={normalizedPathname} /> : null}
         {vehiclesItem ? <AdminNavLink item={vehiclesItem} pathname={normalizedPathname} /> : null}
         {showSettingsButton ? (
           <Link className="quick-btn h-11 min-h-11 w-11 shrink-0 px-0" href="/admin/settings" title="시스템 설정" aria-label="시스템 설정">
@@ -3128,6 +3171,158 @@ function VehicleAdmin({ vehicles, onVehicles }: { vehicles: VehicleV2[]; onVehic
 
 function ReservationAdmin({ reservations, onReservations }: { reservations: ReservationV2[]; onReservations: ReloadHandler<ReservationV2> }) {
   return <section className="space-y-4"><ReservationForm reservations={reservations} onReservations={onReservations} /><CalendarPage reservations={reservations} /></section>;
+}
+
+function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
+  const [month, setMonth] = useState(currentMonthKorea());
+  const [type, setType] = useState<DispatchReturnHistoryType>("all");
+  const [query, setQuery] = useState("");
+  const [rows, setRows] = useState<DispatchReturnHistoryRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [page, setPage] = useState(1);
+  const [memo, setMemo] = useState("");
+
+  useEffect(() => {
+    setPage(1);
+  }, [month, type, query]);
+
+  useEffect(() => {
+    if (!canView) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setMessage("");
+      try {
+        const params = new URLSearchParams({ month, type });
+        if (query.trim()) params.set("q", query.trim());
+        const response = await fetch(`/api/dispatch-return-history?${params.toString()}`, { cache: "no-store" });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({})) as { error?: string };
+          throw new Error(data.error || "배회차현황기록을 불러오지 못했습니다.");
+        }
+        const data = await response.json() as DispatchReturnHistoryRow[];
+        if (!cancelled) setRows(data);
+      } catch (error) {
+        if (!cancelled) {
+          setRows([]);
+          setMessage(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }, 150);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [canView, month, type, query]);
+
+  if (!canView) {
+    return (
+      <section className="panel p-8 text-center">
+        <h1 className="text-xl font-black">배회차현황기록</h1>
+        <p className="mt-2 text-sm font-bold text-[#68746d]">배회차관리 read 이상 권한이 필요합니다.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel space-y-4 overflow-hidden">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-xl font-black">배회차현황기록</h1>
+          <p className="mt-1 text-sm font-bold text-[#68746d]">배차완료와 회차완료 기록을 최신순으로 확인합니다.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, -1))}>이전달</button>
+          <div className="rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black">{formatMonthLabel(month)}</div>
+          <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, 1))}>다음달</button>
+          <button className="small-btn" type="button" onClick={() => setMonth(currentMonthKorea())}>이번달</button>
+        </div>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+        <div className="dispatch-board-search">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#68746d]" aria-hidden="true" />
+          <input
+            className="field min-h-11 pl-9"
+            placeholder="차량번호 · 연락처 · 오더자 · 고객차종 · 수리처 · 메모 검색"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query ? (
+            <button className="dispatch-board-search-clear" type="button" aria-label="검색어 지우기" onClick={() => setQuery("")}>
+              ×
+            </button>
+          ) : null}
+        </div>
+        <Segmented
+          value={type}
+          values={["all", "dispatch", "return"]}
+          labels={{ all: "전체", dispatch: "배차", return: "회차" }}
+          onChange={(value) => setType(value as DispatchReturnHistoryType)}
+        />
+      </div>
+      {message ? <p className="rounded-lg bg-[#fff7f4] px-3 py-2 text-sm font-black text-[#a13f24]">{message}</p> : null}
+      <div data-horizontal-scroll="true" className="admin-table-wrapper w-full overflow-x-auto">
+        <table className="admin-table w-full min-w-[1360px] table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[80px]" />
+            <col className="w-[150px]" />
+            <col className="w-[110px]" />
+            <col className="w-[150px]" />
+            <col className="w-[180px]" />
+            <col className="w-[140px]" />
+            <col className="w-[90px]" />
+            <col className="w-[180px]" />
+            <col className="w-[240px]" />
+            <col className="w-[120px]" />
+          </colgroup>
+          <thead>
+            <tr className="border-b">
+              <th>구분</th>
+              <th>완료일시</th>
+              <th>차량번호</th>
+              <th>연락처</th>
+              <th>오더자</th>
+              <th>고객차종</th>
+              <th>주유량</th>
+              <th>수리처</th>
+              <th>메모</th>
+              <th>작성자</th>
+            </tr>
+          </thead>
+          <tbody>{paginate(rows, page, 15).map((row) => (
+            <tr className="border-b" key={`${row.type}-${row.id}`}>
+              <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge type={row.type} /></td>
+              <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
+              <TruncatedCell value={clean(row.vehicle_number)} />
+              <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
+              <TruncatedCell sensitive value={clean(row.orderer)} />
+              <TruncatedCell value={clean(row.customer_car_model)} />
+              <TruncatedCell value={clean(row.fuel)} />
+              <TruncatedCell sensitive value={clean(row.repair_shop)} />
+              <MemoCell value={row.memo} onOpen={setMemo} />
+              <TruncatedCell value={clean(row.created_by)} />
+            </tr>
+          ))}</tbody>
+        </table>
+        {!loading && !rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">해당 월의 배회차 완료 기록이 없습니다.</p> : null}
+        {loading ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">불러오는 중입니다.</p> : null}
+      </div>
+      <Pagination page={page} pageSize={15} totalItems={rows.length} onPageChange={setPage} />
+      {memo ? <MemoModal memo={memo} onClose={() => setMemo("")} /> : null}
+    </section>
+  );
+}
+
+function HistoryTypeBadge({ type }: { type: "dispatch" | "return" }) {
+  const isDispatch = type === "dispatch";
+  return (
+    <span className={`inline-flex min-h-7 items-center rounded-full px-3 text-xs font-black ${isDispatch ? "bg-[#e9f5ef] text-[#116149]" : "bg-[#eef1ff] text-[#2f4f9f]"}`}>
+      {isDispatch ? "배차" : "회차"}
+    </span>
+  );
 }
 
 function DispatchAdmin({
@@ -5453,6 +5648,30 @@ function shiftMonth(date: string, amount: number) {
   const parsed = new Date(`${date.slice(0, 7)}-01T00:00:00`);
   parsed.setMonth(parsed.getMonth() + amount);
   return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function currentMonthKorea() {
+  return todayKorea().slice(0, 7);
+}
+
+function addMonths(month: string, amount: number) {
+  return shiftMonth(`${month}-01`, amount).slice(0, 7);
+}
+
+function formatMonthLabel(month: string) {
+  const [year, monthNumber] = month.split("-");
+  return `${year}년 ${Number(monthNumber)}월`;
+}
+
+function formatHistoryDateTime(value?: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
+    return formatBoardDateTime(value.slice(0, 10), value.slice(11, 16), value);
+  }
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(value)) {
+    return formatBoardDateTime(value.slice(0, 10), value.slice(11, 16), value.replace(" ", "T"));
+  }
+  return formatBoardDateTime(value.slice(0, 10), "", value);
 }
 
 function newest(files: UploadedFileV2[]) {
