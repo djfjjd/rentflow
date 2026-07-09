@@ -12,6 +12,8 @@ import {
   Camera,
   Car,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   CreditCard,
   FileText,
@@ -3232,17 +3234,24 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
   }
 
   return (
-    <section className="panel space-y-4 overflow-hidden">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <section className="panel space-y-3 overflow-hidden p-3 sm:p-4">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-xl font-black">배회차현황기록</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, -1))}>이전달</button>
+        <div className="grid w-full grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_44px] items-center gap-2 lg:w-auto lg:grid-cols-[44px_112px_96px_44px]">
+          <button
+            className="small-btn h-11 min-h-0 w-11 px-0"
+            type="button"
+            aria-label="이전달"
+            onClick={() => setMonth(addMonths(month, -1))}
+          >
+            <ChevronLeft size={18} strokeWidth={3} aria-hidden="true" />
+          </button>
           <label className="relative">
             <span className="sr-only">연도 선택</span>
             <select
-              className="field h-10 min-w-28 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
+              className="field h-11 min-w-0 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
               value={month.slice(0, 4)}
               onChange={(event) => setMonth(replaceHistoryYear(month, event.target.value))}
             >
@@ -3254,7 +3263,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
           <label className="relative">
             <span className="sr-only">월 선택</span>
             <select
-              className="field h-10 min-w-24 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
+              className="field h-11 min-w-0 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
               value={month.slice(5, 7)}
               onChange={(event) => setMonth(replaceHistoryMonth(month, event.target.value))}
             >
@@ -3263,14 +3272,21 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
               ))}
             </select>
           </label>
-          <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, 1))}>다음달</button>
+          <button
+            className="small-btn h-11 min-h-0 w-11 px-0"
+            type="button"
+            aria-label="다음달"
+            onClick={() => setMonth(addMonths(month, 1))}
+          >
+            <ChevronRight size={18} strokeWidth={3} aria-hidden="true" />
+          </button>
         </div>
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
+      <div className="grid gap-2">
         <div className="dispatch-board-search">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#68746d]" aria-hidden="true" />
           <input
-            className="field min-h-11 pl-9"
+            className="field min-h-10 pl-9 text-sm"
             placeholder="차량번호 · 연락처 · 오더자 · 고객차종 · 수리처 · 메모 검색"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -5573,8 +5589,10 @@ function Segmented({
   itemClassNames?: Record<string, { selected: string; unselected: string }>;
   onChange: (value: string) => void;
 }) {
+  const gridClassName = values.length === 4 ? "grid-cols-4" : values.length === 3 ? "grid-cols-3" : "grid-cols-2";
+
   return (
-    <div className={`grid ${values.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>
+    <div className={`grid ${gridClassName} gap-2 rounded-lg bg-[#e6ebe5] p-1`}>
       {values.map((item) => {
         const itemClassName = itemClassNames?.[item];
         const isSelected = value === item;
