@@ -92,7 +92,10 @@ type DispatchReturnHistoryRow = {
   id: string;
   type: "dispatch" | "return";
   category?: "보험" | "자차" | "셀프" | "회차" | string;
+  contract_record_id?: string;
   completed_at?: string;
+  date?: string;
+  time?: string;
   vehicle_number?: string;
   customer_phone?: string;
   orderer?: string;
@@ -350,6 +353,7 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
                 open={activeOverlay === "unread"}
                 onOpenChange={(open) => setActiveOverlay(open ? "unread" : null)}
               />
+              {canViewDispatchManage ? <DispatchReturnHistoryHeaderButton isAdmin={isAdmin} mobileOnly /> : null}
               <TodayCalendar reservations={reservations} open={activeOverlay === "calendar"} onOpenChange={(open) => setActiveOverlay(open ? "calendar" : null)} />
             </div>
           </div>
@@ -367,14 +371,14 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
           {kind === "lost-items" ? <LostItemForm vehicles={vehicles} dispatches={dispatches} lostItems={lostItems} onLostItems={reloadLostItems} /> : null}
           {kind === "photos" ? <PhotosPage admin={isAdmin} canShowDriveLinks={canShowDriveLinks} /> : null}
           {kind === "partners" ? <PartnersPage /> : null}
-          {kind === "dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} /> : null}
+          {kind === "dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} contracts={contracts} /> : null}
           {kind === "calendar" ? <CalendarPage reservations={reservations} /> : null}
           {kind === "app-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
           {kind === "admin-dashboard" ? <Dashboard vehicles={vehicles} reservations={reservations} dispatches={dispatches} returns={returns} /> : null}
           {kind === "admin-vehicles" ? <VehicleAdmin vehicles={vehicles} onVehicles={setVehicles} /> : null}
           {kind === "admin-reservations" ? <ReservationAdmin reservations={reservations} onReservations={reloadReservations} /> : null}
           {kind === "admin-dispatches" ? <DispatchAdmin contracts={contracts} dispatches={dispatches} returns={returns} vehicles={vehicles} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
-          {kind === "admin-dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} /> : null}
+          {kind === "admin-dispatch-return-history" ? <DispatchReturnHistoryPage canView={canViewDispatchManage} contracts={contracts} /> : null}
           {kind === "admin-billing" ? <BillingAdmin /> : null}
           {kind === "admin-receivables" ? <ReceivablesAdmin /> : null}
           {kind === "admin-incidents" ? <IncidentsAdmin /> : null}
@@ -432,16 +436,23 @@ function QuickMenu({ isAdmin, canViewDispatchManage }: { isAdmin: boolean; canVi
         <span className="hidden sm:inline">로그아웃</span>
       </button>
       {canViewDispatchManage ? (
-        <Link
-          className="quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3"
-          href={isAdmin ? "/admin/dispatch-return-history" : "/app/dispatch-return-history"}
-          title="배회차현황기록"
-          aria-label="배회차현황기록"
-        >
-          <ListChecks size={17} />
-        </Link>
+        <DispatchReturnHistoryHeaderButton isAdmin={isAdmin} desktopOnly />
       ) : null}
     </nav>
+  );
+}
+
+function DispatchReturnHistoryHeaderButton({ isAdmin, desktopOnly = false, mobileOnly = false }: { isAdmin: boolean; desktopOnly?: boolean; mobileOnly?: boolean }) {
+  const visibilityClass = desktopOnly ? "hidden sm:inline-flex" : mobileOnly ? "inline-flex sm:hidden" : "inline-flex";
+  return (
+    <Link
+      className={`quick-btn header-icon-button h-11 min-h-11 w-11 min-w-11 px-0 sm:w-auto sm:px-3 ${visibilityClass}`}
+      href={isAdmin ? "/admin/dispatch-return-history" : "/app/dispatch-return-history"}
+      title="배회차현황기록"
+      aria-label="배회차현황기록"
+    >
+      <ListChecks size={17} />
+    </Link>
   );
 }
 
@@ -3174,7 +3185,7 @@ function ReservationAdmin({ reservations, onReservations }: { reservations: Rese
   return <section className="space-y-4"><ReservationForm reservations={reservations} onReservations={onReservations} /><CalendarPage reservations={reservations} /></section>;
 }
 
-function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
+function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; contracts: ContractV2[] }) {
   const [month, setMonth] = useState(currentMonthKorea());
   const [type, setType] = useState<DispatchReturnHistoryType>("all");
   const [query, setQuery] = useState("");
@@ -3276,7 +3287,7 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
       </div>
       {message ? <p className="rounded-lg bg-[#fff7f4] px-3 py-2 text-sm font-black text-[#a13f24]">{message}</p> : null}
       <div data-horizontal-scroll="true" className="admin-table-wrapper w-full overflow-x-auto">
-        <table className="admin-table w-full min-w-[1360px] table-fixed text-left text-sm">
+        <table className="admin-table w-full min-w-[1500px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
             <col className="w-[150px]" />
@@ -3287,6 +3298,8 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
             <col className="w-[90px]" />
             <col className="w-[180px]" />
             <col className="w-[240px]" />
+            <col className="w-[90px]" />
+            <col className="w-[80px]" />
             <col className="w-[120px]" />
           </colgroup>
           <thead>
@@ -3300,23 +3313,41 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
               <th>주유량</th>
               <th>수리처</th>
               <th>메모</th>
+              <th>사진보기</th>
+              <th>계약서</th>
               <th>작성자</th>
             </tr>
           </thead>
-          <tbody>{paginate(rows, page, 15).map((row) => (
-            <tr className="border-b" key={`${row.type}-${row.id}`}>
-              <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge category={row.category} /></td>
-              <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
-              <TruncatedCell value={clean(row.vehicle_number)} />
-              <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
-              <TruncatedCell sensitive value={clean(row.orderer)} />
-              <TruncatedCell value={clean(row.customer_car_model)} />
-              <TruncatedCell value={clean(row.fuel)} />
-              <TruncatedCell sensitive value={clean(row.repair_shop)} />
-              <MemoCell value={row.memo} onOpen={setMemo} />
-              <TruncatedCell value={clean(row.created_by)} />
-            </tr>
-          ))}</tbody>
+          <tbody>{paginate(rows, page, 15).map((row) => {
+            const category = normalizeHistoryCategory(row.category);
+            const recordType = row.type === "dispatch" ? "dispatch" : "return";
+            const contract = contractForRecord(contracts, clean(row.contract_record_id || row.id));
+            return (
+              <tr className="border-b" key={`${row.type}-${row.id}`}>
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge category={category} /></td>
+                <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
+                <TruncatedCell value={clean(row.vehicle_number)} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
+                <TruncatedCell sensitive value={clean(row.orderer)} />
+                <TruncatedCell value={clean(row.customer_car_model)} />
+                <TruncatedCell value={clean(row.fuel)} />
+                <TruncatedCell sensitive value={clean(row.repair_shop)} />
+                <MemoCell value={row.memo} onOpen={setMemo} />
+                <td className="h-11 whitespace-nowrap px-1 align-middle">
+                  <PhotoGalleryButton
+                    date={row.date || row.completed_at?.slice(0, 10)}
+                    kind={category}
+                    recordId={row.id}
+                    recordType={recordType}
+                    time={row.time || row.completed_at?.slice(11, 16)}
+                    vehicleNumber={row.vehicle_number || ""}
+                  />
+                </td>
+                <td className="h-11 whitespace-nowrap px-1 text-center align-middle"><ContractClip contract={contract} /></td>
+                <TruncatedCell value={clean(row.created_by)} />
+              </tr>
+            );
+          })}</tbody>
         </table>
         {!loading && !rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">해당 월의 배회차 완료 기록이 없습니다.</p> : null}
         {loading ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">불러오는 중입니다.</p> : null}

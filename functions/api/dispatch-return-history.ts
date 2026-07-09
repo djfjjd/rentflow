@@ -55,6 +55,9 @@ function dispatchHistorySql(hasQuery: boolean) {
       id,
       'dispatch' AS type,
       COALESCE(dispatch_type, business_type, status, '배차') AS category,
+      id AS contract_record_id,
+      date AS record_date,
+      time AS record_time,
       CASE
         WHEN COALESCE(return_at, '') != '' THEN return_at
         WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
@@ -100,6 +103,9 @@ function returnHistorySql(hasQuery: boolean) {
       id,
       'return' AS type,
       '회차' AS category,
+      COALESCE(dispatch_id, '') AS contract_record_id,
+      date AS record_date,
+      time AS record_time,
       CASE
         WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
         ELSE COALESCE(updated_at, created_at, '')
@@ -137,7 +143,10 @@ function mapHistoryRow(row: any) {
     id: row.id,
     type: row.type,
     category: normalizeCategory(row.category, row.type),
+    contract_record_id: row.contract_record_id || "",
     completed_at: row.completed_at,
+    date: row.record_date || "",
+    time: row.record_time || "",
     vehicle_number: row.vehicle_number || "",
     customer_phone: row.customer_phone || "",
     orderer: row.orderer || "",
@@ -220,6 +229,7 @@ async function ensureHistorySchemas(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "notes", definition: "TEXT" },
     { name: "dispatch_memo_snapshot", definition: "TEXT" },
+    { name: "dispatch_id", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
     { name: "created_by_role", definition: "TEXT" },
     { name: "created_by_name", definition: "TEXT" },
