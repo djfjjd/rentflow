@@ -85,11 +85,11 @@ type PageKind =
 type ReloadHandler<T> = (items?: T[]) => void | Promise<void>;
 type PermissionLevel = "none" | "read" | "write";
 
-type DispatchReturnHistoryType = "all" | "dispatch" | "return";
+type DispatchReturnHistoryType = "all" | "active_dispatch" | "dispatch" | "return";
 
 type DispatchReturnHistoryRow = {
   id: string;
-  type: "dispatch" | "return";
+  type: "active_dispatch" | "dispatch" | "return";
   category?: "보험" | "자차" | "셀프" | "회차" | string;
   contract_record_id?: string;
   completed_at?: string;
@@ -3283,8 +3283,8 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
         </div>
         <Segmented
           value={type}
-          values={["all", "dispatch", "return"]}
-          labels={{ all: "전체", dispatch: "배차", return: "회차" }}
+          values={["all", "active_dispatch", "dispatch", "return"]}
+          labels={{ all: "전체", active_dispatch: "배차중", dispatch: "배차기록", return: "회차기록" }}
           onChange={(value) => setType(value as DispatchReturnHistoryType)}
         />
       </div>
@@ -3325,7 +3325,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
           </thead>
           <tbody>{paginate(rows, page, 15).map((row) => {
             const category = normalizeHistoryCategory(row.category);
-            const recordType = row.type === "dispatch" ? "dispatch" : "return";
+            const recordType = row.type === "return" ? "return" : "dispatch";
             const contract = contractForRecord(contracts, clean(row.contract_record_id || row.id));
             return (
               <tr className="border-b" key={`${row.type}-${row.id}`}>
@@ -3355,7 +3355,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
             );
           })}</tbody>
         </table>
-        {!loading && !rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">해당 월의 배회차 완료 기록이 없습니다.</p> : null}
+        {!loading && !rows.length ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">해당 월의 배회차 현황 기록이 없습니다.</p> : null}
         {loading ? <p className="py-12 text-center text-sm font-bold text-[#68746d]">불러오는 중입니다.</p> : null}
       </div>
       <Pagination page={page} pageSize={15} totalItems={rows.length} onPageChange={setPage} />

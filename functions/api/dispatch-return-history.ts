@@ -6,7 +6,7 @@ type Env = {
   JWT_SECRET?: string;
 };
 
-type HistoryType = "all" | "dispatch" | "return";
+type HistoryType = "all" | "active_dispatch" | "dispatch" | "return";
 
 export async function onRequestGet({ request, env }: { request: Request; env: Env }) {
   try {
@@ -23,6 +23,11 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
     const parts: string[] = [];
     const binds: string[] = [];
 
+    if (type === "all" || type === "active_dispatch") {
+      parts.push(activeDispatchHistorySql(Boolean(query)));
+      binds.push(month);
+      if (query) binds.push(search);
+    }
     if (type === "all" || type === "dispatch") {
       parts.push(dispatchHistorySql(Boolean(query)));
       binds.push(month);
@@ -47,6 +52,54 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
     console.error("dispatch return history failed", { error: error instanceof Error ? error.message : String(error) });
     return Response.json({ error: String(error) }, { status: 500, headers: noStoreHeaders() });
   }
+}
+
+function activeDispatchHistorySql(hasQuery: boolean) {
+  return `
+    SELECT
+      id,
+      'active_dispatch' AS type,
+      COALESCE(dispatch_type, business_type, status, '배차중') AS category,
+      id AS contract_record_id,
+      date AS record_date,
+      time AS record_time,
+      CASE
+        WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
+        ELSE COALESCE(updated_at, created_at, '')
+      END AS completed_at,
+      COALESCE(date, substr(COALESCE(updated_at, created_at, ''), 1, 10), '') AS sort_date,
+      COALESCE(substr(time, 1, 5), substr(COALESCE(updated_at, created_at, ''), 12, 5), '') AS sort_time,
+      COALESCE(vehicle_number, rental_car_number, plate_number, '') AS vehicle_number,
+      COALESCE((SELECT company_type FROM vehicles WHERE plate_number = COALESCE(dispatches.vehicle_number, dispatches.rental_car_number, dispatches.plate_number, '') LIMIT 1), '') AS company_type,
+      COALESCE(customer_phone, phone, customer_contact, contact, '') AS customer_phone,
+      COALESCE(orderer, ordered_by, customer_name, '') AS orderer,
+      COALESCE(customer_car_model, '') AS customer_car_model,
+      COALESCE(fuel_level_text, fuel_display, '') AS fuel,
+      COALESCE(repair_shop, '') AS repair_shop,
+      COALESCE(memo, notes, '') AS memo,
+      TRIM(COALESCE(created_by_role, '') || ' ' || COALESCE(created_by_name, '')) AS created_by,
+      COALESCE(updated_at, created_at, '') AS updated_at
+    FROM dispatches
+    WHERE retention_archived_at IS NULL
+      AND COALESCE(return_completed, 0) NOT IN (1, true)
+      AND COALESCE(return_at, '') = ''
+      AND substr(COALESCE(NULLIF(date, ''), substr(COALESCE(updated_at, created_at, ''), 1, 10)), 1, 7) = ?
+      ${hasQuery ? `AND lower(
+        COALESCE(vehicle_number, '') || ' ' ||
+        COALESCE(rental_car_number, '') || ' ' ||
+        COALESCE(customer_phone, '') || ' ' ||
+        COALESCE(phone, '') || ' ' ||
+        COALESCE(customer_contact, '') || ' ' ||
+        COALESCE(contact, '') || ' ' ||
+        COALESCE(orderer, '') || ' ' ||
+        COALESCE(ordered_by, '') || ' ' ||
+        COALESCE(customer_name, '') || ' ' ||
+        COALESCE(customer_car_model, '') || ' ' ||
+        COALESCE(repair_shop, '') || ' ' ||
+        COALESCE(memo, '') || ' ' ||
+        COALESCE(notes, '')
+      ) LIKE ?` : ""}
+  `;
 }
 
 function dispatchHistorySql(hasQuery: boolean) {
@@ -178,7 +231,7 @@ function normalizeMonth(value: string | null) {
 }
 
 function normalizeType(value: string | null): HistoryType {
-  if (value === "dispatch" || value === "return") return value;
+  if (value === "active_dispatch" || value === "dispatch" || value === "return") return value;
   return "all";
 }
 
