@@ -215,7 +215,7 @@ export function cycleColumnMode(mode: ColumnMode): ColumnMode {
 
 export function modeForColumn(matrix: PermissionPresetMatrix, column: PermissionColumn, custom: boolean): ColumnMode {
   if (custom) return "custom";
-  const values = visibleMatrixSubjects.map((subject) => matrix[column][subject.key]);
+  const values = matrixSubjects.map((subject) => matrix[column][subject.key]);
   if (values.every((value) => value === "write")) return "allWrite";
   if (values.every((value) => value === "none")) return "allNone";
   return "custom";
@@ -225,7 +225,7 @@ export function applyColumnMode(matrix: PermissionPresetMatrix, column: Permissi
   if (mode === "custom") return cloneMatrix(matrix);
   const next = cloneMatrix(matrix);
   const level = mode === "allWrite" ? "write" : "none";
-  visibleMatrixSubjects.forEach((subject) => {
+  matrixSubjects.forEach((subject) => {
     next[column][subject.key] = level;
   });
   return next;
@@ -257,11 +257,23 @@ export async function savePermissionPresetMatrix(db: any, matrix: PermissionPres
   await ensurePermissionPresetSchema(db);
   const now = new Date().toISOString();
   const normalized = normalizePermissionPresetMatrix(matrix);
-  await db.prepare(
-    `INSERT INTO position_permission_presets (id, matrix_json, created_at, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET matrix_json = excluded.matrix_json, updated_at = excluded.updated_at`,
-  ).bind(permissionPresetId, JSON.stringify(normalized), now, now).run();
+  const matrixJson = JSON.stringify(normalized);
+  try {
+    await db.prepare(
+      `INSERT INTO position_permission_presets (id, matrix_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET matrix_json = excluded.matrix_json, updated_at = excluded.updated_at`,
+    ).bind(permissionPresetId, matrixJson, now, now).run();
+  } catch {
+    const updated = await db.prepare("UPDATE position_permission_presets SET matrix_json = ?, updated_at = ? WHERE id = ?")
+      .bind(matrixJson, now, permissionPresetId)
+      .run();
+    if (!updated.meta?.changes) {
+      await db.prepare("INSERT INTO position_permission_presets (id, matrix_json, created_at, updated_at) VALUES (?, ?, ?, ?)")
+        .bind(permissionPresetId, matrixJson, now, now)
+        .run();
+    }
+  }
   return normalized;
 }
 
