@@ -18,7 +18,6 @@ import {
   GripVertical,
   Home,
   Info,
-  ListChecks,
   LogOut,
   MapPin,
   PackageSearch,
@@ -141,7 +140,6 @@ type ContractV2 = {
 const appActions = [
   { href: "/app/dispatch", label: "배차", icon: Car, primary: true },
   { href: "/app/return", label: "회차", icon: Check, primary: true },
-  { href: "/app/dispatch-return-history", label: "배회차현황기록", icon: ListChecks },
   { href: "/app/dashboard", label: "차량현황판", icon: Car, emoji: "🚗" },
   { href: "/app/reservation", label: "예약일정 추가", icon: CalendarDays },
   { href: "/app/incident", label: "사고/정비 기록", icon: Wrench },
@@ -151,7 +149,6 @@ const appActions = [
 
 const adminItems = [
   { href: "/admin/dispatches", label: "배회차관리", icon: ClipboardList },
-  { href: "/admin/dispatch-return-history", label: "배회차현황기록", icon: ListChecks },
   { href: "/admin/billing", label: "계약서/청구", icon: FileText },
   { href: "/admin/dashboard", label: "차량현황판", icon: BarChart3 },
   { href: "/admin/vehicles", label: "차량수정", icon: Car },
@@ -361,9 +358,9 @@ export function RentFlowV2Page({ kind }: { kind: PageKind }) {
         </header>
         <div className={`${mainInnerClass} flex flex-col gap-4 py-4 ${pageClassName}`}>
 
-          {isAdmin ? <AdminNav canViewDispatchManage={canViewDispatchManage} /> : null}
+          {isAdmin ? <AdminNav /> : null}
 
-          {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} canViewDispatchManage={canViewDispatchManage} /> : null}
+          {kind === "home" ? <HomeScreen canUploadContracts={canUploadContracts} /> : null}
           {kind === "dispatch" ? <DispatchForm contracts={contracts} vehicles={vehicles} dispatches={dispatches} onDispatches={reloadDispatches} canEditDispatchRecords={canEditDispatchRecords} /> : null}
           {kind === "return" ? <ReturnForm vehicles={vehicles} dispatches={dispatches} returns={returns} onDispatches={reloadDispatches} onReturns={reloadReturns} canEditDispatchRecords={canEditDispatchRecords} /> : null}
           {kind === "reservation" ? <ReservationForm reservations={reservations} onReservations={reloadReservations} /> : null}
@@ -452,7 +449,7 @@ function DispatchReturnHistoryHeaderButton({ isAdmin, desktopOnly = false, mobil
       title="배회차현황기록"
       aria-label="배회차현황기록"
     >
-      <ListChecks size={17} />
+      <Search size={17} />
     </Link>
   );
 }
@@ -756,12 +753,8 @@ export function VehicleSearchCombobox({
   );
 }
 
-function HomeScreen({ canUploadContracts, canViewDispatchManage }: { canUploadContracts: boolean; canViewDispatchManage: boolean }) {
-  const visibleActions = appActions.filter((item) => {
-    if (!canUploadContracts && item.href === "/app/billing") return false;
-    if (!canViewDispatchManage && item.href === "/app/dispatch-return-history") return false;
-    return true;
-  });
+function HomeScreen({ canUploadContracts }: { canUploadContracts: boolean }) {
+  const visibleActions = appActions.filter((item) => canUploadContracts || item.href !== "/app/billing");
   return (
     <section className="home-container space-y-3">
       <div className="grid grid-cols-2 gap-3">
@@ -1047,12 +1040,11 @@ function ActionButton({ item }: { item: (typeof appActions)[number] }) {
   );
 }
 
-function AdminNav({ canViewDispatchManage }: { canViewDispatchManage: boolean }) {
+function AdminNav() {
   const pathname = usePathname();
   const normalizedPathname = normalizeRoutePath(pathname);
   const showSettingsButton = normalizedPathname === "/admin" || normalizedPathname === "/admin/dispatches" || normalizedPathname === "/admin/dispatch-return-history" || normalizedPathname === "/admin/vehicles";
   const dispatchItem = adminItems.find((item) => item.href === "/admin/dispatches");
-  const historyItem = adminItems.find((item) => item.href === "/admin/dispatch-return-history");
   const vehiclesItem = adminItems.find((item) => item.href === "/admin/vehicles");
 
   return (
@@ -1061,7 +1053,6 @@ function AdminNav({ canViewDispatchManage }: { canViewDispatchManage: boolean })
         {dispatchItem ? <AdminNavLink item={dispatchItem} pathname={normalizedPathname} /> : null}
       </div>
       <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
-        {historyItem && canViewDispatchManage ? <AdminNavLink item={historyItem} pathname={normalizedPathname} /> : null}
         {vehiclesItem ? <AdminNavLink item={vehiclesItem} pathname={normalizedPathname} /> : null}
         {showSettingsButton ? (
           <Link className="quick-btn h-11 min-h-11 w-11 shrink-0 px-0" href="/admin/settings" title="시스템 설정" aria-label="시스템 설정">
