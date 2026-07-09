@@ -66,6 +66,7 @@ function dispatchHistorySql(hasQuery: boolean) {
       COALESCE(substr(NULLIF(return_at, ''), 1, 10), date, substr(COALESCE(updated_at, created_at, ''), 1, 10), '') AS sort_date,
       COALESCE(substr(NULLIF(return_at, ''), 12, 5), substr(time, 1, 5), substr(COALESCE(updated_at, created_at, ''), 12, 5), '') AS sort_time,
       COALESCE(vehicle_number, rental_car_number, plate_number, '') AS vehicle_number,
+      COALESCE((SELECT company_type FROM vehicles WHERE plate_number = COALESCE(dispatches.vehicle_number, dispatches.rental_car_number, dispatches.plate_number, '') LIMIT 1), '') AS company_type,
       COALESCE(customer_phone, phone, customer_contact, contact, '') AS customer_phone,
       COALESCE(orderer, ordered_by, customer_name, '') AS orderer,
       COALESCE(customer_car_model, '') AS customer_car_model,
@@ -113,6 +114,7 @@ function returnHistorySql(hasQuery: boolean) {
       COALESCE(date, substr(COALESCE(updated_at, created_at, ''), 1, 10), '') AS sort_date,
       COALESCE(substr(time, 1, 5), substr(COALESCE(updated_at, created_at, ''), 12, 5), '') AS sort_time,
       COALESCE(vehicle_number, rental_car_number, plate_number, '') AS vehicle_number,
+      COALESCE((SELECT company_type FROM vehicles WHERE plate_number = COALESCE(returns.vehicle_number, returns.rental_car_number, returns.plate_number, '') LIMIT 1), '') AS company_type,
       COALESCE(customer_phone_snapshot, '') AS customer_phone,
       COALESCE(orderer_snapshot, '') AS orderer,
       COALESCE(customer_car_model_snapshot, '') AS customer_car_model,
@@ -148,6 +150,7 @@ function mapHistoryRow(row: any) {
     date: row.record_date || "",
     time: row.record_time || "",
     vehicle_number: row.vehicle_number || "",
+    company_type: row.company_type || "",
     customer_phone: row.customer_phone || "",
     orderer: row.orderer || "",
     customer_name: row.orderer || "",
@@ -182,6 +185,11 @@ function normalizeType(value: string | null): HistoryType {
 async function ensureHistorySchemas(env: Env) {
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS dispatches (id TEXT PRIMARY KEY, date TEXT, time TEXT, vehicle_number TEXT, is_completed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS returns (id TEXT PRIMARY KEY, date TEXT, time TEXT, vehicle_number TEXT, is_completed INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY, plate_number TEXT, company_type TEXT)").run();
+  await ensureColumns(env.DB, "vehicles", [
+    { name: "plate_number", definition: "TEXT" },
+    { name: "company_type", definition: "TEXT" },
+  ]);
   await ensureColumns(env.DB, "dispatches", [
     { name: "date", definition: "TEXT" },
     { name: "time", definition: "TEXT" },

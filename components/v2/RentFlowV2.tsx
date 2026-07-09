@@ -97,6 +97,7 @@ type DispatchReturnHistoryRow = {
   date?: string;
   time?: string;
   vehicle_number?: string;
+  company_type?: string;
   customer_phone?: string;
   orderer?: string;
   customer_car_model?: string;
@@ -3249,14 +3250,26 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
         <div className="flex flex-wrap items-center gap-2">
           <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, -1))}>이전달</button>
           <label className="relative">
+            <span className="sr-only">연도 선택</span>
+            <select
+              className="field min-h-10 min-w-28 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
+              value={month.slice(0, 4)}
+              onChange={(event) => setMonth(replaceHistoryYear(month, event.target.value))}
+            >
+              {yearOptions(month).map((option) => (
+                <option value={option} key={option}>{option}년</option>
+              ))}
+            </select>
+          </label>
+          <label className="relative">
             <span className="sr-only">월 선택</span>
             <select
-              className="field min-h-10 min-w-36 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
+              className="field min-h-10 min-w-24 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
+              value={month.slice(5, 7)}
+              onChange={(event) => setMonth(replaceHistoryMonth(month, event.target.value))}
             >
-              {monthOptions(month).map((option) => (
-                <option value={option} key={option}>{formatMonthLabel(option)}</option>
+              {monthNumberOptions().map((option) => (
+                <option value={option} key={option}>{Number(option)}월</option>
               ))}
             </select>
           </label>
@@ -3326,7 +3339,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
               <tr className="border-b" key={`${row.type}-${row.id}`}>
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge category={category} /></td>
                 <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
-                <TruncatedCell value={clean(row.vehicle_number)} />
+                <TruncatedCell className={getVehicleNumberClass(row.company_type)} value={clean(row.vehicle_number)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
                 <TruncatedCell sensitive value={clean(row.orderer)} />
                 <TruncatedCell value={clean(row.customer_car_model)} />
@@ -5721,10 +5734,23 @@ function formatMonthLabel(month: string) {
   return `${year}년 ${Number(monthNumber)}월`;
 }
 
-function monthOptions(selectedMonth: string) {
-  const current = currentMonthKorea();
-  const options = Array.from({ length: 49 }, (_, index) => addMonths(current, index - 24));
-  return options.includes(selectedMonth) ? options : [...options, selectedMonth].sort();
+function yearOptions(selectedMonth: string) {
+  const selectedYear = Number(selectedMonth.slice(0, 4)) || 2026;
+  const currentYear = Number(currentMonthKorea().slice(0, 4)) || 2026;
+  const lastYear = Math.max(selectedYear, currentYear + 10, 2028);
+  return Array.from({ length: lastYear - 2026 + 1 }, (_, index) => String(2026 + index));
+}
+
+function monthNumberOptions() {
+  return Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+}
+
+function replaceHistoryYear(month: string, year: string) {
+  return `${year}-${month.slice(5, 7)}`;
+}
+
+function replaceHistoryMonth(month: string, monthNumber: string) {
+  return `${month.slice(0, 4)}-${monthNumber}`;
 }
 
 function formatHistoryDateTime(value?: string) {
