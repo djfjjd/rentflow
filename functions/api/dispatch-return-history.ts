@@ -54,6 +54,7 @@ function dispatchHistorySql(hasQuery: boolean) {
     SELECT
       id,
       'dispatch' AS type,
+      COALESCE(dispatch_type, business_type, status, '배차') AS category,
       CASE
         WHEN COALESCE(return_at, '') != '' THEN return_at
         WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
@@ -98,6 +99,7 @@ function returnHistorySql(hasQuery: boolean) {
     SELECT
       id,
       'return' AS type,
+      '회차' AS category,
       CASE
         WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
         ELSE COALESCE(updated_at, created_at, '')
@@ -134,6 +136,7 @@ function mapHistoryRow(row: any) {
   return {
     id: row.id,
     type: row.type,
+    category: normalizeCategory(row.category, row.type),
     completed_at: row.completed_at,
     vehicle_number: row.vehicle_number || "",
     customer_phone: row.customer_phone || "",
@@ -146,6 +149,15 @@ function mapHistoryRow(row: any) {
     created_by: row.created_by || "-",
     updated_at: row.updated_at || "",
   };
+}
+
+function normalizeCategory(value: unknown, type: unknown) {
+  if (type === "return") return "회차";
+  const text = String(value || "").trim();
+  if (text.includes("보험")) return "보험";
+  if (text.includes("자차")) return "자차";
+  if (text.includes("셀프")) return "셀프";
+  return "보험";
 }
 
 function normalizeMonth(value: string | null) {
@@ -175,6 +187,9 @@ async function ensureHistorySchemas(env: Env) {
     { name: "ordered_by", definition: "TEXT" },
     { name: "customer_name", definition: "TEXT" },
     { name: "customer_car_model", definition: "TEXT" },
+    { name: "dispatch_type", definition: "TEXT" },
+    { name: "business_type", definition: "TEXT" },
+    { name: "status", definition: "TEXT" },
     { name: "fuel_level_text", definition: "TEXT" },
     { name: "fuel_display", definition: "TEXT" },
     { name: "repair_shop", definition: "TEXT" },

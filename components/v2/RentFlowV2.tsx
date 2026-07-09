@@ -91,6 +91,7 @@ type DispatchReturnHistoryType = "all" | "dispatch" | "return";
 type DispatchReturnHistoryRow = {
   id: string;
   type: "dispatch" | "return";
+  category?: "보험" | "자차" | "셀프" | "회차" | string;
   completed_at?: string;
   vehicle_number?: string;
   customer_phone?: string;
@@ -3291,7 +3292,7 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
           <thead>
             <tr className="border-b">
               <th>구분</th>
-              <th>완료일시</th>
+              <th>날짜</th>
               <th>차량번호</th>
               <th>연락처</th>
               <th>오더자</th>
@@ -3304,7 +3305,7 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
           </thead>
           <tbody>{paginate(rows, page, 15).map((row) => (
             <tr className="border-b" key={`${row.type}-${row.id}`}>
-              <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge type={row.type} /></td>
+              <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge category={row.category} /></td>
               <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
               <TruncatedCell value={clean(row.vehicle_number)} />
               <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
@@ -3326,13 +3327,29 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
   );
 }
 
-function HistoryTypeBadge({ type }: { type: "dispatch" | "return" }) {
-  const isDispatch = type === "dispatch";
+function HistoryTypeBadge({ category }: { category?: string }) {
+  const label = normalizeHistoryCategory(category);
+  const className =
+    label === "보험"
+      ? "bg-red-100 text-red-800"
+      : label === "자차"
+        ? "bg-green-100 text-green-800"
+        : label === "셀프"
+          ? "bg-blue-100 text-blue-800"
+          : "bg-gray-100 text-gray-700";
   return (
-    <span className={`inline-flex min-h-7 items-center rounded-full px-3 text-xs font-black ${isDispatch ? "bg-[#e9f5ef] text-[#116149]" : "bg-[#eef1ff] text-[#2f4f9f]"}`}>
-      {isDispatch ? "배차" : "회차"}
+    <span className={`inline-flex min-h-7 items-center rounded-full px-3 text-xs font-black ${className}`}>
+      {label}
     </span>
   );
+}
+
+function normalizeHistoryCategory(category?: string) {
+  const text = clean(category);
+  if (text.includes("보험")) return "보험";
+  if (text.includes("자차")) return "자차";
+  if (text.includes("셀프")) return "셀프";
+  return "회차";
 }
 
 function DispatchAdmin({
