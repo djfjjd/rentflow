@@ -55,11 +55,12 @@ function dispatchHistorySql(hasQuery: boolean) {
       id,
       'dispatch' AS type,
       CASE
+        WHEN COALESCE(return_at, '') != '' THEN return_at
         WHEN COALESCE(date, '') != '' THEN date || 'T' || COALESCE(NULLIF(substr(time, 1, 5), ''), '00:00') || ':00'
         ELSE COALESCE(updated_at, created_at, '')
       END AS completed_at,
-      COALESCE(date, substr(COALESCE(updated_at, created_at, ''), 1, 10), '') AS sort_date,
-      COALESCE(substr(time, 1, 5), substr(COALESCE(updated_at, created_at, ''), 12, 5), '') AS sort_time,
+      COALESCE(substr(NULLIF(return_at, ''), 1, 10), date, substr(COALESCE(updated_at, created_at, ''), 1, 10), '') AS sort_date,
+      COALESCE(substr(NULLIF(return_at, ''), 12, 5), substr(time, 1, 5), substr(COALESCE(updated_at, created_at, ''), 12, 5), '') AS sort_time,
       COALESCE(vehicle_number, rental_car_number, plate_number, '') AS vehicle_number,
       COALESCE(customer_phone, phone, customer_contact, contact, '') AS customer_phone,
       COALESCE(orderer, ordered_by, customer_name, '') AS orderer,
@@ -71,8 +72,9 @@ function dispatchHistorySql(hasQuery: boolean) {
       COALESCE(updated_at, created_at, '') AS updated_at
     FROM dispatches
     WHERE retention_archived_at IS NULL
-      AND (is_completed = 1 OR is_completed = true)
-      AND substr(COALESCE(NULLIF(date, ''), substr(COALESCE(updated_at, created_at, ''), 1, 10)), 1, 7) = ?
+      AND (return_completed = 1 OR return_completed = true)
+      AND COALESCE(return_at, '') != ''
+      AND substr(COALESCE(NULLIF(return_at, ''), NULLIF(date, ''), substr(COALESCE(updated_at, created_at, ''), 1, 10)), 1, 7) = ?
       ${hasQuery ? `AND lower(
         COALESCE(vehicle_number, '') || ' ' ||
         COALESCE(rental_car_number, '') || ' ' ||
@@ -113,7 +115,6 @@ function returnHistorySql(hasQuery: boolean) {
       COALESCE(updated_at, created_at, '') AS updated_at
     FROM returns
     WHERE retention_archived_at IS NULL
-      AND (is_completed = 1 OR is_completed = true)
       AND substr(COALESCE(NULLIF(date, ''), substr(COALESCE(updated_at, created_at, ''), 1, 10)), 1, 7) = ?
       ${hasQuery ? `AND lower(
         COALESCE(vehicle_number, '') || ' ' ||
@@ -180,6 +181,8 @@ async function ensureHistorySchemas(env: Env) {
     { name: "memo", definition: "TEXT" },
     { name: "notes", definition: "TEXT" },
     { name: "is_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "return_completed", definition: "INTEGER DEFAULT 0" },
+    { name: "return_at", definition: "DATETIME" },
     { name: "created_by_role", definition: "TEXT" },
     { name: "created_by_name", definition: "TEXT" },
     { name: "created_at", definition: "DATETIME" },

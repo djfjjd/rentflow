@@ -3236,9 +3236,19 @@ function DispatchReturnHistoryPage({ canView }: { canView: boolean }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, -1))}>이전달</button>
-          <div className="rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black">{formatMonthLabel(month)}</div>
+          <label className="relative">
+            <span className="sr-only">월 선택</span>
+            <select
+              className="field min-h-10 min-w-36 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+            >
+              {monthOptions(month).map((option) => (
+                <option value={option} key={option}>{formatMonthLabel(option)}</option>
+              ))}
+            </select>
+          </label>
           <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, 1))}>다음달</button>
-          <button className="small-btn" type="button" onClick={() => setMonth(currentMonthKorea())}>이번달</button>
         </div>
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
@@ -5661,6 +5671,12 @@ function addMonths(month: string, amount: number) {
 function formatMonthLabel(month: string) {
   const [year, monthNumber] = month.split("-");
   return `${year}년 ${Number(monthNumber)}월`;
+}
+
+function monthOptions(selectedMonth: string) {
+  const current = currentMonthKorea();
+  const options = Array.from({ length: 49 }, (_, index) => addMonths(current, index - 24));
+  return options.includes(selectedMonth) ? options : [...options, selectedMonth].sort();
 }
 
 function formatHistoryDateTime(value?: string) {
