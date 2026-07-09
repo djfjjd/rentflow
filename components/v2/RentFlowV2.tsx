@@ -3236,14 +3236,13 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-xl font-black">배회차현황기록</h1>
-          <p className="mt-1 text-sm font-bold text-[#68746d]">배차완료와 회차완료 기록을 최신순으로 확인합니다.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button className="small-btn" type="button" onClick={() => setMonth(addMonths(month, -1))}>이전달</button>
           <label className="relative">
             <span className="sr-only">연도 선택</span>
             <select
-              className="field min-h-10 min-w-28 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
+              className="field h-10 min-w-28 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
               value={month.slice(0, 4)}
               onChange={(event) => setMonth(replaceHistoryYear(month, event.target.value))}
             >
@@ -3255,7 +3254,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
           <label className="relative">
             <span className="sr-only">월 선택</span>
             <select
-              className="field min-h-10 min-w-24 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-2 text-sm font-black"
+              className="field h-10 min-w-24 cursor-pointer rounded-lg border border-[#d8ded8] bg-white px-3 py-0 text-sm font-black"
               value={month.slice(5, 7)}
               onChange={(event) => setMonth(replaceHistoryMonth(month, event.target.value))}
             >
@@ -3291,7 +3290,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
       </div>
       {message ? <p className="rounded-lg bg-[#fff7f4] px-3 py-2 text-sm font-black text-[#a13f24]">{message}</p> : null}
       <div data-horizontal-scroll="true" className="admin-table-wrapper w-full overflow-x-auto">
-        <table className="admin-table w-full min-w-[1500px] table-fixed text-left text-sm">
+        <table className="admin-table w-full min-w-[1640px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
             <col className="w-[150px]" />
@@ -3304,12 +3303,13 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
             <col className="w-[240px]" />
             <col className="w-[90px]" />
             <col className="w-[80px]" />
+            <col className="w-[150px]" />
             <col className="w-[120px]" />
           </colgroup>
           <thead>
             <tr className="border-b">
               <th>구분</th>
-              <th>날짜</th>
+              <th>배회차일시</th>
               <th>차량번호</th>
               <th>연락처</th>
               <th>오더자</th>
@@ -3319,6 +3319,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
               <th>메모</th>
               <th>사진보기</th>
               <th>계약서</th>
+              <th>최종수정일</th>
               <th>작성자</th>
             </tr>
           </thead>
@@ -3329,7 +3330,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
             return (
               <tr className="border-b" key={`${row.type}-${row.id}`}>
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><HistoryTypeBadge category={category} /></td>
-                <TruncatedCell value={formatHistoryDateTime(row.completed_at)} />
+                <TruncatedCell value={formatHistoryBusinessDateTime(row.date, row.time, row.completed_at)} />
                 <TruncatedCell className={getVehicleNumberClass(row.company_type)} value={clean(row.vehicle_number)} />
                 <td className="h-11 whitespace-nowrap px-1 align-middle"><PhoneCell phone={row.customer_phone} /></td>
                 <TruncatedCell sensitive value={clean(row.orderer)} />
@@ -3348,6 +3349,7 @@ function DispatchReturnHistoryPage({ canView, contracts }: { canView: boolean; c
                   />
                 </td>
                 <td className="h-11 whitespace-nowrap px-1 text-center align-middle"><ContractClip contract={contract} /></td>
+                <TruncatedCell value={formatHistorySeoulDateTime(row.updated_at)} />
                 <TruncatedCell value={clean(row.created_by)} />
               </tr>
             );
@@ -4417,7 +4419,7 @@ function VehicleStatusBoard({ rows, query, onQueryChange }: { rows: VehicleDashb
               <td>{row.fuelLevelText || "-"}</td>
               <td>{row.customerCarModel || "-"}</td>
               <td><SensitiveInline value={row.ordererRepairShop} /></td>
-              <td className="whitespace-nowrap">{formatDateTime(row.updatedAt)}</td>
+              <td className="whitespace-nowrap">{formatHistorySeoulDateTime(row.updatedAt)}</td>
               <td className="whitespace-nowrap">{row.authorLabel}</td>
             </tr>
           ))}</tbody>
@@ -5744,15 +5746,31 @@ function replaceHistoryMonth(month: string, monthNumber: string) {
   return `${month.slice(0, 4)}-${monthNumber}`;
 }
 
-function formatHistoryDateTime(value?: string) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
-    return formatBoardDateTime(value.slice(0, 10), value.slice(11, 16), value);
-  }
-  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(value)) {
-    return formatBoardDateTime(value.slice(0, 10), value.slice(11, 16), value.replace(" ", "T"));
-  }
-  return formatBoardDateTime(value.slice(0, 10), "", value);
+function formatHistoryBusinessDateTime(date?: string, time?: string, fallback?: string) {
+  if (date) return formatBoardDateTime(date, time, fallback);
+  return formatHistorySeoulDateTime(fallback);
+}
+
+function formatHistorySeoulDateTime(value?: string) {
+  const textValue = clean(value);
+  if (!textValue) return "";
+  const normalizedValue = textValue.replace(" ", "T");
+  const isoValue = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalizedValue) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(normalizedValue)
+    ? `${normalizedValue}Z`
+    : normalizedValue;
+  const parsed = new Date(isoValue);
+  if (Number.isNaN(parsed.getTime())) return textValue;
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(parsed);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}.${part("month")}.${part("day")} ${part("hour")}:${part("minute")}`;
 }
 
 function newest(files: UploadedFileV2[]) {
