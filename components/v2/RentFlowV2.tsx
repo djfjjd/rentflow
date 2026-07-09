@@ -1260,7 +1260,7 @@ function ReturnForm({ vehicles, dispatches, returns, onDispatches, onReturns, ca
       <PhotoUploadButton key={`return-upload-${resetKey}`} recordId={recordId} recordType="return" vehicleNumber={vehicle?.plateNumber || ""} />
       <datalist id="parking-locations">{parkingLocations.map((location) => <option value={location} key={location} />)}</datalist>
     </DataForm>
-    <ReturnBoard returns={returns} vehicles={vehicles} onReturns={onReturns} canEditDispatchRecords={canEditDispatchRecords} />
+    <ReturnBoard dispatches={dispatches} returns={returns} vehicles={vehicles} onReturns={onReturns} canEditDispatchRecords={canEditDispatchRecords} />
     </section>
   );
 }
@@ -3373,7 +3373,7 @@ function DispatchBoard({ contracts, dispatches, vehicles, onDispatches, canEditD
   );
 }
 
-function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: { returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: ReloadHandler<ReturnV2>; canEditDispatchRecords: boolean }) {
+function ReturnBoard({ dispatches, returns, vehicles, onReturns, canEditDispatchRecords }: { dispatches: DispatchV2[]; returns: ReturnV2[]; vehicles: VehicleV2[]; onReturns: ReloadHandler<ReturnV2>; canEditDispatchRecords: boolean }) {
   const [editing, setEditing] = useState<ReturnV2 | null>(null);
   const [deleting, setDeleting] = useState<ReturnV2 | null>(null);
   const [page, setPage] = useState(1);
@@ -3381,11 +3381,15 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
   const normalizedQuery = normalizeSearchText(query);
   const rows = [...returns]
     .filter((item) => {
+      const linkedDispatch = findLinkedDispatchForReturn(item, dispatches);
+      const returnDispatchDisplay = getReturnDispatchDisplay(item, linkedDispatch);
       if (!normalizedQuery) return true;
       const vehicleNumber = clean(item.rentalCarNumber);
       return normalizeSearchText([
         vehicleNumber,
         vehicleNumber.slice(-4),
+        returnDispatchDisplay.orderer,
+        returnDispatchDisplay.repairShop,
         item.orderer,
         item.ordererSnapshot,
         item.repairShop,
@@ -3425,9 +3429,11 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
       </div>
       <div data-horizontal-scroll="true" className="return-board-wrapper return-table-wrapper return-table-wrap w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className={`return-table w-full ${canEditDispatchRecords ? "min-w-[1300px]" : "min-w-[1160px]"} text-left text-sm`}>
-          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>주차구역</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}<th>작성자</th></tr></thead>
+          <thead><tr className="border-b"><th>날짜</th><th>차량번호</th><th>구분</th><th>차종/색상</th><th>회차키로수</th><th>회차주유량</th><th>오더자/수리처</th><th>메모</th><th>사진링크</th><th>사진추가업로드</th>{canEditDispatchRecords ? <><th>수정</th><th>삭제</th></> : null}<th>작성자</th></tr></thead>
           <tbody>{paginate(rows, page).map((item) => {
             const vehicle = findVehicle(vehicles, item.rentalCarNumber || "");
+            const linkedDispatch = findLinkedDispatchForReturn(item, dispatches);
+            const returnDispatchDisplay = getReturnDispatchDisplay(item, linkedDispatch);
             return (
               <tr className="border-b" key={item.id}>
                 <td>{formatBoardDateTime(item.date, item.time, item.createdAt)}</td>
@@ -3436,7 +3442,7 @@ function ReturnBoard({ returns, vehicles, onReturns, canEditDispatchRecords }: {
                 <td>{vehicleModelColor(vehicle)}</td>
                 <td>{clean(String(item.mileage || ""))}</td>
                 <td>{clean(item.fuelDisplay)}</td>
-                <td>{clean(item.parkingZone || item.arrivalAddress)}</td>
+                <td><SensitiveInline value={formatDashboardOrdererShop(returnDispatchDisplay.orderer, returnDispatchDisplay.repairShop, returnDispatchDisplay.isCorporateVehicle)} /></td>
                 <td><SensitiveInline value={item.notes} /></td>
                 <td><PhotoGalleryButton date={item.date} kind="회차" recordId={item.id} recordType="return" time={item.time} vehicleNumber={item.rentalCarNumber || ""} /></td>
                 <td><AdditionalUploadButton recordType="return" recordId={item.id} vehicleNumber={item.rentalCarNumber || ""} label="사진추가" /></td>
