@@ -15,7 +15,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
     if (!isTouchDevice()) return;
 
     function onTouchStart(event: TouchEvent) {
-      if (window.scrollY !== 0 || shouldBlockPullToRefresh(event.target)) {
+      if (window.scrollY !== 0 || shouldBlockRefresh(event.target)) {
         startY.current = null;
         return;
       }
@@ -23,7 +23,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
     }
 
     function onTouchMove(event: TouchEvent) {
-      if (startY.current === null || shouldBlockPullToRefresh(event.target)) return;
+      if (startY.current === null || shouldBlockRefresh(event.target)) return;
       const currentY = event.touches[0]?.clientY ?? 0;
       const distance = Math.max(0, currentY - startY.current);
       if (distance <= 0) return;
@@ -39,7 +39,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       setPullDistance(0);
       setReady(false);
 
-      if (shouldRefresh) {
+      if (shouldRefresh && !isSaveInProgress()) {
         hardRefresh();
       }
     }
@@ -99,6 +99,14 @@ function shouldBlockPullToRefresh(target: EventTarget | null) {
   if (element.closest("[data-horizontal-scroll='true']")) return true;
 
   return false;
+}
+
+function shouldBlockRefresh(target: EventTarget | null) {
+  return isSaveInProgress() || shouldBlockPullToRefresh(target);
+}
+
+function isSaveInProgress() {
+  return Boolean(window.__rentflowSaveInProgress || document.querySelector("form[data-saving='true'], [data-saving='true']"));
 }
 
 function isFormElement(element: Element | null) {

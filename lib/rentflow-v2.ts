@@ -288,11 +288,42 @@ export async function fetchJson<T>(url: string, fallback: T): Promise<T> {
 }
 
 export async function sendJson(url: string, body: unknown, method = "POST") {
-  const response = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
+  markSaveInProgress(true);
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      throw new Error(formatApiError(url, response.status, response.statusText, bodyText));
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("API request failed:")) {
+      throw error;
+    }
+    throw new Error(formatApiError(url, undefined, undefined, error instanceof Error ? error.message : String(error)));
+  } finally {
+    markSaveInProgress(false);
+  }
+}
+
+function formatApiError(url: string, status?: number, statusText?: string, detail?: string) {
+  const absoluteUrl = typeof window === "undefined" ? url : new URL(url, window.location.origin).toString();
+  const statusLabel = status ? `${status}${statusText ? ` ${statusText}` : ""}` : "network error";
+  return `API request failed: ${absoluteUrl} (${statusLabel})${detail ? ` - ${detail}` : ""}`;
+}
+
+function markSaveInProgress(active: boolean) {
+  if (typeof window === "undefined") return;
+  window.__rentflowSaveInProgress = active;
+}
+
+declare global {
+  interface Window {
+    __rentflowSaveInProgress?: boolean;
+  }
 }

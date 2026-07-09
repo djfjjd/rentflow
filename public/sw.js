@@ -23,12 +23,11 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  if (request.method !== "GET") {
+  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
     return;
   }
 
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(request, { cache: "no-store" }));
+  if (request.method !== "GET") {
     return;
   }
 
