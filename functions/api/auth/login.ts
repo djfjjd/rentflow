@@ -6,7 +6,6 @@ import { safeText } from "../_d1-utils";
 import { buildDeviceCookie, buildTrustedDeviceCookie, createTrustedDeviceToken, expireTrustedDeviceCookie, readDeviceId } from "../../../lib/trusted-device";
 import { detectDeviceType, isDesktopDevice, type DeviceType } from "../../../lib/device-detection";
 import { officePcLabel, officePcTypeToRole, roleAllowedForOfficePc } from "../../../lib/office-pc-policy";
-import { isDeveloperLoginEnabled } from "../../../lib/permissions";
 
 type Env = {
   ADMIN_EMAIL?: string;
@@ -47,11 +46,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (account.isDeveloper && !account.email) {
     return Response.json({ error: "ADMIN_EMAIL is not configured." }, { status: 500 });
   }
-  if (account.isDeveloper && !(await isDeveloperLoginEnabled(env.DB))) {
-    await recordLoginLog(env, request, { email: account.email, role: account.role, deviceId, status: "failure", message: "developer login disabled by permissions" });
-    return Response.json({ error: "개발자 로그인이 비활성화되어 있습니다." }, { status: 403 });
-  }
-
   const url = new URL(request.url);
   const userAgent = request.headers.get("User-Agent") || "";
   const deviceType = detectDeviceType(userAgent);

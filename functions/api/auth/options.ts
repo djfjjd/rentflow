@@ -1,5 +1,3 @@
-import { isDeveloperLoginEnabled } from "../../../lib/permissions";
-
 type Env = {
   DB: any;
 };
@@ -8,7 +6,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   try {
     return Response.json({
       accounts: {
-        developer: await isDeveloperLoginEnabled(env.DB),
+        developer: true,
         admin: true,
         manager: true,
         staff: true,
