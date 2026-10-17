@@ -2019,16 +2019,14 @@ function PhotosPage({ admin, canShowDriveLinks }: { admin: boolean; canShowDrive
   return (
     <section className="space-y-4">
       <FilterBar query={query} onQuery={setQuery} placeholder="차량번호, 보험접수번호, 고객명, 파일명 검색" />
-      {canShowDriveLinks ? (
-        <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
-          <p>파일 보관기간은 업로드 후 14일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.</p>
-          <div className="mt-1 flex justify-end">
-            <a className="text-[#116149] underline underline-offset-2" href="https://drive.google.com/drive/folders/1D7Ld2MoesuEZBmDjKU0iZHyVyWhmyKOu?usp=drive_link" rel="noreferrer" target="_blank">
-              구글 드라이브 열기
-            </a>
-          </div>
+      <div className="rounded-lg border border-[#d8ded8] bg-white px-4 py-3 text-sm font-black text-[#667269]">
+        <p>파일 보관기간은 업로드 후 14일이며, 이후 자동삭제 됩니다. 장기보관이 필요한 파일은 Google Drive 업로드를 이용해주세요.</p>
+        <div className="mt-1 flex justify-end">
+          <a className="text-[#116149] underline underline-offset-2" href="https://drive.google.com/drive/folders/1D7Ld2MoesuEZBmDjKU0iZHyVyWhmyKOu?usp=drive_link" rel="noreferrer" target="_blank">
+            구글 드라이브 열기
+          </a>
         </div>
-      ) : null}
+      </div>
       <div className="hidden"><ThumbnailBackfillButton /></div>
       {canShowDriveLinks ? (
         <DriveArchiveButton
